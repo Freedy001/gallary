@@ -1,0 +1,51 @@
+package model
+
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
+
+// Image 图片模型
+type Image struct {
+	ID           int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	OriginalName string `gorm:"type:varchar(255);not null" json:"original_name"`
+	StoragePath  string `gorm:"type:varchar(500);not null" json:"storage_path"`
+	StorageType  string `gorm:"type:varchar(20);not null;default:local" json:"storage_type"`
+	FileSize     int64  `gorm:"not null" json:"file_size"`
+	FileHash     string `gorm:"type:varchar(64);uniqueIndex;not null" json:"file_hash"`
+	MimeType     string `gorm:"type:varchar(50);not null" json:"mime_type"`
+	Width        int    `gorm:"type:int;not null" json:"width,omitempty"`
+	Height       int    `gorm:"type:int;not null" json:"height,omitempty"`
+
+	// 缩略图相关
+	ThumbnailPath   string `gorm:"type:varchar(500);not null" json:"thumbnail_path,omitempty"`
+	ThumbnailWidth  *int   `gorm:"type:int" json:"thumbnail_width,omitempty"`
+	ThumbnailHeight *int   `gorm:"type:int" json:"thumbnail_height,omitempty"`
+
+	// EXIF 元数据
+	TakenAt      *time.Time `gorm:"type:timestamp" json:"taken_at,omitempty"`
+	Latitude     *float64   `gorm:"type:decimal(10,8)" json:"latitude,omitempty"`
+	Longitude    *float64   `gorm:"type:decimal(11,8)" json:"longitude,omitempty"`
+	LocationName *string    `gorm:"type:varchar(255)" json:"location_name,omitempty"`
+	CameraModel  *string    `gorm:"type:varchar(100)" json:"camera_model,omitempty"`
+	CameraMake   *string    `gorm:"type:varchar(100)" json:"camera_make,omitempty"`
+	Aperture     *string    `gorm:"type:varchar(20)" json:"aperture,omitempty"`
+	ShutterSpeed *string    `gorm:"type:varchar(20)" json:"shutter_speed,omitempty"`
+	ISO          *int       `gorm:"type:int" json:"iso,omitempty"`
+	FocalLength  *string    `gorm:"type:varchar(20)" json:"focal_length,omitempty"`
+
+	// 关联
+	Tags     []Tag           `gorm:"many2many:image_tags" json:"tags,omitempty"`
+	Metadata []ImageMetadata `gorm:"foreignKey:ImageID" json:"metadata,omitempty"`
+
+	// 系统字段
+	CreatedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty" swaggertype:"primitive,string"`
+}
+
+// TableName 指定表名
+func (Image) TableName() string {
+	return "images"
+}

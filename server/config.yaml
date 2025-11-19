@@ -1,0 +1,94 @@
+# 服务器配置
+server:
+  host: "0.0.0.0"
+  port: 9099
+  mode: "debug" # debug/release
+
+# 管理员配置
+admin:
+  # 如果不设置密码，则不需要认证
+  # 留空表示无需认证，或设置为 bcrypt 加密后的密码
+  password: "" # 示例: "$2a$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# 数据库配置
+database:
+  host: "localhost"
+  port: 5432
+  username: "root"
+  password: "123456"
+  database: "devdb"
+  sslmode: "disable" # disable/require/verify-ca/verify-full
+  timezone: "Asia/Shanghai"
+  max_idle_conns: 10
+  max_open_conns: 100
+  log_level: "debug" # silent/error/warn/info
+
+# 存储配置
+storage:
+  # 默认存储类型: local/oss/s3/minio
+  default: "local"
+
+  # 本地存储
+  local:
+    base_path: "./storage/images"
+    thumbnail_path: "./storage/thumbnails"
+    url_prefix: "/static/images"
+
+# 图片处理配置
+image:
+  # 允许的文件类型
+  allowed_types:
+    - "image/jpeg"
+    - "image/jpg"
+    - "image/png"
+    - "image/gif"
+    - "image/webp"
+    - "image/heic"
+  # 最大文件大小 (字节)
+  max_size: 52428800 # 50MB
+  # 缩略图尺寸
+  thumbnail:
+    width: 300
+    height: 300
+#    quality: 85
+
+# JWT配置 (用于认证token)
+jwt:
+  secret: "your-secret-key-please-change-this-in-production"
+  expire_hours: 168 # 7天
+
+# 日志配置
+logger:
+  level: "debug" # debug/info/warn/error
+  format: "console" # json/console
+  output: "./logs/app.log"
+  max_size: 100 # MB
+  max_backups: 5
+  max_age: 30 # days
+  compress: true
+
+# CORS配置
+cors:
+  allow_origins:
+    - "*"
+  allow_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  allow_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Authorization"
+  expose_headers:
+    - "Content-Length"
+  allow_credentials: true
+  max_age: 43200
+
+# 分享配置
+share:
+  # 默认过期时间(小时)，0表示永不过期
+  default_expire_hours: 168 # 7天
+  # 分享码长度
+  code_length: 8
