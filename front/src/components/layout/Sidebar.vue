@@ -2,7 +2,7 @@
   <aside
     :class="[
       'flex flex-col border-r border-gray-200 bg-white transition-all duration-300',
-      uiStore.sidebarCollapsed ? 'w-16' : 'w-64',
+      uiStore.sidebarCollapsed ? 'w-16' : 'w-58',
     ]"
   >
     <!-- Logo区域 -->
@@ -82,6 +82,8 @@
 
     <!-- 底部信息 -->
     <div class="border-t border-gray-200 p-4">
+      <UploadDrawer :collapsed="uiStore.sidebarCollapsed" />
+
       <div v-if="!uiStore.sidebarCollapsed" class="text-xs text-gray-500">
         <div class="flex items-center justify-between">
           <span>共 {{ imageStore.total }} 张图片</span>
@@ -98,6 +100,7 @@
 import { useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useImageStore } from '@/stores/image'
+import UploadDrawer from '@/components/upload/UploadDrawer.vue'
 import {
   PhotoIcon,
   MapPinIcon,

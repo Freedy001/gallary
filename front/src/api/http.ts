@@ -1,14 +1,11 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
-import type { ApiResponse } from '@/types'
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9099'
+import axios, {type AxiosInstance, type AxiosRequestConfig, type AxiosResponse} from 'axios'
+import type {ApiResponse} from '@/types'
 
 class HttpClient {
   private instance: AxiosInstance
 
   constructor() {
     this.instance = axios.create({
-      baseURL: BASE_URL,
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
@@ -37,10 +34,10 @@ class HttpClient {
     // 响应拦截器
     this.instance.interceptors.response.use(
       (response: AxiosResponse<ApiResponse>) => {
-        const { code, message } = response.data
+        const {code, message} = response.data
 
         // 成功响应
-        if (code === 0) {
+        if (!code) {
           return response
         }
 
@@ -50,7 +47,7 @@ class HttpClient {
       (error) => {
         // 网络错误或 HTTP 错误
         if (error.response) {
-          const { status, data } = error.response
+          const {status, data} = error.response
 
           // 401 未授权，清除 token 并跳转登录
           if (status === 401) {
@@ -73,25 +70,25 @@ class HttpClient {
     )
   }
 
-  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    return this.instance.get(url, config)
+  async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+    return (await this.instance.get(url, config)).data
   }
 
-  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    return this.instance.post(url, data, config)
+  async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+    return (await this.instance.post(url, data, config)).data
   }
 
-  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    return this.instance.put(url, data, config)
+  async put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+    return (await this.instance.put(url, data, config)).data
   }
 
-  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
-    return this.instance.delete(url, config)
+  async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<ApiResponse<T>> {
+    return (await this.instance.delete(url, config)).data
   }
 
   // 上传文件专用方法
-  upload<T = any>(url: string, formData: FormData, onProgress?: (progress: number) => void): Promise<ApiResponse<T>> {
-    return this.instance.post(url, formData, {
+  async upload<T = any>(url: string, formData: FormData, onProgress?: (progress: number) => void): Promise<ApiResponse<T>> {
+    return (await this.instance.post(url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -101,24 +98,21 @@ class HttpClient {
           onProgress(percentage)
         }
       },
-    })
+    })).data
   }
 
   // 下载文件专用方法
-  download(url: string, filename?: string): Promise<void> {
-    return this.instance.get(url, {
-      responseType: 'blob',
-    }).then((response: any) => {
-      const blob = new Blob([response])
-      const downloadUrl = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename || 'download'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
-    })
+  async download(url: string, filename?: string): Promise<void> {
+    const response = await this.instance.get(url, {responseType: 'blob',});
+    const blob = new Blob([response.data])
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = filename || 'download'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(downloadUrl)
   }
 }
 

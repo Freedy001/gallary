@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -13,7 +14,7 @@ import (
 	"gallary/server/internal/model"
 )
 
-var DB *gorm.DB
+var db *gorm.DB
 
 // InitDatabase 初始化数据库连接
 func InitDatabase(cfg *config.DatabaseConfig) error {
@@ -33,7 +34,7 @@ func InitDatabase(cfg *config.DatabaseConfig) error {
 	}
 
 	// 连接数据库
-	DB, err = gorm.Open(postgres.Open(cfg.GetDSN()), &gorm.Config{
+	db, err = gorm.Open(postgres.Open(cfg.GetDSN()), &gorm.Config{
 		Logger:                                   gormLogger,
 		DisableForeignKeyConstraintWhenMigrating: false,
 		NowFunc: func() time.Time {
@@ -44,8 +45,8 @@ func InitDatabase(cfg *config.DatabaseConfig) error {
 		return fmt.Errorf("连接数据库失败: %w", err)
 	}
 
-	// 获取底层的 sql.DB 对象
-	sqlDB, err := DB.DB()
+	// 获取底层的 sql.db 对象
+	sqlDB, err := db.DB()
 	if err != nil {
 		return fmt.Errorf("获取数据库实例失败: %w", err)
 	}
@@ -66,7 +67,7 @@ func InitDatabase(cfg *config.DatabaseConfig) error {
 
 // AutoMigrate 自动迁移数据库表
 func AutoMigrate() error {
-	err := DB.AutoMigrate(
+	err := db.AutoMigrate(
 		&model.Image{},
 		&model.Tag{},
 		&model.ImageTag{},
@@ -84,8 +85,8 @@ func AutoMigrate() error {
 
 // Close 关闭数据库连接
 func Close() error {
-	if DB != nil {
-		sqlDB, err := DB.DB()
+	if db != nil {
+		sqlDB, err := db.DB()
 		if err != nil {
 			return err
 		}
@@ -94,7 +95,39 @@ func Close() error {
 	return nil
 }
 
-// GetDB 获取数据库实例
-func GetDB() *gorm.DB {
-	return DB
+type contextKey string
+
+const txKey contextKey = "gallary_db_gorm_tx"
+
+// Transaction0 封装事务逻辑，将 tx 注入 context
+func Transaction0(ctx context.Context, fn func(ctx context.Context) error) error {
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 将带有事务的 db 放入 context
+		txCtx := context.WithValue(ctx, txKey, tx)
+		return fn(txCtx)
+	})
+}
+
+func Transaction1[T any](ctx context.Context, fn func(ctx context.Context) (T, error)) (T, error) {
+	var r any
+	return *r.(*T), db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 将带有事务的 db 放入 context
+		txCtx := context.WithValue(ctx, txKey, tx)
+		t, err := fn(txCtx)
+		r = &t
+		return err
+	})
+}
+
+// GetDB 智能获取 DB：优先取事务 DB，否则取全局 DB
+func GetDB(ctx context.Context) *gorm.DB {
+	if ctx == nil {
+		return db
+	}
+
+	tx, ok := ctx.Value(txKey).(*gorm.DB)
+	if ok {
+		return tx
+	}
+	return db.WithContext(ctx)
 }

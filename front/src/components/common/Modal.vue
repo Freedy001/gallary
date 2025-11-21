@@ -3,20 +3,23 @@
     <Transition name="fade">
       <div
         v-if="modelValue"
-        class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 p-4"
+        class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4"
         @click.self="handleClose"
       >
         <Transition name="modal">
-          <div
+          <LiquidGlassCard
             v-if="modelValue"
             :class="[
-              'relative w-full rounded-lg bg-white shadow-xl',
+              'relative w-full mx-auto',
               sizeClasses,
             ]"
+            :hover-effect="false"
+            content-class="p-0"
+            style="background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%)"
             @click.stop
           >
             <!-- 头部 -->
-            <div v-if="title || $slots.header" class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+            <div v-if="title || $slots.header" class="flex items-center justify-between border-b border-white/10 px-6 py-4">
               <slot name="header">
                 <h3 class="text-lg font-semibold text-gray-900">{{ title }}</h3>
               </slot>
@@ -24,7 +27,7 @@
               <button
                 v-if="closable"
                 @click="handleClose"
-                class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                class="rounded-lg p-1 text-gray-500 hover:bg-black/5 hover:text-gray-700 transition-colors"
               >
                 <XMarkIcon class="h-5 w-5" />
               </button>
@@ -36,10 +39,10 @@
             </div>
 
             <!-- 底部 -->
-            <div v-if="$slots.footer" class="border-t border-gray-200 px-6 py-4">
+            <div v-if="$slots.footer" class="border-t border-white/10 px-6 py-4">
               <slot name="footer" />
             </div>
-          </div>
+          </LiquidGlassCard>
         </Transition>
       </div>
     </Transition>
@@ -49,6 +52,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
+import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
 
 interface Props {
   modelValue: boolean

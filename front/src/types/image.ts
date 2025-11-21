@@ -47,6 +47,23 @@ export interface SearchParams {
   end_date?: string
   location?: string
   camera_model?: string
+  tags?: string
   page?: number
   page_size?: number
+}
+
+export interface MetadataUpdate {
+  key: string
+  value?: string
+  value_type?: string
+}
+
+export interface UpdateMetadataRequest {
+  image_ids: number[]
+  original_name?: string
+  location_name?: string
+  latitude?: number
+  longitude?: number
+  metadata?: MetadataUpdate[]
+  tags?: string[]
 }

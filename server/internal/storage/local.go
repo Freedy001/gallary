@@ -23,10 +23,6 @@ func NewLocalStorage(cfg *config.LocalStorageConfig) (*LocalStorage, error) {
 		return nil, fmt.Errorf("创建存储目录失败: %w", err)
 	}
 
-	if err := os.MkdirAll(cfg.ThumbnailPath, 0755); err != nil {
-		return nil, fmt.Errorf("创建缩略图目录失败: %w", err)
-	}
-
 	return &LocalStorage{
 		basePath:  cfg.BasePath,
 		urlPrefix: cfg.URLPrefix,

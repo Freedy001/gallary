@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"gallary/server/pkg/database"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -131,6 +133,42 @@ func (h *ImageHandler) Delete(c *gin.Context) {
 	utils.SuccessWithMessage(c, "删除成功", nil)
 }
 
+// BatchDelete 批量删除图片
+//
+//	@Summary		批量删除图片
+//	@Description	根据ID列表批量删除图片
+//	@Tags			图片管理
+//	@Accept			json
+//	@Produce		json
+//	@Param			ids	body		[]int64			true	"图片ID列表"
+//	@Success		200	{object}	utils.Response	"删除成功"
+//	@Failure		400	{object}	utils.Response	"无效的参数"
+//	@Failure		500	{object}	utils.Response	"删除失败"
+//	@Router			/api/images/batch-delete [post]
+func (h *ImageHandler) BatchDelete(c *gin.Context) {
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数")
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		utils.BadRequest(c, "请选择要删除的图片")
+		return
+	}
+
+	if err := h.service.DeleteBatch(c.Request.Context(), req.IDs); err != nil {
+		logger.Error("批量删除图片失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "删除成功", nil)
+}
+
 // Download 下载图片
 //
 //	@Summary		下载图片
@@ -209,4 +247,40 @@ func (h *ImageHandler) Search(c *gin.Context) {
 	}
 
 	utils.PageResponse(c, images, total, params.Page, params.PageSize)
+}
+
+// BatchUpdateMetadata 批量更新图片元数据
+//
+//	@Summary		批量更新图片元数据
+//	@Description	批量更新多个图片的名称、地理位置、自定义元数据和标签
+//	@Tags			图片管理
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		service.UpdateMetadataRequest		true	"批量元数据更新请求"
+//	@Success		200		{object}	utils.Response{data=[]model.Image}	"更新成功"
+//	@Failure		400		{object}	utils.Response						"无效的参数"
+//	@Failure		500		{object}	utils.Response						"更新失败"
+//	@Router			/api/images/metadata [put]
+func (h *ImageHandler) BatchUpdateMetadata(c *gin.Context) {
+	var req service.UpdateMetadataRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数: "+err.Error())
+		return
+	}
+
+	if len(req.ImageIDs) == 0 {
+		utils.BadRequest(c, "请选择要更新的图片")
+		return
+	}
+
+	images, err := database.Transaction1(c.Request.Context(), func(ctx context.Context) ([]int64, error) {
+		return h.service.BatchUpdateMetadata(ctx, &req)
+	})
+	if err != nil {
+		logger.Error("批量更新图片元数据失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "批量更新成功", images)
 }

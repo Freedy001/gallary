@@ -51,9 +51,8 @@ type StorageConfig struct {
 }
 
 type LocalStorageConfig struct {
-	BasePath      string `mapstructure:"base_path"`
-	ThumbnailPath string `mapstructure:"thumbnail_path"`
-	URLPrefix     string `mapstructure:"url_prefix"`
+	BasePath  string `mapstructure:"base_path"`
+	URLPrefix string `mapstructure:"url_prefix"`
 }
 
 type OSSStorageConfig struct {

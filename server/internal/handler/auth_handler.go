@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -97,6 +98,36 @@ func (h *AuthHandler) Login(c *gin.Context) {
 //	@Router			/api/auth/check [get]
 func (h *AuthHandler) Check(c *gin.Context) {
 	utils.Success(c, gin.H{
-		"authenticated": h.cfg.Admin.IsAuthEnabled(),
+		"authenticated": h.hasAuth(c),
 	})
+}
+
+func (h *AuthHandler) hasAuth(c *gin.Context) bool {
+	// 如果没有设置管理员密码，则不需要认证
+	if !h.cfg.Admin.IsAuthEnabled() {
+		return true
+	}
+
+	// 获取Authorization头
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		return false
+	}
+
+	// 解析Bearer token
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return false
+	}
+
+	// 验证token
+	token, err := jwt.Parse(parts[1], func(token *jwt.Token) (interface{}, error) {
+		return []byte(h.cfg.JWT.Secret), nil
+	})
+
+	if err != nil || !token.Valid {
+		return false
+	}
+
+	return true
 }

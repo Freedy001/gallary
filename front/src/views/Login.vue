@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import Button from '@/components/common/Button.vue'
@@ -51,18 +51,6 @@ const authStore = useAuthStore()
 const password = ref('')
 const loading = ref(false)
 const error = ref('')
-
-onMounted(async () => {
-  // 检查是否需要认证
-  if (!authStore.hasCheckedAuth) {
-    await authStore.checkAuthStatus()
-  }
-
-  // 如果不需要认证,直接跳转到画廊
-  if (!authStore.requiresAuth) {
-    router.push('/gallery')
-  }
-})
 
 async function handleSubmit() {
   error.value = ''
@@ -78,7 +66,7 @@ async function handleSubmit() {
     const success = await authStore.login(password.value)
 
     if (success) {
-      router.push('/gallery')
+      await router.push('/gallery')
     } else {
       error.value = '密码错误,请重试'
     }

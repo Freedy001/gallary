@@ -1,16 +1,20 @@
 <template>
   <AppLayout>
-    <!-- 命令面板 -->
-    <CommandPalette />
+    <template #default>
+      <!-- 命令面板 -->
+      <CommandPalette />
 
-    <!-- 上传抽屉 -->
-    <UploadDrawer />
+      <!-- 图片查看器 -->
+      <ImageViewer />
 
-    <!-- 图片查看器 -->
-    <ImageViewer />
+      <!-- 图片网格 -->
+      <ImageGrid />
+    </template>
 
-    <!-- 图片网格 -->
-    <ImageGrid />
+    <template #overlay>
+      <!-- 悬浮时间线 -->
+      <Timeline />
+    </template>
   </AppLayout>
 </template>
 
@@ -19,9 +23,9 @@ import { onMounted } from 'vue'
 import { useImageStore } from '@/stores/image'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import CommandPalette from '@/components/search/CommandPalette.vue'
-import UploadDrawer from '@/components/upload/UploadDrawer.vue'
 import ImageViewer from '@/components/gallery/ImageViewer.vue'
 import ImageGrid from '@/components/gallery/ImageGrid.vue'
+import Timeline from '@/components/gallery/Timeline.vue'
 
 const imageStore = useImageStore()
 

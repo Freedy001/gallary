@@ -199,7 +199,7 @@ const filters = ref<Partial<SearchParams>>({
   start_date: '',
   end_date: '',
   camera_model: '',
-  location_name: '',
+  location: '',
   tags: '',
 })
 

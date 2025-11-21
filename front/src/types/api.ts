@@ -1,7 +1,7 @@
 export interface ApiResponse<T = any> {
   code: ErrorCode
   message: string
-  data?: T
+  data: T
 }
 
 export interface LoginRequest {

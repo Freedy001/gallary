@@ -60,7 +60,7 @@ func main() {
 	}
 
 	// 6. 初始化Repository层
-	imageRepo := repository.NewImageRepository(database.GetDB())
+	imageRepo := repository.NewImageRepository()
 
 	// 7. 初始化Service层
 	imageService := service.NewImageService(imageRepo, storageImpl, cfg)

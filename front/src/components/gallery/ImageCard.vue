@@ -1,25 +1,28 @@
 <template>
   <div
-    class="group relative aspect-square cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-gray-100 transition-all hover:shadow-md"
+    class="group relative cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-gray-100 transition-all hover:shadow-md"
+    :class="{ 'aspect-square': square }"
     @click="$emit('click')"
+    @contextmenu.prevent="$emit('contextmenu', $event)"
   >
     <!-- 图片 -->
     <img
       v-if="imageUrl"
       :src="imageUrl"
       :alt="image.original_name"
-      class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+      class="w-full object-cover transition-transform duration-300 group-hover:scale-105"
+      :class="{ 'h-full': square }"
       loading="lazy"
       @error="handleImageError"
     />
 
     <!-- 加载占位符 -->
-    <div v-else class="flex h-full items-center justify-center">
+    <div v-else class="flex items-center justify-center" :class="[square ? 'h-full' : 'min-h-[200px]']">
       <PhotoIcon class="h-12 w-12 text-gray-400" />
     </div>
 
     <!-- 悬停遮罩 -->
-    <div class="absolute inset-0 bg-black bg-opacity-0 transition-opacity group-hover:bg-opacity-20" />
+    <div class="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />
 
     <!-- 悬停信息 -->
     <div class="absolute bottom-0 left-0 right-0 translate-y-full bg-gradient-to-t from-black/70 to-transparent p-3 transition-transform group-hover:translate-y-0">
@@ -41,11 +44,15 @@ import type { Image } from '@/types'
 interface Props {
   image: Image
   index: number
+  square?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  square: true
+})
 defineEmits<{
   click: []
+  contextmenu: [event: MouseEvent]
 }>()
 
 const imageError = ref(false)

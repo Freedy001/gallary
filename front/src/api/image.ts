@@ -1,5 +1,11 @@
 import http from './http'
-import type {ApiResponse, Image, Pageable, SearchParams} from '@/types'
+import type {
+  ApiResponse,
+  Image,
+  Pageable,
+  SearchParams,
+  UpdateMetadataRequest,
+} from '@/types'
 
 export const imageApi = {
   // 上传图片
@@ -26,6 +32,11 @@ export const imageApi = {
     return http.delete(`/api/images/${id}`)
   },
 
+  // 批量删除图片
+  deleteBatch(ids: number[]): Promise<ApiResponse<null>> {
+    return http.post('/api/images/batch-delete', {ids})
+  },
+
   // 下载图片
   download(id: number, filename: string): Promise<void> {
     return http.download(`/api/images/${id}/download`, filename)
@@ -36,9 +47,13 @@ export const imageApi = {
     return http.get('/api/search', {params})
   },
 
+  // 更新单个图片元数据
+  updateMetadata(data: UpdateMetadataRequest): Promise<ApiResponse<Image>> {
+    return http.put(`/api/images/metadata`, data)
+  },
+
   // 获取图片 URL
   getImageUrl(storagePath: string): string {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:9099'
-    return `${baseUrl}/static/images/${storagePath}`
+    return `/static/images/${storagePath}`
   },
 }

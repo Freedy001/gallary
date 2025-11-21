@@ -20,14 +20,42 @@ import (
 	"go.uber.org/zap"
 )
 
+// UpdateMetadataRequest 元数据更新请求
+type UpdateMetadataRequest struct {
+	// 要更新的图片ID列表
+	ImageIDs []int64 `json:"image_ids" binding:"required"`
+	// 基本信息
+	OriginalName *string `json:"original_name,omitempty"`
+
+	// 地理位置信息
+	LocationName *string  `json:"location_name,omitempty"`
+	Latitude     *float64 `json:"latitude,omitempty"`
+	Longitude    *float64 `json:"longitude,omitempty"`
+
+	// 自定义元数据
+	Metadata []MetadataUpdate `json:"metadata,omitempty"`
+
+	// 标签信息
+	Tags []string `json:"tags,omitempty"`
+}
+
+// MetadataUpdate 元数据更新项
+type MetadataUpdate struct {
+	Key       string  `json:"key" binding:"required"`
+	Value     *string `json:"value,omitempty"`
+	ValueType string  `json:"value_type,omitempty"`
+}
+
 // ImageService 图片服务接口
 type ImageService interface {
 	Upload(ctx context.Context, file *multipart.FileHeader) (*model.Image, error)
 	GetByID(ctx context.Context, id int64) (*model.Image, error)
 	List(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error)
 	Delete(ctx context.Context, id int64) error
+	DeleteBatch(ctx context.Context, ids []int64) error
 	Search(ctx context.Context, params *repository.SearchParams) ([]*model.Image, int64, error)
 	Download(ctx context.Context, id int64) (io.ReadCloser, string, error)
+	BatchUpdateMetadata(ctx context.Context, req *UpdateMetadataRequest) ([]int64, error)
 }
 
 type imageService struct {
@@ -89,10 +117,25 @@ func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHea
 		return nil, fmt.Errorf("检查文件hash失败: %w", err)
 	}
 	if existingImage != nil {
+		// 检查是否是逻辑删除的记录
+		if existingImage.DeletedAt.Valid {
+			// 恢复逻辑删除的记录
+			logger.Info("检测到已删除的重复图片，恢复记录",
+				zap.String("hash", fileHash),
+				zap.Int64("existing_id", existingImage.ID))
+
+			if err := s.repo.Restore(ctx, existingImage.ID); err != nil {
+				return nil, fmt.Errorf("恢复图片记录失败: %w", err)
+			}
+
+			// 重新获取完整的记录信息
+			return s.repo.FindByID(ctx, existingImage.ID)
+		}
+
 		logger.Info("检测到重复图片，返回已存在的图片",
 			zap.String("hash", fileHash),
 			zap.Int64("existing_id", existingImage.ID))
-		return existingImage, nil
+		return existingImage, fmt.Errorf("图片已存在 hash: " + fileHash)
 	}
 
 	// 8. 生成存储路径（按日期分目录）
@@ -156,7 +199,7 @@ func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHea
 	// 13. 保存到数据库
 	if err := s.repo.Create(ctx, image); err != nil {
 		// 保存失败，删除已上传的文件
-		s.storage.Delete(ctx, finalPath)
+		_ = s.storage.Delete(ctx, finalPath)
 		return nil, fmt.Errorf("保存图片记录失败: %w", err)
 	}
 
@@ -240,7 +283,7 @@ func (s *imageService) List(ctx context.Context, page, pageSize int) ([]*model.I
 	return s.repo.List(ctx, page, pageSize)
 }
 
-// Delete 删除图片
+// Delete 删除图片（逻辑删除，不删除本地文件）
 func (s *imageService) Delete(ctx context.Context, id int64) error {
 	// 获取图片信息
 	image, err := s.repo.FindByID(ctx, id)
@@ -248,17 +291,29 @@ func (s *imageService) Delete(ctx context.Context, id int64) error {
 		return err
 	}
 
-	// 从存储删除原图文件
-	if err := s.storage.Delete(ctx, image.StoragePath); err != nil {
-		logger.Warn("删除存储文件失败", zap.Error(err))
-	}
+	logger.Info("逻辑删除图片，保留本地文件",
+		zap.Int64("id", id),
+		zap.String("file_hash", image.FileHash),
+		zap.String("storage_path", image.StoragePath))
 
-	if err := s.storage.Delete(ctx, image.ThumbnailPath); err != nil {
-		logger.Warn("删除缩略图文件失败", zap.Error(err))
-	}
-
-	// 从数据库删除记录
+	// 仅从数据库逻辑删除记录，不删除本地文件
 	return s.repo.Delete(ctx, id)
+}
+
+// DeleteBatch 批量删除图片（逻辑删除，不删除本地文件）
+func (s *imageService) DeleteBatch(ctx context.Context, ids []int64) error {
+	// 获取所有要删除的图片信息
+	images, err := s.repo.FindByIDs(ctx, ids)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("批量逻辑删除图片，保留本地文件",
+		zap.Int("count", len(images)),
+		zap.Any("ids", ids))
+
+	// 仅从数据库批量逻辑删除记录，不删除本地文件
+	return s.repo.DeleteBatch(ctx, ids)
 }
 
 // Search 搜索图片
@@ -287,4 +342,153 @@ func (s *imageService) Download(ctx context.Context, id int64) (io.ReadCloser, s
 	}
 
 	return reader, image.OriginalName, nil
+}
+
+// updateImageMetadata 更新图片自定义元数据
+func (s *imageService) updateImageMetadata(ctx context.Context, image *model.Image, metadata []MetadataUpdate) error {
+	// 获取现有的元数据
+	existingMetadata, err := s.repo.GetMetadata(ctx, image.ID)
+	if err != nil {
+		return fmt.Errorf("获取现有元数据失败: %w", err)
+	}
+
+	// 创建现有元数据的映射
+	existingMap := make(map[string]*model.ImageMetadata)
+	for i := range existingMetadata {
+		existingMap[existingMetadata[i].MetaKey] = &existingMetadata[i]
+	}
+
+	// 处理每个元数据项
+	for _, item := range metadata {
+		if item.Value == nil || *item.Value == "" {
+			// 如果值为空，删除该元数据
+			if existing, exists := existingMap[item.Key]; exists {
+				if err := s.repo.DeleteMetadata(ctx, existing.ID); err != nil {
+					return fmt.Errorf("删除元数据失败 %s: %w", item.Key, err)
+				}
+			}
+		} else {
+			// 如果值不为空，更新或创建元数据
+			valueType := item.ValueType
+			if valueType == "" {
+				valueType = "string"
+			}
+
+			if existing, exists := existingMap[item.Key]; exists {
+				// 更新现有元数据
+				existing.MetaValue = item.Value
+				existing.ValueType = valueType
+				if err := s.repo.UpdateMetadata(ctx, existing); err != nil {
+					return fmt.Errorf("更新元数据失败 %s: %w", item.Key, err)
+				}
+			} else {
+				// 创建新元数据
+				newMetadata := &model.ImageMetadata{
+					ImageID:   image.ID,
+					MetaKey:   item.Key,
+					MetaValue: item.Value,
+					ValueType: valueType,
+				}
+				if err := s.repo.CreateMetadata(ctx, newMetadata); err != nil {
+					return fmt.Errorf("创建元数据失败 %s: %w", item.Key, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// updateImageTags 更新图片标签
+func (s *imageService) updateImageTags(ctx context.Context, image *model.Image, tagNames []string) error {
+	// 获取或创建标签
+	var tagIDs []int64
+	for _, tagName := range tagNames {
+		if tagName == "" {
+			continue
+		}
+
+		// 查找现有标签
+		tag, err := s.repo.FindTagByName(ctx, tagName)
+		if err != nil {
+			return fmt.Errorf("查找标签失败 %s: %w", tagName, err)
+		}
+
+		if tag == nil {
+			// 创建新标签
+			tag = &model.Tag{
+				Name: tagName,
+			}
+			if err := s.repo.CreateTag(ctx, tag); err != nil {
+				return fmt.Errorf("创建标签失败 %s: %w", tagName, err)
+			}
+		}
+
+		tagIDs = append(tagIDs, tag.ID)
+	}
+
+	// 更新图片标签关联
+	if err := s.repo.UpdateImageTags(ctx, image.ID, tagIDs); err != nil {
+		return fmt.Errorf("更新图片标签关联失败: %w", err)
+	}
+
+	return nil
+}
+
+// BatchUpdateMetadata 批量更新图片元数据
+func (s *imageService) BatchUpdateMetadata(ctx context.Context, req *UpdateMetadataRequest) ([]int64, error) {
+	var updatedImages []int64
+
+	// 遍历每个图片ID进行更新
+	for _, imageID := range req.ImageIDs {
+		// 将批量请求转换为单个请求
+		// 1. 获取现有图片信息
+		image, err := s.repo.FindByID(ctx, imageID)
+		if err != nil {
+			return nil, err
+		}
+
+		// 2. 更新基本信息
+		if req.OriginalName != nil {
+			image.OriginalName = *req.OriginalName
+		}
+
+		// 3. 更新地理位置信息
+		if req.LocationName != nil {
+			image.LocationName = req.LocationName
+		}
+		if req.Latitude != nil {
+			image.Latitude = req.Latitude
+		}
+		if req.Longitude != nil {
+			image.Longitude = req.Longitude
+		}
+
+		// 4. 更新自定义元数据
+		if req.Metadata != nil {
+			if err := s.updateImageMetadata(ctx, image, req.Metadata); err != nil {
+				return nil, fmt.Errorf("更新自定义元数据失败: %w", err)
+			}
+		}
+
+		// 5. 更新标签信息
+		if req.Tags != nil {
+			if err := s.updateImageTags(ctx, image, req.Tags); err != nil {
+				return nil, fmt.Errorf("更新标签失败: %w", err)
+			}
+		}
+
+		// 6. 保存更新
+		if err := s.repo.Update(ctx, image); err != nil {
+			return nil, fmt.Errorf("保存图片更新失败: %w", err)
+		}
+
+		updatedImages = append(updatedImages, imageID)
+	}
+
+	logger.Info("批量更新图片元数据成功",
+		zap.Int("count", len(updatedImages)),
+		zap.Any("image_ids", req.ImageIDs))
+
+	return updatedImages, nil
 }

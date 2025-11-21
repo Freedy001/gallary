@@ -5,10 +5,11 @@ import type { Image, Pageable, SearchParams } from '@/types'
 
 export const useImageStore = defineStore('image', () => {
   // State
-  const images = ref<Image[]>([])
+  const images = ref<(Image | null)[]>([])
   const currentImage = ref<Image | null>(null)
   const selectedImages = ref<Set<number>>(new Set())
   const loading = ref(false)
+  const loadingPages = ref<Set<number>>(new Set())
   const error = ref<string | null>(null)
 
   // Pagination state
@@ -27,8 +28,12 @@ export const useImageStore = defineStore('image', () => {
 
   // Actions
   async function fetchImages(page = 1) {
+    // 防止重复加载同一页
+    if (loadingPages.value.has(page)) return
+
     try {
-      loading.value = true
+      loadingPages.value.add(page)
+      if (page === 1) loading.value = true
       error.value = null
 
       const response = isSearchMode.value && searchParams.value
@@ -37,23 +42,42 @@ export const useImageStore = defineStore('image', () => {
 
       const data: Pageable<Image> = response.data
 
-      if (page === 1) {
-        images.value = data.items
-      } else {
-        images.value.push(...data.items)
-      }
-
       currentPage.value = data.page
       pageSize.value = data.page_size
       total.value = data.total
       totalPages.value = data.total_pages
+
+      if (page === 1) {
+        // 初始化数组，使用 null 占位
+        const newImages = new Array(data.total).fill(null)
+        data.list.forEach((item, index) => {
+          newImages[index] = item
+        })
+        images.value = newImages
+      } else {
+        // 确保数组长度足够
+        if (images.value.length !== data.total) {
+          if (images.value.length < data.total) {
+            const diff = data.total - images.value.length
+            for (let i = 0; i < diff; i++) images.value.push(null)
+          }
+        }
+
+        const startIndex = (page - 1) * pageSize.value
+        data.list.forEach((item, index) => {
+          if (startIndex + index < images.value.length) {
+            images.value[startIndex + index] = item
+          }
+        })
+      }
 
       return data
     } catch (err) {
       error.value = err instanceof Error ? err.message : '获取图片列表失败'
       throw err
     } finally {
-      loading.value = false
+      if (page === 1) loading.value = false
+      loadingPages.value.delete(page)
     }
   }
 
@@ -64,6 +88,7 @@ export const useImageStore = defineStore('image', () => {
 
   async function refreshImages() {
     currentPage.value = 1
+    loadingPages.value.clear()
     await fetchImages(1)
   }
 
@@ -97,7 +122,7 @@ export const useImageStore = defineStore('image', () => {
   async function deleteImage(id: number) {
     try {
       await imageApi.delete(id)
-      images.value = images.value.filter(img => img.id !== id)
+      images.value = images.value.filter(img => img === null || img.id !== id)
       total.value -= 1
 
       if (currentImage.value?.id === id) {
@@ -108,6 +133,33 @@ export const useImageStore = defineStore('image', () => {
     } catch (err) {
       error.value = err instanceof Error ? err.message : '删除图片失败'
       throw err
+    }
+  }
+
+  async function deleteBatch(ids?: number[]) {
+    try {
+      const idsToDelete = ids || Array.from(selectedImages.value)
+      if (idsToDelete.length === 0) return
+
+      loading.value = true
+      await imageApi.deleteBatch(idsToDelete)
+
+      // 从列表移除已删除的图片
+      images.value = images.value.filter(img => img === null || !idsToDelete.includes(img.id))
+      total.value -= idsToDelete.length
+
+      // 清除选中状态
+      idsToDelete.forEach(id => selectedImages.value.delete(id))
+
+      // 如果当前查看的图片被删除，清空当前图片
+      if (currentImage.value && idsToDelete.includes(currentImage.value.id)) {
+        currentImage.value = null
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '批量删除图片失败'
+      throw err
+    } finally {
+      loading.value = false
     }
   }
 
@@ -161,6 +213,7 @@ export const useImageStore = defineStore('image', () => {
     clearSearch,
     getImageDetail,
     deleteImage,
+    deleteBatch,
     selectImage,
     deselectImage,
     toggleSelect,

@@ -35,7 +35,7 @@ func SetupRouter(
 		auth := api.Group("/auth")
 		{
 			auth.POST("/login", authHandler.Login)
-			auth.GET("/check", authHandler.Check)
+			auth.GET("/check", middleware.AuthMiddleware(cfg), authHandler.Check)
 		}
 
 		// 图片相关路由（需要认证）
@@ -43,6 +43,8 @@ func SetupRouter(
 		images.Use(middleware.AuthMiddleware(cfg))
 		{
 			images.POST("/upload", imageHandler.Upload)
+			images.POST("/batch-delete", imageHandler.BatchDelete)
+			images.PUT("/metadata", imageHandler.BatchUpdateMetadata)
 			images.GET("", imageHandler.List)
 			images.GET("/:id", imageHandler.GetByID)
 			images.DELETE("/:id", imageHandler.Delete)

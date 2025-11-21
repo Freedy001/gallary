@@ -1,5 +1,5 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import {defineStore} from 'pinia'
+import {ref, computed} from 'vue'
 
 export interface UploadTask {
   id: string
@@ -12,7 +12,7 @@ export interface UploadTask {
 
 export const useUIStore = defineStore('ui', () => {
   // State
-  const gridDensity = ref(3) // 1-5, 1=最密集(6列), 5=瀑布流(2列)
+  const gridDensity = ref(6) // 1-10, 1=最密集(9列), 10=最稀疏(1列)
   const sidebarCollapsed = ref(false)
   const commandPaletteOpen = ref(false)
   const imageViewerOpen = ref(false)
@@ -26,14 +26,25 @@ export const useUIStore = defineStore('ui', () => {
   const globalLoading = ref(false)
   const loadingMessage = ref('')
 
+  // Selection mode state
+  const isSelectionMode = ref(false)
+
+  // Timeline state
+  const activeDate = ref<string | null>(null)
+
   // Computed
   const gridColumns = computed(() => {
     const desktopColumns = {
-      1: 6,  // 最密集
-      2: 5,
-      3: 4,  // 默认
-      4: 3,
-      5: 2,  // 瀑布流
+      1: 9,  // Grid
+      2: 8,  // Grid
+      3: 7,  // Grid
+      4: 6,  // Grid
+      5: 5,  // Grid
+      6: 4,  // Grid (Default)
+      7: 3,  // Grid
+      8: 3,  // Waterfall
+      9: 2,  // Waterfall
+      10: 1, // Waterfall
     }[gridDensity.value] || 4
 
     return {
@@ -67,7 +78,7 @@ export const useUIStore = defineStore('ui', () => {
 
   // Actions
   function setGridDensity(density: number) {
-    gridDensity.value = Math.max(1, Math.min(5, density))
+    gridDensity.value = Math.max(1, Math.min(10, density))
   }
 
   function toggleSidebar() {
@@ -155,6 +166,14 @@ export const useUIStore = defineStore('ui', () => {
     loadingMessage.value = message
   }
 
+  function setSelectionMode(mode: boolean) {
+    isSelectionMode.value = mode
+  }
+
+  function setActiveDate(date: string | null) {
+    activeDate.value = date
+  }
+
   return {
     // State
     gridDensity,
@@ -166,6 +185,8 @@ export const useUIStore = defineStore('ui', () => {
     uploadTasks,
     globalLoading,
     loadingMessage,
+    isSelectionMode,
+    activeDate,
 
     // Computed
     gridColumns,
@@ -194,5 +215,7 @@ export const useUIStore = defineStore('ui', () => {
     clearCompletedTasks,
     clearAllTasks,
     setGlobalLoading,
+    setSelectionMode,
+    setActiveDate,
   }
 })
