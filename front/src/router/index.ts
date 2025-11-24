@@ -22,7 +22,7 @@ const routes: RouteRecordRaw[] = [
     path: '/gallery/location',
     name: 'Location',
     component: () => import('@/views/LocationView.vue'),
-    meta: {requiresAuth: true, disabled: true},
+    meta: {requiresAuth: true},
   },
   {
     path: '/gallery/people',

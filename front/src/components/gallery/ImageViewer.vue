@@ -5,10 +5,8 @@
         Change: Changed base container to handle the liquid glass context
         Instead of simple bg-black, we'll use our custom glass style classes
       -->
-      <div
-          v-if="uiStore.imageViewerOpen && currentImage"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 liquid-glass-container"
-      >
+      <div v-if="currentImage"
+           class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 liquid-glass-container">
         <!-- Layer 1: Glass Distortion Background (The overlay itself acts as the glass) -->
         <div class="absolute inset-0 liquid-glass-backdrop"></div>
 
@@ -63,24 +61,47 @@
                 }"
                   style="user-select: none"
                   draggable="false"
-                  @load="handleImageLoad"
               />
             </div>
           </Transition>
         </div>
 
-        <!-- 底部工具栏 (Liquid Glass Card Style) -->
-        <div
-            class="absolute bottom-0 left-0 right-0 p-6 z-20"
-            @click.stop
-        >
-          <LiquidGlassCard
-              class="mx-auto max-w-4xl menu-item"
-              :target-element="mainImageRef"
-              :target-image="imageUrl"
+        <!-- Details Toggle Button (Visible when details hidden) -->
+        <Transition name="fade">
+          <button
+              v-if="!showDetails"
+              @click="showDetails = true"
+              class="absolute bottom-6 right-6 z-30 rounded-full bg-black/50 p-3 text-white transition-colors hover:bg-black/70 glass-control"
+              title="显示详情 (I)"
           >
+            <InformationCircleIcon class="h-6 w-6"/>
+          </button>
+        </Transition>
+
+        <!-- 底部工具栏 (Liquid Glass Card Style) -->
+        <Transition name="slide-up">
+          <div
+              v-if="showDetails"
+              class="absolute bottom-0 left-0 right-0 p-6 z-20"
+              @click.stop
+          >
+            <LiquidGlassCard
+                class="mx-auto max-w-4xl menu-item relative"
+                :content-class="'p-4 pb-3.5'"
+                :target-element="mainImageRef"
+                :target-image="imageUrl"
+            >
+              <!-- Toggle Hide Button -->
+              <button
+                  @click="showDetails = false"
+                  class="absolute top-2 right-5 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                  title="隐藏详情 (I)"
+              >
+                <ChevronDownIcon class="h-5 w-5"/>
+              </button>
+
               <!-- 文件信息 -->
-              <div class="mb-4 text-white">
+              <div class="mb-3.5 text-white">
                 <h3 class="text-lg font-semibold text-shadow">{{ currentImage.original_name }}</h3>
                 <div class="mt-2 flex flex-wrap gap-4 text-sm text-gray-100 text-shadow-sm">
                   <span v-if="currentImage.taken_at">{{ formatDate(currentImage.taken_at) }}</span>
@@ -88,12 +109,19 @@
                   <!-- EXIF 信息 -->
                   <div v-if="currentImage.aperture || currentImage.shutter_speed || currentImage.iso"
                        class="flex gap-3 border-l border-white/30 pl-3">
-                    <span v-if="currentImage.aperture">f/{{ currentImage.aperture }}</span>
+                    <span v-if="currentImage.aperture">{{ currentImage.aperture }}</span>
                     <span v-if="currentImage.shutter_speed">{{ currentImage.shutter_speed }}s</span>
                     <span v-if="currentImage.iso">ISO{{ currentImage.iso }}</span>
+                    <span v-if="currentImage.focal_length">{{ currentImage.focal_length }}</span>
                   </div>
-                  <span class="border-l border-white/30 pl-3">{{ currentImage.width }} × {{ currentImage.height }}</span>
+                  <span class="border-l border-white/30 pl-3">{{ currentImage.width }} × {{
+                      currentImage.height
+                    }}</span>
                   <span>{{ formatFileSize(currentImage.file_size) }}</span>
+                  <span v-if="currentImage.location_name" class="border-l border-white/30 pl-3 flex items-center gap-1">
+                    <MapPinIcon class="h-3 w-3"/>
+                    {{ currentImage.location_name }}
+                  </span>
                 </div>
               </div>
 
@@ -114,12 +142,22 @@
                 </button>
                 <button
                     @click="resetZoom"
-                    class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/20 backdrop-blur-md transition-all border border-white/10"
+                    class="rounded-lg bg-white/10 px-3 py-1.5 text-sm text-white hover:bg-white/20 backdrop-blur-md transition-all border border-white/10"
                 >
                   重置
                 </button>
 
-                <div class="flex-1"/>
+                <div class="flex-1 ">
+                  <button
+                      @click="showThumbnails = !showThumbnails"
+                      class="flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors w-full justify-center py-1"
+                  >
+                    <span v-if="showThumbnails">隐藏预览</span>
+                    <span v-else>显示预览 ({{ images.length }})</span>
+                    <ChevronUpIcon v-if="showThumbnails" class="h-4 w-4"/>
+                    <ChevronDownIcon v-else class="h-4 w-4"/>
+                  </button>
+                </div>
 
                 <button
                     @click="downloadImage"
@@ -137,19 +175,50 @@
                   删除
                 </button>
               </div>
-          </LiquidGlassCard>
-        </div>
+
+              <!-- 缩略图列表 -->
+              <div>
+                <Transition name="thumbnail-slide">
+                  <div
+                      v-if="showThumbnails"
+                      ref="thumbnailsRef"
+                      class="flex gap-1 overflow-hidden px-1 mt-2"
+                      @wheel.stop
+                  >
+                    <div
+                        v-for="(img, index) in images"
+                        :key="img?.id || index"
+                        class="relative h-10 w-10 flex-shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 transition-all bg-gray-800/50"
+                        :class="index === props.index ? 'border-blue-500 opacity-100 ring-2 ring-blue-500/50' : 'border-transparent opacity-60 hover:opacity-80'"
+                        @click="changeIndex(index)"
+                    >
+                      <img
+                          v-if="img"
+                          :src="imageApi.getImageUrl(img.thumbnail_path || img.storage_path)"
+                          class="h-full w-full object-cover"
+                          loading="lazy"
+                          :alt="img.original_name"
+                      />
+                      <div v-else class="h-full w-full flex items-center justify-center text-xs text-gray-500">
+                        加载中...
+                      </div>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
+            </LiquidGlassCard>
+          </div>
+        </Transition>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import {computed, ref, onMounted, onUnmounted} from 'vue'
-import {useUIStore} from '@/stores/ui'
-import {useImageStore} from '@/stores/image'
+import {computed, ref, onMounted, onUnmounted, watch} from 'vue'
 import {imageApi} from '@/api/image'
 import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
+import type {Image} from '@/types'
 import {
   XMarkIcon,
   ChevronLeftIcon,
@@ -158,21 +227,35 @@ import {
   PlusIcon,
   ArrowDownTrayIcon,
   TrashIcon,
+  MapPinIcon,
+  InformationCircleIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from '@heroicons/vue/24/outline'
 
-const uiStore = useUIStore()
-const imageStore = useImageStore()
+const props = defineProps<{
+  index: number
+  images: (Image | null)[]
+}>()
 
+const emit = defineEmits<{
+  (e: 'close'): void
+  (e: 'loadMore', value: number): void
+}>()
+
+const currentIndex = ref<number>(-1)
 const imageContainerRef = ref<HTMLElement>()
 const scale = ref(1)
 const translate = ref({x: 0, y: 0})
 const isDragging = ref(false)
 const dragStart = ref({x: 0, y: 0})
 const slideDirection = ref<'slide-left' | 'slide-right'>('slide-left')
+const showDetails = ref(true)
+const showThumbnails = ref(true)
+const thumbnailsRef = ref<HTMLElement>()
 
 const currentImage = computed(() => {
-  const index = uiStore.currentViewerIndex
-  return imageStore.images[index] || null
+  return props.images[currentIndex.value] || null
 })
 
 const imageUrl = computed(() => {
@@ -180,18 +263,18 @@ const imageUrl = computed(() => {
   return imageApi.getImageUrl(currentImage.value.storage_path)
 })
 
-const hasPrevious = computed(() => uiStore.currentViewerIndex > 0)
-const hasNext = computed(() => uiStore.currentViewerIndex < imageStore.images.length - 1)
+const hasPrevious = computed(() => props.index > 0)
+const hasNext = computed(() => props.index < props.images.length - 1)
 
 function close() {
-  uiStore.closeImageViewer()
+  emit('close')
   resetZoom()
 }
 
 function previous() {
   if (hasPrevious.value) {
     slideDirection.value = 'slide-right'
-    uiStore.previousImage()
+    currentIndex.value--
     resetZoom()
   }
 }
@@ -199,7 +282,19 @@ function previous() {
 function next() {
   if (hasNext.value) {
     slideDirection.value = 'slide-left'
-    uiStore.nextImage()
+    currentIndex.value++
+    resetZoom()
+  }
+}
+
+function changeIndex(newIndex: number) {
+  if (newIndex >= 0 && newIndex < props.images.length) {
+    if (newIndex > props.index) {
+      slideDirection.value = 'slide-left'
+    } else {
+      slideDirection.value = 'slide-right'
+    }
+    currentIndex.value = newIndex
     resetZoom()
   }
 }
@@ -249,9 +344,6 @@ function originScale(): boolean {
   return scale.value == 1 && translate.value.x === 0 && translate.value.y === 0;
 }
 
-function handleImageLoad() {
-  // 图片加载完成
-}
 
 async function downloadImage() {
   if (!currentImage.value) return
@@ -270,13 +362,7 @@ async function deleteImage() {
     return
   }
 
-  try {
-    await imageStore.deleteImage(currentImage.value.id)
-    close()
-  } catch (error) {
-    console.error('Delete failed:', error)
-    alert('删除失败')
-  }
+  await imageApi.deleteBatch([currentImage.value.id])
 }
 
 function formatDate(dateString: string): string {
@@ -298,8 +384,6 @@ function formatFileSize(bytes: number): string {
 
 // 键盘快捷键
 function handleKeydown(event: KeyboardEvent) {
-  if (!uiStore.imageViewerOpen) return
-
   switch (event.key) {
     case 'Escape':
       close()
@@ -309,6 +393,10 @@ function handleKeydown(event: KeyboardEvent) {
       break
     case 'ArrowRight':
       next()
+      break
+    case 'i':
+    case 'I':
+      showDetails.value = !showDetails.value
       break
     case '+':
     case '=':
@@ -324,6 +412,34 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 const mainImageRef = ref<HTMLImageElement>()
+
+watch(() => props.index, index => {
+  currentIndex.value = index
+})
+
+watch(
+    () => currentIndex.value,
+    (newIndex) => {
+      if (props.images[newIndex] === null) {
+        emit('loadMore', newIndex)
+      }
+
+      if (showThumbnails.value && thumbnailsRef.value) {
+        // 自动滚动到当前缩略图
+        const container = thumbnailsRef.value
+        const children = container.children
+        if (children[newIndex]) {
+          const element = children[newIndex] as HTMLElement
+          const containerCenter = container.clientWidth / 2
+          const elementCenter = element.offsetLeft + element.clientWidth / 2
+          container.scrollTo({
+            left: elementCenter - containerCenter,
+            behavior: 'smooth'
+          })
+        }
+      }
+    }
+)
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
@@ -381,6 +497,7 @@ onUnmounted(() => {
 .text-shadow {
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
+
 .text-shadow-sm {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
@@ -392,14 +509,40 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
+
 .glass-control:hover {
   background: rgba(80, 80, 80, 0.5);
   border-color: rgba(255, 255, 255, 0.3);
   transform: scale(1.05); /* Keep vertical center */
 }
+
 /* Top close button needs simpler hover transform */
 .glass-control.top-4:hover {
   transform: scale(1.05);
 }
 
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateY(100%);
+  opacity: 0;
+}
+
+.thumbnail-slide-enter-active,
+.thumbnail-slide-leave-active {
+  transition: all 0.3s ease;
+  max-height: 100px;
+  opacity: 1;
+}
+
+.thumbnail-slide-enter-from,
+.thumbnail-slide-leave-to {
+  max-height: 0;
+  margin-top: 0;
+  opacity: 0;
+}
 </style>

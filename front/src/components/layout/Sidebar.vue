@@ -42,17 +42,25 @@
           </button>
         </router-link>
 
-        <!-- 地点 (预留) -->
-        <button
-          disabled
-          :class="[
-            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium',
-            'cursor-not-allowed text-gray-400',
-          ]"
+        <!-- 地点 -->
+        <router-link
+          to="/gallery/location"
+          v-slot="{ isActive }"
+          custom
         >
-          <MapPinIcon class="h-5 w-5 flex-shrink-0" />
-          <span v-if="!uiStore.sidebarCollapsed">地点</span>
-        </button>
+          <button
+            @click="navigateTo('/gallery/location')"
+            :class="[
+              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              isActive
+                ? 'bg-blue-50 text-blue-600'
+                : 'text-gray-700 hover:bg-gray-100',
+            ]"
+          >
+            <MapPinIcon class="h-5 w-5 flex-shrink-0" />
+            <span v-if="!uiStore.sidebarCollapsed">地点</span>
+          </button>
+        </router-link>
 
         <!-- 人物 (预留) -->
         <button

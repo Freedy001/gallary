@@ -1,16 +1,202 @@
 <template>
   <AppLayout>
-    <div class="flex h-full items-center justify-center p-6">
-      <div class="text-center">
-        <MapPinIcon class="mx-auto h-16 w-16 text-gray-300" />
-        <h3 class="mt-4 text-lg font-medium text-gray-900">地点视图</h3>
-        <p class="mt-2 text-sm text-gray-600">此功能正在开发中</p>
+    <div class="h-full w-full relative">
+      <!-- Map Container -->
+      <div id="location-map-container" class="w-full h-full">
+        <div v-if="!amapConfigured"
+             class="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500 text-sm p-4 text-center z-10">
+          请在 .env 文件中配置 VITE_AMAP_KEY 和 VITE_AMAP_SECURITY_KEY
+        </div>
+        <div v-if="loading" class="absolute inset-0 flex items-center justify-center bg-white/80 z-20">
+          <div class="text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+            <p class="mt-4 text-sm text-gray-600">加载地图中...</p>
+          </div>
+        </div>
       </div>
+
+      <!-- 图片查看器 -->
+      <ImageViewer
+        :index="viewerIndex"
+        :images="viewerImages"
+        @close="viewerIndex=-1"
+      />
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { MapPinIcon } from '@heroicons/vue/24/outline'
+import {computed, onMounted, onUnmounted, ref} from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import ImageViewer from '@/components/gallery/ImageViewer.vue'
+import {imageApi} from '@/api/image'
+import {useUIStore} from '@/stores/ui'
+import type {ClusterResult, Image} from '@/types'
+import AMapLoader from '@amap/amap-jsapi-loader'
+
+let map: any = null
+let markers:any[] = []
+const loading = ref(true)
+const amapConfigured = computed(() => !!import.meta.env.VITE_AMAP_KEY)
+
+const uiStore = useUIStore()
+
+// 图片查看器状态
+const viewerImages = ref<Image[]>([])
+const viewerIndex = ref(-1)
+
+// 更新聚合点
+const updateClusters = async () => {
+  if (!map) return
+
+  try {
+    const bounds = map.getBounds()
+    const zoom = Math.floor(map.getZoom())
+
+    const minLat = bounds.getSouthWest().lat
+    const maxLat = bounds.getNorthEast().lat
+    const minLng = bounds.getSouthWest().lng
+    const maxLng = bounds.getNorthEast().lng
+
+    const response = await imageApi.getClusters(minLat, maxLat, minLng, maxLng, zoom)
+    renderMarkers(response.data || [])
+  } catch (error) {
+    console.error('获取聚合数据失败:', error)
+  }
+}
+
+// 渲染标记
+const renderMarkers = (clusters: ClusterResult[]) => {
+  if (!map) return
+
+  // 清除现有标记
+  map.remove(markers)
+  markers = []
+
+  const newMarkers: any[] = []
+
+  clusters.forEach(cluster => {
+    const {latitude, longitude, count, cover_image, min_lat, max_lat, min_lng, max_lng} = cluster
+    if (!cover_image) return
+
+    const imageUrl = imageApi.getImageUrl(cover_image.thumbnail_path || cover_image.storage_path)
+
+    // 创建自定义内容
+    const content = `
+      <div style="position: relative; width: 48px; height: 48px; cursor: pointer;">
+        <div style="width: 100%; height: 100%; border-radius: 8px; border: 2px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; background: #f3f4f6;">
+           <img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;" alt="-">
+        </div>
+        ${count > 1 ? `<div style="position: absolute; top: -8px; right: -8px; background: #3b82f6; color: white; border-radius: 9999px; padding: 0 6px; font-size: 12px; font-weight: bold; border: 2px solid white; min-width: 20px; text-align: center;">${count}</div>` : ''}
+      </div>
+    `
+
+    const marker = new (window as any).AMap.Marker({
+      position: [longitude, latitude],
+      content: content,
+      offset: new (window as any).AMap.Pixel(-24, -24), // Center the marker (48/2 = 24)
+      zIndex: 100,
+      extData: cluster,
+      cursor: 'pointer'
+    })
+
+    // 添加点击事件
+    marker.on('click', async () => {
+      try {
+        // 显示加载状态
+        uiStore.setGlobalLoading(true, '加载图片中...')
+
+        // 获取聚合组内的所有图片（限制100张）
+        const response = await imageApi.getClusterImages(min_lat, max_lat, min_lng, max_lng, 1, 100)
+
+        if (response.data && response.data.list.length > 0) {
+          // 更新图片列表并打开查看器
+          viewerImages.value = response.data.list
+          viewerIndex.value = 0
+        }
+      } catch (error) {
+        console.error('加载聚合图片失败:', error)
+      } finally {
+        uiStore.setGlobalLoading(false)
+      }
+    })
+
+    newMarkers.push(marker)
+  })
+
+  map.add(newMarkers)
+  markers = newMarkers
+}
+
+
+const initMap = async () => {
+  if (!amapConfigured.value) {
+    loading.value = false
+    return
+  }
+
+  try {
+    (window as any)._AMapSecurityConfig = {
+      securityJsCode: import.meta.env.VITE_AMAP_SECURITY_KEY,
+    }
+
+    const AMap = await AMapLoader.load({
+      key: import.meta.env.VITE_AMAP_KEY,
+      version: "2.0",
+      plugins: [],
+    })
+
+    // 默认中国中心
+    const centerLng = 104.195397
+    const centerLat = 35.86166
+    const zoom = 4
+
+    map = new AMap.Map("location-map-container", {
+      viewMode: "3D",
+      zoom: zoom,
+      center: [centerLng, centerLat],
+      resizeEnable: true
+    })
+
+    map.on('complete', () => {
+      loading.value = false
+      updateClusters()
+    })
+
+    map.on('moveend', updateClusters)
+    map.on('zoomend', updateClusters)
+
+  } catch (error) {
+    console.error('地图初始化失败:', error)
+    loading.value = false
+  }
+}
+
+const destroyMap = () => {
+  if (map) {
+    map.destroy()
+    map = null
+    markers = []
+  }
+}
+
+onMounted(async () => {
+  await initMap()
+})
+
+onUnmounted(() => {
+  destroyMap()
+})
 </script>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

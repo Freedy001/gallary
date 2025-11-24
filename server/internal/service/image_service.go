@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -56,6 +57,9 @@ type ImageService interface {
 	Search(ctx context.Context, params *repository.SearchParams) ([]*model.Image, int64, error)
 	Download(ctx context.Context, id int64) (io.ReadCloser, string, error)
 	BatchUpdateMetadata(ctx context.Context, req *UpdateMetadataRequest) ([]int64, error)
+	GetImagesWithLocation(ctx context.Context) ([]*model.Image, error)
+	GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, zoom int) ([]*model.ClusterResult, error)
+	GetClusterImages(ctx context.Context, minLat, maxLat, minLng, maxLng float64, page, pageSize int) ([]*model.Image, int64, error)
 }
 
 type imageService struct {
@@ -491,4 +495,62 @@ func (s *imageService) BatchUpdateMetadata(ctx context.Context, req *UpdateMetad
 		zap.Any("image_ids", req.ImageIDs))
 
 	return updatedImages, nil
+}
+
+// GetImagesWithLocation 获取带有地理位置的图片
+func (s *imageService) GetImagesWithLocation(ctx context.Context) ([]*model.Image, error) {
+	return s.repo.GetImagesWithLocation(ctx)
+}
+
+// GetClusters 获取图片聚合数据
+func (s *imageService) GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, zoom int) ([]*model.ClusterResult, error) {
+	// 根据缩放级别计算网格大小
+	// 这是一个启发式策略，可以根据实际效果调整
+	gridSize := 0.5 // 默认值
+
+	if zoom >= 18 {
+		gridSize = 0.0002 // 约20米
+	} else if zoom >= 16 {
+		gridSize = 0.001 // 约100米
+	} else if zoom >= 14 {
+		gridSize = 0.005 // 约500米
+	} else if zoom >= 12 {
+		gridSize = 0.02 // 约2公里
+	} else if zoom >= 10 {
+		gridSize = 0.1 // 约10公里
+	} else if zoom >= 8 {
+		gridSize = 0.5 // 约50公里
+	} else if zoom >= 6 {
+		gridSize = 2.0 // 约200公里
+	} else {
+		gridSize = 10.0 // 很大
+	}
+
+	// 计算中心纬度，用于调整经度网格大小（解决投影变形问题）
+	centerLat := (minLat + maxLat) / 2.0
+	// 将纬度转换为弧度
+	radLat := centerLat * math.Pi / 180.0
+	// 计算经度方向的网格大小
+	// gridSizeLng = gridSizeLat / cos(lat)
+	// 注意：cos(lat) 可能接近0（极地），需要做边界处理
+	cosLat := math.Abs(math.Cos(radLat))
+	if cosLat < 0.0001 {
+		cosLat = 0.0001
+	}
+	gridSizeLng := gridSize / cosLat
+
+	return s.repo.GetClusters(ctx, minLat, maxLat, minLng, maxLng, gridSize, gridSizeLng)
+}
+
+// GetClusterImages 获取指定聚合组内的图片（分页）
+func (s *imageService) GetClusterImages(ctx context.Context, minLat, maxLat, minLng, maxLng float64, page, pageSize int) ([]*model.Image, int64, error) {
+	// 参数验证
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	return s.repo.GetClusterImages(ctx, minLat, maxLat, minLng, maxLng, page, pageSize)
 }

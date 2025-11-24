@@ -46,6 +46,8 @@ func SetupRouter(
 			images.POST("/batch-delete", imageHandler.BatchDelete)
 			images.PUT("/metadata", imageHandler.BatchUpdateMetadata)
 			images.GET("", imageHandler.List)
+			images.GET("/clusters", imageHandler.GetClusters)
+			images.GET("/clusters/images", imageHandler.GetClusterImages)
 			images.GET("/:id", imageHandler.GetByID)
 			images.DELETE("/:id", imageHandler.Delete)
 			images.GET("/:id/download", imageHandler.Download)

@@ -12,6 +12,7 @@ import (
 
 // ImageRepository 图片仓库接口
 type ImageRepository interface {
+	GetImagesWithLocation(ctx context.Context) ([]*model.Image, error)
 	Create(ctx context.Context, image *model.Image) error
 	FindByID(ctx context.Context, id int64) (*model.Image, error)
 	FindByHash(ctx context.Context, hash string) (*model.Image, error)
@@ -33,6 +34,10 @@ type ImageRepository interface {
 	FindTagByName(ctx context.Context, name string) (*model.Tag, error)
 	CreateTag(ctx context.Context, tag *model.Tag) error
 	UpdateImageTags(ctx context.Context, imageID int64, tagIDs []int64) error
+
+	// 聚合相关
+	GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, gridSizeLat, gridSizeLng float64) ([]*model.ClusterResult, error)
+	GetClusterImages(ctx context.Context, minLat, maxLat, minLng, maxLng float64, page, pageSize int) ([]*model.Image, int64, error)
 }
 
 // SearchParams 搜索参数
@@ -306,4 +311,127 @@ func (r *imageRepository) UpdateImageTags(ctx context.Context, imageID int64, ta
 
 		return nil
 	})
+}
+
+// GetImagesWithLocation 获取带有地理位置的图片
+func (r *imageRepository) GetImagesWithLocation(ctx context.Context) ([]*model.Image, error) {
+	var images []*model.Image
+	err := database.GetDB(ctx).WithContext(ctx).
+		Where("latitude IS NOT NULL AND longitude IS NOT NULL").
+		Find(&images).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return images, nil
+}
+
+// GetClusters 获取聚合后的图片数据
+func (r *imageRepository) GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, gridSizeLat, gridSizeLng float64) ([]*model.ClusterResult, error) {
+	var results []*model.ClusterResult
+
+	// 1. 聚合查询
+	// 使用 floor(lat/gridSizeLat) 和 floor(lng/gridSizeLng) 进行分组
+	type clusterRaw struct {
+		GridIndexLat int
+		GridIndexLng int
+		Lat          float64
+		Lng          float64
+		Count        int64
+		CoverID      int64
+	}
+	var raws []clusterRaw
+
+	// PostgreSQL 语法
+	// 确保只查询有坐标的图片
+	// 使用 SQL 注入安全的参数绑定
+	err := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).Raw(`
+		SELECT 
+			FLOOR(latitude / ?) as grid_index_lat, 
+			FLOOR(longitude / ?) as grid_index_lng, 
+			AVG(latitude) as lat, 
+			AVG(longitude) as lng, 
+			COUNT(*) as count, 
+			MAX(id) as cover_id
+		FROM images 
+		WHERE (latitude BETWEEN ? AND ?) AND (longitude BETWEEN ? AND ?)
+		GROUP BY grid_index_lat, grid_index_lng
+	`, gridSizeLat, gridSizeLng, minLat, maxLat, minLng, maxLng).Scan(&raws).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(raws) == 0 {
+		return []*model.ClusterResult{}, nil
+	}
+
+	// 2. 获取 Cover Image 详情
+	coverIDs := make([]int64, 0, len(raws))
+	for _, raw := range raws {
+		coverIDs = append(coverIDs, raw.CoverID)
+	}
+
+	var images []*model.Image
+	err = database.GetDB(ctx).WithContext(ctx).
+		Where("id IN ?", coverIDs).
+		Find(&images).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	// 建立 ID -> Image 映射
+	imageMap := make(map[int64]*model.Image)
+	for _, img := range images {
+		imageMap[img.ID] = img
+	}
+
+	// 3. 组装结果
+	for _, raw := range raws {
+		if img, ok := imageMap[raw.CoverID]; ok {
+			// 计算该网格的经纬度范围
+			minLat := float64(raw.GridIndexLat) * gridSizeLat
+			maxLat := float64(raw.GridIndexLat+1) * gridSizeLat
+			minLng := float64(raw.GridIndexLng) * gridSizeLng
+			maxLng := float64(raw.GridIndexLng+1) * gridSizeLng
+
+			results = append(results, &model.ClusterResult{
+				MinLat:     minLat,
+				MaxLat:     maxLat,
+				MinLng:     minLng,
+				MaxLng:     maxLng,
+				Latitude:   raw.Lat,
+				Longitude:  raw.Lng,
+				Count:      raw.Count,
+				CoverImage: img,
+			})
+		}
+	}
+
+	return results, nil
+}
+
+// GetClusterImages 获取指定聚合组内的图片（分页）
+func (r *imageRepository) GetClusterImages(ctx context.Context, minLat, maxLat, minLng, maxLng float64, page, pageSize int) ([]*model.Image, int64, error) {
+	var images []*model.Image
+	var total int64
+
+	db := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).
+		Where("latitude >= ? AND latitude < ?", minLat, maxLat).
+		Where("longitude >= ? AND longitude < ?", minLng, maxLng)
+
+	// 获取总数
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 分页查询
+	offset := (page - 1) * pageSize
+	if err := db.Offset(offset).Limit(pageSize).Order("taken_at DESC").Find(&images).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return images, total, nil
 }

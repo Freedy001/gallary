@@ -3,7 +3,7 @@
     <Transition name="fade">
       <div
         v-if="modelValue"
-        class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4"
+        class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto "
         @click.self="handleClose"
       >
         <Transition name="modal">
@@ -15,7 +15,6 @@
             ]"
             :hover-effect="false"
             content-class="p-0"
-            style="background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%)"
             @click.stop
           >
             <!-- 头部 -->

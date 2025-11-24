@@ -4,11 +4,8 @@
       <!-- 命令面板 -->
       <CommandPalette />
 
-      <!-- 图片查看器 -->
-      <ImageViewer />
-
       <!-- 图片网格 -->
-      <ImageGrid />
+      <ImageGrid/>
     </template>
 
     <template #overlay>
@@ -23,7 +20,6 @@ import { onMounted } from 'vue'
 import { useImageStore } from '@/stores/image'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import CommandPalette from '@/components/search/CommandPalette.vue'
-import ImageViewer from '@/components/gallery/ImageViewer.vue'
 import ImageGrid from '@/components/gallery/ImageGrid.vue'
 import Timeline from '@/components/gallery/Timeline.vue'
 

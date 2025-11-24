@@ -22,7 +22,7 @@
     </div>
 
     <!-- 悬停遮罩 -->
-    <div class="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />
+<!--    <div class="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />-->
 
     <!-- 悬停信息 -->
     <div class="absolute bottom-0 left-0 right-0 translate-y-full bg-gradient-to-t from-black/70 to-transparent p-3 transition-transform group-hover:translate-y-0">
@@ -30,6 +30,7 @@
       <div class="mt-1 flex items-center gap-2 text-xs text-gray-300">
         <span v-if="image.taken_at">{{ formatDate(image.taken_at) }}</span>
         <span v-if="image.camera_model">{{ image.camera_model }}</span>
+        <span v-if="image.location_name">{{ image.location_name }}</span>
       </div>
     </div>
   </div>

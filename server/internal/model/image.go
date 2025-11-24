@@ -45,6 +45,18 @@ type Image struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty" swaggertype:"primitive,string"`
 }
 
+// ClusterResult 聚合结果
+type ClusterResult struct {
+	MinLat     float64 `json:"min_lat"`     // 最小纬度
+	MaxLat     float64 `json:"max_lat"`     // 最大纬度
+	MinLng     float64 `json:"min_lng"`     // 最小经度
+	MaxLng     float64 `json:"max_lng"`     // 最大经度
+	Latitude   float64 `json:"latitude"`    // 聚合中心纬度
+	Longitude  float64 `json:"longitude"`   // 聚合中心经度
+	Count      int64   `json:"count"`       // 图片数量
+	CoverImage *Image  `json:"cover_image"` // 封面图片
+}
+
 // TableName 指定表名
 func (Image) TableName() string {
 	return "images"

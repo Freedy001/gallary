@@ -11,12 +11,14 @@ export interface UploadTask {
 }
 
 export const useUIStore = defineStore('ui', () => {
-  // State
+  // image layout State
   const gridDensity = ref(6) // 1-10, 1=最密集(9列), 10=最稀疏(1列)
+  // Sidebar state
   const sidebarCollapsed = ref(false)
+  // Command palette state
   const commandPaletteOpen = ref(false)
+  // Image viewer state
   const imageViewerOpen = ref(false)
-  const currentViewerIndex = ref(0)
 
   // Upload state
   const uploadDrawerOpen = ref(false)
@@ -30,7 +32,7 @@ export const useUIStore = defineStore('ui', () => {
   const isSelectionMode = ref(false)
 
   // Timeline state
-  const activeDate = ref<string | null>(null)
+  const timeLineState = ref<{ date: string, location: string | null } | null>(null)
 
   // Computed
   const gridColumns = computed(() => {
@@ -97,23 +99,6 @@ export const useUIStore = defineStore('ui', () => {
     commandPaletteOpen.value = !commandPaletteOpen.value
   }
 
-  function openImageViewer(index = 0) {
-    currentViewerIndex.value = index
-    imageViewerOpen.value = true
-  }
-
-  function closeImageViewer() {
-    imageViewerOpen.value = false
-  }
-
-  function nextImage() {
-    currentViewerIndex.value++
-  }
-
-  function previousImage() {
-    currentViewerIndex.value--
-  }
-
   function openUploadDrawer() {
     uploadDrawerOpen.value = true
   }
@@ -170,8 +155,8 @@ export const useUIStore = defineStore('ui', () => {
     isSelectionMode.value = mode
   }
 
-  function setActiveDate(date: string | null) {
-    activeDate.value = date
+  function setTimeLineState(date: { date: string, location: string | null } | null) {
+    timeLineState.value = date
   }
 
   return {
@@ -180,13 +165,12 @@ export const useUIStore = defineStore('ui', () => {
     sidebarCollapsed,
     commandPaletteOpen,
     imageViewerOpen,
-    currentViewerIndex,
     uploadDrawerOpen,
     uploadTasks,
     globalLoading,
     loadingMessage,
     isSelectionMode,
-    activeDate,
+    timeLineState,
 
     // Computed
     gridColumns,
@@ -202,10 +186,6 @@ export const useUIStore = defineStore('ui', () => {
     openCommandPalette,
     closeCommandPalette,
     toggleCommandPalette,
-    openImageViewer,
-    closeImageViewer,
-    nextImage,
-    previousImage,
     openUploadDrawer,
     closeUploadDrawer,
     toggleUploadDrawer,
@@ -216,6 +196,6 @@ export const useUIStore = defineStore('ui', () => {
     clearAllTasks,
     setGlobalLoading,
     setSelectionMode,
-    setActiveDate,
+    setTimeLineState,
   }
 })

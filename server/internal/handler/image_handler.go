@@ -257,7 +257,7 @@ func (h *ImageHandler) Search(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			request	body		service.UpdateMetadataRequest		true	"批量元数据更新请求"
-//	@Success		200		{object}	utils.Response{data=[]model.Image}	"更新成功"
+//	@Success		200		{object}	utils.Response{data=[]int64}		"更新成功"
 //	@Failure		400		{object}	utils.Response						"无效的参数"
 //	@Failure		500		{object}	utils.Response						"更新失败"
 //	@Router			/api/images/metadata [put]
@@ -273,7 +273,7 @@ func (h *ImageHandler) BatchUpdateMetadata(c *gin.Context) {
 		return
 	}
 
-	images, err := database.Transaction1(c.Request.Context(), func(ctx context.Context) ([]int64, error) {
+	imageIds, err := database.Transaction1(c.Request.Context(), func(ctx context.Context) ([]int64, error) {
 		return h.service.BatchUpdateMetadata(ctx, &req)
 	})
 	if err != nil {
@@ -282,5 +282,99 @@ func (h *ImageHandler) BatchUpdateMetadata(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessWithMessage(c, "批量更新成功", images)
+	utils.SuccessWithMessage(c, "批量更新成功", imageIds)
+}
+
+// GetClusters 获取图片聚合数据
+//
+//	@Summary		获取图片聚合数据
+//	@Description	根据视窗范围和缩放级别获取图片聚合数据
+//	@Tags			图片管理
+//	@Produce		json
+//	@Param			min_lat	query		number							true	"最小纬度"
+//	@Param			max_lat	query		number							true	"最大纬度"
+//	@Param			min_lng	query		number							true	"最小经度"
+//	@Param			max_lng	query		number							true	"最大经度"
+//	@Param			zoom	query		int								true	"缩放级别"
+//	@Success		200		{object}	utils.Response{data=[]model.ClusterResult}	"聚合列表"
+//	@Failure		500		{object}	utils.Response					"获取失败"
+//	@Router			/api/images/clusters [get]
+func (h *ImageHandler) GetClusters(c *gin.Context) {
+	minLat, _ := strconv.ParseFloat(c.Query("min_lat"), 64)
+	maxLat, _ := strconv.ParseFloat(c.Query("max_lat"), 64)
+	minLng, _ := strconv.ParseFloat(c.Query("min_lng"), 64)
+	maxLng, _ := strconv.ParseFloat(c.Query("max_lng"), 64)
+	zoom, _ := strconv.Atoi(c.Query("zoom"))
+
+	// 简单验证参数
+	if minLat == 0 && maxLat == 0 && minLng == 0 && maxLng == 0 {
+		// 如果没有传参数，默认返回全球范围
+		minLat, maxLat = -90, 90
+		minLng, maxLng = -180, 180
+	}
+
+	clusters, err := h.service.GetClusters(c.Request.Context(), minLat, maxLat, minLng, maxLng, zoom)
+	if err != nil {
+		logger.Error("获取聚合数据失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.Success(c, clusters)
+}
+
+// GetClusterImages 获取指定聚合组内的图片（分页）
+// @Summary 获取聚合组图片
+// @Description 获取指定经纬度范围内的图片列表（分页）
+// @Tags images
+// @Accept json
+// @Produce json
+// @Param min_lat query number true "最小纬度"
+// @Param max_lat query number true "最大纬度"
+// @Param min_lng query number true "最小经度"
+// @Param max_lng query number true "最大经度"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
+// @Success 200 {object} utils.Response{data=object{items=[]model.Image,total=int64,page=int,page_size=int}}
+// @Failure 400 {object} utils.Response
+// @Failure 500 {object} utils.Response
+// @Router /api/images/clusters/images [get]
+func (h *ImageHandler) GetClusterImages(c *gin.Context) {
+	// 解析参数
+	minLat, err := strconv.ParseFloat(c.Query("min_lat"), 64)
+	if err != nil {
+		utils.Error(c, 400, "无效的最小纬度")
+		return
+	}
+
+	maxLat, err := strconv.ParseFloat(c.Query("max_lat"), 64)
+	if err != nil {
+		utils.Error(c, 400, "无效的最大纬度")
+		return
+	}
+
+	minLng, err := strconv.ParseFloat(c.Query("min_lng"), 64)
+	if err != nil {
+		utils.Error(c, 400, "无效的最小经度")
+		return
+	}
+
+	maxLng, err := strconv.ParseFloat(c.Query("max_lng"), 64)
+	if err != nil {
+		utils.Error(c, 400, "无效的最大经度")
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	// 调用服务层
+	images, total, err := h.service.GetClusterImages(c.Request.Context(), minLat, maxLat, minLng, maxLng, page, pageSize)
+	if err != nil {
+		logger.Error("获取聚合组图片失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.PageResponse(c, images, total, page, pageSize)
 }
