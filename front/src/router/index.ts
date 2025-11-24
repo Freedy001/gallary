@@ -22,7 +22,19 @@ const routes: RouteRecordRaw[] = [
     path: '/gallery/location',
     name: 'Location',
     component: () => import('@/views/LocationView.vue'),
-    meta: {requiresAuth: true, disabled: true},
+    meta: {requiresAuth: true},
+  },
+  {
+    path: '/gallery/share',
+    name: 'ShareManage',
+    component: () => import('@/views/ShareManage.vue'),
+    meta: {requiresAuth: true},
+  },
+  {
+    path: '/s/:code',
+    name: 'SharePublic',
+    component: () => import('@/views/SharePublic.vue'),
+    meta: {requiresAuth: false},
   },
   {
     path: '/gallery/people',

@@ -1,6 +1,6 @@
 <template>
   <div
-    class="group relative cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-gray-100 transition-all hover:shadow-md"
+    class="group relative cursor-pointer overflow-hidden rounded-2xl bg-white/5 transition-all duration-300 hover:scale-[1.02] hover:z-10"
     :class="{ 'aspect-square': square }"
     @click="$emit('click')"
     @contextmenu.prevent="$emit('contextmenu', $event)"
@@ -10,26 +10,27 @@
       v-if="imageUrl"
       :src="imageUrl"
       :alt="image.original_name"
-      class="w-full object-cover transition-transform duration-300 group-hover:scale-105"
+      class="w-full object-cover transition-transform duration-500"
       :class="{ 'h-full': square }"
       loading="lazy"
+      draggable="false"
       @error="handleImageError"
     />
 
     <!-- 加载占位符 -->
-    <div v-else class="flex items-center justify-center" :class="[square ? 'h-full' : 'min-h-[200px]']">
-      <PhotoIcon class="h-12 w-12 text-gray-400" />
+    <div v-else class="flex items-center justify-center bg-white/5" :class="[square ? 'h-full' : 'min-h-[200px]']">
+      <PhotoIcon class="h-10 w-10 text-gray-700" />
     </div>
 
-    <!-- 悬停遮罩 -->
-    <div class="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/20" />
+    <!-- 极简内描边 (替代边框，更有质感) -->
+    <div class="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 pointer-events-none transition-opacity group-hover:ring-white/20"></div>
 
     <!-- 悬停信息 -->
-    <div class="absolute bottom-0 left-0 right-0 translate-y-full bg-gradient-to-t from-black/70 to-transparent p-3 transition-transform group-hover:translate-y-0">
-      <p class="truncate text-sm font-medium text-white">{{ image.original_name }}</p>
-      <div class="mt-1 flex items-center gap-2 text-xs text-gray-300">
+    <div class="absolute bottom-0 left-0 right-0 translate-y-full bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 transition-transform duration-300 ease-out group-hover:translate-y-0">
+      <p class="truncate text-sm font-medium text-gray-100">{{ image.original_name }}</p>
+      <div class="mt-1 flex items-center gap-2 text-xs text-gray-400 font-light">
         <span v-if="image.taken_at">{{ formatDate(image.taken_at) }}</span>
-        <span v-if="image.camera_model">{{ image.camera_model }}</span>
+        <span v-if="image.camera_model" class="truncate opacity-80">{{ image.camera_model }}</span>
       </div>
     </div>
   </div>

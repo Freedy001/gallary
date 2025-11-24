@@ -1,5 +1,10 @@
 import {defineStore} from 'pinia'
 import {ref, computed} from 'vue'
+import {createThumbnail} from "@/utils/image.ts";
+import {imageApi} from "@/api/image.ts";
+import {useImageStore} from "@/stores/image.ts";
+
+const imageStore = useImageStore()
 
 export interface UploadTask {
   id: string
@@ -11,12 +16,12 @@ export interface UploadTask {
 }
 
 export const useUIStore = defineStore('ui', () => {
-  // State
+  // image layout State
   const gridDensity = ref(6) // 1-10, 1=最密集(9列), 10=最稀疏(1列)
+  // Sidebar state
   const sidebarCollapsed = ref(false)
+  // Command palette state
   const commandPaletteOpen = ref(false)
-  const imageViewerOpen = ref(false)
-  const currentViewerIndex = ref(0)
 
   // Upload state
   const uploadDrawerOpen = ref(false)
@@ -30,7 +35,7 @@ export const useUIStore = defineStore('ui', () => {
   const isSelectionMode = ref(false)
 
   // Timeline state
-  const activeDate = ref<string | null>(null)
+  const timeLineState = ref<{ date: string, location: string | null } | null>(null)
 
   // Computed
   const gridColumns = computed(() => {
@@ -54,16 +59,28 @@ export const useUIStore = defineStore('ui', () => {
     }
   })
 
+  // 根据网格列数动态计算每页应加载的图片数量
+  // 确保至少加载足够填满 2 屏的图片，以便触发滚动
+  const pageSize = computed(() => {
+    const cols = gridColumns.value.desktop
+    // 估算每屏能显示的行数（假设视口高度约 900px，每个图片约 200px）
+    const rowsPerScreen = Math.ceil(900 / 200)
+    // 每页至少加载 2 屏的图片数量，最少 20 张
+    const minSize = Math.max(20, cols * rowsPerScreen * 2)
+    // 向上取整到 10 的倍数，便于分页计算
+    return Math.ceil(minSize / 10) * 10
+  })
+
   const uploadingCount = computed(() =>
-    uploadTasks.value.filter(t => t.status === 'uploading').length
+      uploadTasks.value.filter(t => t.status === 'uploading').length
   )
 
   const completedCount = computed(() =>
-    uploadTasks.value.filter(t => t.status === 'success').length
+      uploadTasks.value.filter(t => t.status === 'success').length
   )
 
   const failedCount = computed(() =>
-    uploadTasks.value.filter(t => t.status === 'error').length
+      uploadTasks.value.filter(t => t.status === 'error').length
   )
 
   const totalProgress = computed(() => {
@@ -73,7 +90,7 @@ export const useUIStore = defineStore('ui', () => {
   })
 
   const hasActiveUploads = computed(() =>
-    uploadTasks.value.some(t => t.status === 'uploading' || t.status === 'pending')
+      uploadTasks.value.some(t => t.status === 'uploading' || t.status === 'pending')
   )
 
   // Actions
@@ -97,23 +114,6 @@ export const useUIStore = defineStore('ui', () => {
     commandPaletteOpen.value = !commandPaletteOpen.value
   }
 
-  function openImageViewer(index = 0) {
-    currentViewerIndex.value = index
-    imageViewerOpen.value = true
-  }
-
-  function closeImageViewer() {
-    imageViewerOpen.value = false
-  }
-
-  function nextImage() {
-    currentViewerIndex.value++
-  }
-
-  function previousImage() {
-    currentViewerIndex.value--
-  }
-
   function openUploadDrawer() {
     uploadDrawerOpen.value = true
   }
@@ -122,19 +122,79 @@ export const useUIStore = defineStore('ui', () => {
     uploadDrawerOpen.value = false
   }
 
-  function toggleUploadDrawer() {
-    uploadDrawerOpen.value = !uploadDrawerOpen.value
-  }
-
-  function addUploadTask(file: File): UploadTask {
-    const task: UploadTask = {
+  function addUploadTask(files: File[]) {
+    files.forEach(file => uploadTasks.value.unshift({
       id: `${Date.now()}-${Math.random()}`,
       file,
       progress: 0,
       status: 'pending',
+    }))
+    processUploadQueue().then()
+  }
+
+  // 处理上传队列
+  async function processUploadQueue() {
+    const tasks = uploadTasks.value
+    const pendingTasks = tasks.filter(t => t.status === 'pending')
+
+    // 没有待处理任务时直接返回
+    if (pendingTasks.length === 0) return
+
+    // 异步生成缩略图，只为没有缩略图的任务生成
+    tasks.forEach(task => {
+      if (!task.imageUrl) {
+        createThumbnail(task.file).then(imageUrl => {
+          if (imageUrl) updateUploadTask(task.id, {imageUrl})
+        }).catch(console.error)
+      }
+    })
+
+    // 计算批次数量（向上取整）
+    const turn = Math.ceil(pendingTasks.length / 5)
+    let hasSuccess = false
+
+    for (let i = 0; i < turn; i++) {
+      const tasksToStart = pendingTasks.slice(
+          i * 5,
+          (i + 1) * 5
+      )
+      const results = await doUploadFile(tasksToStart)
+      if (results.some(r => r)) hasSuccess = true
     }
-    uploadTasks.value.push(task)
-    return task
+
+    // 只在有成功上传时刷新图片列表
+    if (hasSuccess) {
+      await imageStore.refreshImages()
+    }
+  }
+
+  async function doUploadFile(tasks: UploadTask[]): Promise<boolean[]> {
+    return Promise.all(tasks.map(async task => {
+      try {
+        // 生成预览图 (使用缩略图以节省内存)
+        updateUploadTask(task.id, {
+          status: 'uploading',
+        })
+
+        await imageApi.upload(task.file, (progress) => {
+          updateUploadTask(task.id, {progress})
+        });
+
+        // 上传成功
+        updateUploadTask(task.id, {
+          status: 'success',
+          progress: 100,
+        })
+        return true
+      } catch (error) {
+        // 上传失败
+        updateUploadTask(task.id, {
+          status: 'error',
+          error: error instanceof Error ? error.message : '上传失败',
+        })
+        return false
+      }
+    }))
   }
 
   function updateUploadTask(id: string, updates: Partial<UploadTask>) {
@@ -153,12 +213,8 @@ export const useUIStore = defineStore('ui', () => {
 
   function clearCompletedTasks() {
     uploadTasks.value = uploadTasks.value.filter(
-      t => t.status !== 'success' && t.status !== 'error'
+        t => t.status !== 'success' && t.status !== 'error'
     )
-  }
-
-  function clearAllTasks() {
-    uploadTasks.value = []
   }
 
   function setGlobalLoading(loading: boolean, message = '') {
@@ -170,8 +226,8 @@ export const useUIStore = defineStore('ui', () => {
     isSelectionMode.value = mode
   }
 
-  function setActiveDate(date: string | null) {
-    activeDate.value = date
+  function setTimeLineState(date: { date: string, location: string | null } | null) {
+    timeLineState.value = date
   }
 
   return {
@@ -179,17 +235,16 @@ export const useUIStore = defineStore('ui', () => {
     gridDensity,
     sidebarCollapsed,
     commandPaletteOpen,
-    imageViewerOpen,
-    currentViewerIndex,
     uploadDrawerOpen,
     uploadTasks,
     globalLoading,
     loadingMessage,
     isSelectionMode,
-    activeDate,
+    timeLineState,
 
     // Computed
     gridColumns,
+    pageSize,
     uploadingCount,
     completedCount,
     failedCount,
@@ -202,20 +257,14 @@ export const useUIStore = defineStore('ui', () => {
     openCommandPalette,
     closeCommandPalette,
     toggleCommandPalette,
-    openImageViewer,
-    closeImageViewer,
-    nextImage,
-    previousImage,
     openUploadDrawer,
     closeUploadDrawer,
-    toggleUploadDrawer,
     addUploadTask,
     updateUploadTask,
     removeUploadTask,
     clearCompletedTasks,
-    clearAllTasks,
     setGlobalLoading,
     setSelectionMode,
-    setActiveDate,
+    setTimeLineState,
   }
 })

@@ -1,51 +1,42 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { imageApi } from '@/api/image'
-import type { Image, Pageable, SearchParams } from '@/types'
+import {defineStore} from 'pinia'
+import {ref, computed} from 'vue'
+import {imageApi} from '@/api/image'
+import type {Image, Pageable} from '@/types'
 
 export const useImageStore = defineStore('image', () => {
   // State
   const images = ref<(Image | null)[]>([])
-  const currentImage = ref<Image | null>(null)
+  const viewerIndex = ref<number>(-1);
   const selectedImages = ref<Set<number>>(new Set())
   const loading = ref(false)
-  const loadingPages = ref<Set<number>>(new Set())
   const error = ref<string | null>(null)
 
   // Pagination state
   const currentPage = ref(1)
-  const pageSize = ref(20)
+  const currentSize = ref(20)
   const total = ref(0)
-  const totalPages = ref(0)
-
-  // Search state
-  const searchParams = ref<SearchParams | null>(null)
-  const isSearchMode = ref(false)
 
   // Computed
-  const hasMore = computed(() => currentPage.value < totalPages.value)
   const selectedCount = computed(() => selectedImages.value.size)
 
+  const loadingPages = new Set<number>()
+  let imageFetcher: (page: number, size: number) => Promise<Pageable<Image>>;
+
   // Actions
-  async function fetchImages(page = 1) {
+  async function fetchImages(page = 1, pageSize = 20) {
     // 防止重复加载同一页
-    if (loadingPages.value.has(page)) return
+    if (loadingPages.has(page)) return
 
     try {
-      loadingPages.value.add(page)
+      loadingPages.add(page)
       if (page === 1) loading.value = true
       error.value = null
 
-      const response = isSearchMode.value && searchParams.value
-        ? await imageApi.search({ ...searchParams.value, page, page_size: pageSize.value })
-        : await imageApi.getList(page, pageSize.value)
-
-      const data: Pageable<Image> = response.data
+      const data: Pageable<Image> = await imageFetcher(page, pageSize)
 
       currentPage.value = data.page
-      pageSize.value = data.page_size
+      currentSize.value = data.page_size
       total.value = data.total
-      totalPages.value = data.total_pages
 
       if (page === 1) {
         // 初始化数组，使用 null 占位
@@ -63,7 +54,7 @@ export const useImageStore = defineStore('image', () => {
           }
         }
 
-        const startIndex = (page - 1) * pageSize.value
+        const startIndex = (page - 1) * pageSize
         data.list.forEach((item, index) => {
           if (startIndex + index < images.value.length) {
             images.value[startIndex + index] = item
@@ -77,64 +68,19 @@ export const useImageStore = defineStore('image', () => {
       throw err
     } finally {
       if (page === 1) loading.value = false
-      loadingPages.value.delete(page)
+      loadingPages.delete(page)
     }
   }
 
-  async function loadMore() {
-    if (!hasMore.value || loading.value) return
-    await fetchImages(currentPage.value + 1)
-  }
+  type fetchFun = (page: number, size: number) => Promise<Pageable<Image>>
 
-  async function refreshImages() {
+  async function refreshImages(fetcher: fetchFun | null = null, pageSize = 20) {
+    if (fetcher) imageFetcher = fetcher
     currentPage.value = 1
-    loadingPages.value.clear()
-    await fetchImages(1)
+    loadingPages.clear()
+    await fetchImages(1, pageSize)
   }
 
-  async function searchImages(params: SearchParams) {
-    searchParams.value = params
-    isSearchMode.value = true
-    currentPage.value = 1
-    await fetchImages(1)
-  }
-
-  function clearSearch() {
-    searchParams.value = null
-    isSearchMode.value = false
-    refreshImages()
-  }
-
-  async function getImageDetail(id: number) {
-    try {
-      loading.value = true
-      const response = await imageApi.getDetail(id)
-      currentImage.value = response.data
-      return response.data
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : '获取图片详情失败'
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function deleteImage(id: number) {
-    try {
-      await imageApi.delete(id)
-      images.value = images.value.filter(img => img === null || img.id !== id)
-      total.value -= 1
-
-      if (currentImage.value?.id === id) {
-        currentImage.value = null
-      }
-
-      selectedImages.value.delete(id)
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : '删除图片失败'
-      throw err
-    }
-  }
 
   async function deleteBatch(ids?: number[]) {
     try {
@@ -150,11 +96,6 @@ export const useImageStore = defineStore('image', () => {
 
       // 清除选中状态
       idsToDelete.forEach(id => selectedImages.value.delete(id))
-
-      // 如果当前查看的图片被删除，清空当前图片
-      if (currentImage.value && idsToDelete.includes(currentImage.value.id)) {
-        currentImage.value = null
-      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : '批量删除图片失败'
       throw err
@@ -165,10 +106,6 @@ export const useImageStore = defineStore('image', () => {
 
   function selectImage(id: number) {
     selectedImages.value.add(id)
-  }
-
-  function deselectImage(id: number) {
-    selectedImages.value.delete(id)
   }
 
   function toggleSelect(id: number) {
@@ -183,41 +120,24 @@ export const useImageStore = defineStore('image', () => {
     selectedImages.value.clear()
   }
 
-  function setCurrentImage(image: Image | null) {
-    currentImage.value = image
-  }
-
   return {
     // State
     images,
-    currentImage,
+    viewerIndex,
     selectedImages,
     loading,
     error,
     currentPage,
-    pageSize,
     total,
-    totalPages,
-    searchParams,
-    isSearchMode,
-
     // Computed
-    hasMore,
     selectedCount,
 
     // Actions
     fetchImages,
-    loadMore,
     refreshImages,
-    searchImages,
-    clearSearch,
-    getImageDetail,
-    deleteImage,
     deleteBatch,
     selectImage,
-    deselectImage,
     toggleSelect,
     clearSelection,
-    setCurrentImage,
   }
 })

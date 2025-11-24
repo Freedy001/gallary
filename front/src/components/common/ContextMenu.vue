@@ -5,7 +5,7 @@
       class="fixed z-50 py-1 min-w-[160px] w-max overflow-hidden !rounded-xl "
       @contextmenu.prevent
   >
-    <LiquidGlassCard :hover-effect="false" content-class="p-0" style="padding: 5px">
+    <LiquidGlassCard :hover-effect="false" content-class="p-0">
       <slot></slot>
     </LiquidGlassCard>
   </div>

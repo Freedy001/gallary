@@ -1,62 +1,68 @@
 <template>
   <div
-    class="flex h-screen overflow-hidden bg-white relative"
-    @dragenter.prevent="handleDragEnter"
-    @dragover.prevent="handleDragOver"
-    @dragleave.prevent="handleDragLeave"
-    @drop.prevent="handleDrop"
+      class="flex h-screen overflow-hidden relative bg-transparent"
+      @dragenter.prevent="handleDragEnter"
+      @dragover.prevent="handleDragOver"
+      @dragleave.prevent="handleDragLeave"
+      @drop.prevent="handleDrop"
   >
-    <!-- 拖拽上传遮罩 -->
+    <!-- 拖拽上传遮罩 - 极光玻璃态 -->
     <Transition
-      enter-active-class="transition duration-200 ease-out"
-      enter-from-class="opacity-0 scale-95"
-      enter-to-class="opacity-100 scale-100"
-      leave-active-class="transition duration-150 ease-in"
-      leave-from-class="opacity-100 scale-100"
-      leave-to-class="opacity-0 scale-95"
+        enter-active-class="transition duration-500 cubic-bezier(0.16, 1, 0.3, 1)"
+        enter-from-class="opacity-0 scale-95 blur-xl"
+        enter-to-class="opacity-100 scale-100 blur-0"
+        leave-active-class="transition duration-300 ease-in"
+        leave-from-class="opacity-100 scale-100 blur-0"
+        leave-to-class="opacity-0 scale-95 blur-xl"
     >
       <div
-        v-if="isDragging"
-        class="absolute inset-0 z-50 flex items-center justify-center bg-blue-500/10 backdrop-blur-sm"
+          v-if="isDragging"
+          class="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xl"
       >
-        <div class="m-4 flex h-[calc(100%-2rem)] w-[calc(100%-2rem)] flex-col items-center justify-center rounded-2xl border-4 border-dashed border-blue-500 bg-white/50">
-          <div class="mb-6 rounded-full bg-white p-6 shadow-xl ring-4 ring-blue-100">
-            <ArrowUpTrayIcon class="h-16 w-16 text-blue-600" />
+        <div
+            class="relative m-4 flex h-[calc(100%-2rem)] w-[calc(100%-2rem)] flex-col items-center justify-center rounded-3xl border border-white/10 bg-white/5 shadow-2xl overflow-hidden">
+
+          <!-- 动态光效背景 -->
+          <div class="absolute inset-0 overflow-hidden pointer-events-none">
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary-500/20 blur-[120px] rounded-full animate-pulse"></div>
           </div>
-          <h3 class="text-3xl font-bold text-gray-900">释放以上传图片</h3>
-          <p class="mt-2 text-lg text-gray-600">支持批量上传</p>
+
+          <div class="relative z-10 mb-8 rounded-full bg-white/10 p-8 shadow-[0_0_40px_rgba(139,92,246,0.3)] ring-1 ring-white/20 backdrop-blur-md">
+            <ArrowUpTrayIcon class="h-20 w-20 text-primary-100 drop-shadow-lg"/>
+          </div>
+          <h3 class="relative z-10 text-4xl font-bold text-white tracking-tight drop-shadow-md">释放即刻上传</h3>
+          <p class="relative z-10 mt-4 text-lg text-gray-400 font-light">支持批量拖拽 • 自动去重</p>
         </div>
       </div>
     </Transition>
 
     <!-- 左侧边栏 -->
-    <Sidebar />
+    <Sidebar/>
 
     <!-- 主内容区 -->
-    <div class="flex flex-1 flex-col overflow-hidden">
-      <!-- 顶部栏 -->
-      <TopBar />
+    <div class="flex flex-1 flex-col overflow-hidden relative z-0">
+      <!-- 顶部栏插槽 -->
+      <slot name="header"/>
 
       <!-- 内容区域 -->
-      <div class="flex flex-1 overflow-hidden bg-gray-50 relative">
+      <div class="flex flex-1 overflow-hidden relative">
         <!-- 图片内容滚动区域 -->
-        <main id="main-scroll-container" class="flex-1 overflow-y-auto">
-          <slot />
+        <main id="main-scroll-container" class="flex-1 overflow-y-auto scroll-smooth">
+          <slot/>
         </main>
 
         <!-- 悬浮层插槽 (用于时间线等) -->
-        <slot name="overlay" />
+        <slot name="overlay"/>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useUIStore } from '@/stores/ui'
-import { ArrowUpTrayIcon } from '@heroicons/vue/24/outline'
+import {ref} from 'vue'
+import {useUIStore} from '@/stores/ui'
+import {ArrowUpTrayIcon} from '@heroicons/vue/24/outline'
 import Sidebar from './Sidebar.vue'
-import TopBar from './TopBar.vue'
 
 const uiStore = useUIStore()
 const isDragging = ref(false)
@@ -90,15 +96,11 @@ function handleDrop(e: DragEvent) {
   const files = e.dataTransfer?.files
   if (!files || files.length === 0) return
 
-  let hasImages = false
-  Array.from(files).forEach(file => {
-    if (file.type.startsWith('image/')) {
-      uiStore.addUploadTask(file)
-      hasImages = true
-    }
-  })
+  const fileToUpload = Array.from(files).filter(file => file.type.startsWith('image/'));
+  if (fileToUpload.length <= 0) return;
 
-  if (hasImages && !uiStore.uploadDrawerOpen) {
+  uiStore.addUploadTask(fileToUpload)
+  if (!uiStore.uploadDrawerOpen) {
     uiStore.openUploadDrawer()
   }
 }

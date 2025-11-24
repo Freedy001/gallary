@@ -67,3 +67,21 @@ export interface UpdateMetadataRequest {
   metadata?: MetadataUpdate[]
   tags?: string[]
 }
+
+export interface ClusterResult {
+  latitude: number
+  longitude: number
+  count: number
+  cover_image: Image
+}
+
+export interface ClusterResult {
+  min_lat: number
+  max_lat: number
+  min_lng: number
+  max_lng: number
+  latitude: number
+  longitude: number
+  count: number
+  cover_image: Image
+}

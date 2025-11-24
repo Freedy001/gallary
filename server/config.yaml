@@ -30,7 +30,7 @@ storage:
 
   # 本地存储
   local:
-    base_path: "../storage/images"
+    base_path: "../../storage/images"
     url_prefix: "/static/images"
 
 # 图片处理配置

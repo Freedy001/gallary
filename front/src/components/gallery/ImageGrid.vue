@@ -1,5 +1,5 @@
 <template>
-  <div class="p-6">
+  <div class="p-3">
     <!-- 加载状态 -->
     <div v-if="imageStore.loading && (!imageStore.images || imageStore.images.length === 0)" class="py-12 text-center">
       <div class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
@@ -25,6 +25,9 @@
         <ContextMenuItem v-if="contextMenuTargetIds.length === 1" :icon="EyeIcon" @click="handleView">
           查看
         </ContextMenuItem>
+        <ContextMenuItem :icon="ShareIcon" @click="handleShare">
+          分享 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+        </ContextMenuItem>
         <ContextMenuItem :icon="PencilIcon" @click="handleEdit">
           编辑元数据 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
         </ContextMenuItem>
@@ -37,10 +40,17 @@
       </ContextMenu>
 
       <MetadataEditor
-        v-model="isMetadataEditorOpen"
-        :image-ids="metadataEditorTargetIds"
-        :initial-data="metadataEditorInitialData"
-        @saved="onMetadataSaved"
+          v-model="isMetadataEditorOpen"
+          :image-ids="metadataEditorTargetIds"
+          :initial-data="metadataEditorInitialData"
+          @saved="onMetadataSaved"
+      />
+
+      <CreateShare
+          :is-open="isShareModalOpen"
+          :selected-count="shareTargetIds.length"
+          :selected-ids="shareTargetIds"
+          @close="isShareModalOpen = false"
       />
 
       <!-- 框选区域 -->
@@ -167,28 +177,43 @@
       </div>
     </div>
   </div>
+
+  <!-- 图片查看器 -->
+  <ImageViewer/>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { ComponentPublicInstance } from 'vue'
-import { useThrottleFn, useDebounceFn } from '@vueuse/core'
+import type {ComponentPublicInstance} from 'vue'
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import {useDebounceFn, useThrottleFn} from '@vueuse/core'
 import {useImageStore} from '@/stores/image'
 import {useUIStore} from '@/stores/ui'
 import {imageApi} from '@/api/image'
 import type {Image} from '@/types'
-import {PhotoIcon, CheckIcon, PencilIcon, TrashIcon, ArrowDownTrayIcon, EyeIcon} from '@heroicons/vue/24/outline'
+import {
+  ArrowDownTrayIcon,
+  CheckIcon,
+  EyeIcon,
+  PencilIcon,
+  PhotoIcon,
+  TrashIcon,
+  ShareIcon
+} from '@heroicons/vue/24/outline'
 import ImageCard from './ImageCard.vue'
 import ContextMenu from '@/components/common/ContextMenu.vue'
 import ContextMenuItem from '@/components/common/ContextMenuItem.vue'
-import MetadataEditor from './MetadataEditor.vue'
+import MetadataEditor from './menu/MetadataEditor.vue'
+import CreateShare from '@/components/gallery/menu/CreateShare.vue'
+import ImageViewer from "@/components/gallery/ImageViewer.vue";
+
+const index = ref<number>(-1)
 
 const imageStore = useImageStore()
 const uiStore = useUIStore()
 const containerRef = ref<HTMLElement>()
 
 // 右键菜单状态
-const contextMenu = ref({ visible: false, x: 0, y: 0 })
+const contextMenu = ref({visible: false, x: 0, y: 0})
 const contextMenuTargetIds = ref<number[]>([])
 const contextMenuSingleTarget = ref<{ image: Image, index: number } | null>(null)
 
@@ -196,6 +221,10 @@ const contextMenuSingleTarget = ref<{ image: Image, index: number } | null>(null
 const isMetadataEditorOpen = ref(false)
 const metadataEditorTargetIds = ref<number[]>([])
 const metadataEditorInitialData = ref<Image | null>(null)
+
+// 分享弹窗状态
+const isShareModalOpen = ref(false)
+const shareTargetIds = ref<number[]>([])
 
 const handleContextMenu = (e: MouseEvent, image: Image, index: number) => {
   contextMenu.value = {
@@ -210,12 +239,18 @@ const handleContextMenu = (e: MouseEvent, image: Image, index: number) => {
     contextMenuTargetIds.value = [image.id]
   }
 
-  contextMenuSingleTarget.value = { image, index }
+  contextMenuSingleTarget.value = {image, index}
+}
+
+const handleShare = () => {
+  shareTargetIds.value = contextMenuTargetIds.value
+  isShareModalOpen.value = true
+  contextMenu.value.visible = false
 }
 
 const handleView = () => {
   if (contextMenuSingleTarget.value) {
-    uiStore.openImageViewer(contextMenuSingleTarget.value.index)
+    index.value = contextMenuSingleTarget.value.index
   }
   contextMenu.value.visible = false
 }
@@ -223,13 +258,13 @@ const handleView = () => {
 const handleEdit = () => {
   metadataEditorTargetIds.value = contextMenuTargetIds.value
   if (contextMenuTargetIds.value.length === 1 && contextMenuSingleTarget.value && contextMenuTargetIds.value[0] === contextMenuSingleTarget.value.image.id) {
-      metadataEditorInitialData.value = contextMenuSingleTarget.value.image
+    metadataEditorInitialData.value = contextMenuSingleTarget.value.image
   } else if (contextMenuTargetIds.value.length === 1) {
-      // Fallback if logic matches
-       const img = imageStore.images.find(i => i.id === contextMenuTargetIds.value[0])
-       metadataEditorInitialData.value = img || null
+    // Fallback if logic matches
+    const img = imageStore.images.find(i => i?.id === contextMenuTargetIds.value[0])
+    metadataEditorInitialData.value = img || null
   } else {
-      metadataEditorInitialData.value = null
+    metadataEditorInitialData.value = null
   }
   isMetadataEditorOpen.value = true
   contextMenu.value.visible = false
@@ -239,34 +274,34 @@ const handleDownload = async () => {
   contextMenu.value.visible = false
   // Loop download
   for (const id of contextMenuTargetIds.value) {
-      const img = imageStore.images.find(i => i.id === id)
-      if (img) {
-          await imageApi.download(id, img.original_name)
-      }
+    const img = imageStore.images.find(i => i?.id === id)
+    if (img) {
+      await imageApi.download(id, img.original_name)
+    }
   }
 }
 
 const handleDelete = async () => {
-    contextMenu.value.visible = false
-    if (!confirm(`Are you sure you want to delete ${contextMenuTargetIds.value.length} images?`)) return
+  contextMenu.value.visible = false
+  if (!confirm(`Are you sure you want to delete ${contextMenuTargetIds.value.length} images?`)) return
 
-    try {
-        await imageApi.deleteBatch(contextMenuTargetIds.value)
-        // Refresh or remove from store
-        // Assuming store has a remove method or we just fetch again
-        // imageStore.removeImages(contextMenuTargetIds.value) // If exists
-        // Or fetch
-        imageStore.fetchImages(1) // Simple reload for now
-        imageStore.selectedImages.clear()
-    } catch (e) {
-        console.error('Delete failed', e)
-    }
+  try {
+    await imageApi.deleteBatch(contextMenuTargetIds.value)
+    // Refresh or remove from store
+    // Assuming store has a remove method or we just fetch again
+    // imageStore.removeImages(contextMenuTargetIds.value) // If exists
+    // Or fetch
+    await imageStore.fetchImages(1) // Simple reload for now
+    imageStore.selectedImages.clear()
+  } catch (e) {
+    console.error('Delete failed', e)
+  }
 }
 
 const onMetadataSaved = () => {
-    // Refresh list to show new data
-    // Ideally update local data, but fetching is safer
-    imageStore.fetchImages(imageStore.currentPage) // Stay on current page
+  // Refresh list to show new data
+  // Ideally update local data, but fetching is safer
+  imageStore.fetchImages(imageStore.currentPage) // Stay on current page
 }
 
 // 瀑布流相关
@@ -501,7 +536,7 @@ function handleImageClick(image: Image, index: number) {
   if (uiStore.isSelectionMode) {
     imageStore.toggleSelect(image.id)
   } else {
-    uiStore.openImageViewer(index)
+    imageStore.viewerIndex = index
   }
 }
 
@@ -523,13 +558,12 @@ const updateActiveDate = useThrottleFn(() => {
   // 向上查找包含 data-index 的元素
   const itemEl = el.closest('[data-index]') as HTMLElement
   if (itemEl && itemEl.dataset.index) {
-    const index = parseInt(itemEl.dataset.index)
-    const image = imageStore.images[index]
+    const image = imageStore.images[parseInt(itemEl.dataset.index)] as (Image | null)
     if (image) {
       // 优先使用拍摄时间，否则使用创建时间
       const date = image.taken_at || image.created_at
-      if (date && date !== uiStore.activeDate) {
-        uiStore.setActiveDate(date)
+      if (date && date !== uiStore.timeLineState?.date) {
+        uiStore.setTimeLineState({date, location: image.location_name})
       }
     }
   }
@@ -537,7 +571,7 @@ const updateActiveDate = useThrottleFn(() => {
 
 // 停止滚动 1.5 秒后隐藏时间线
 const hideTimeline = useDebounceFn(() => {
-  uiStore.setActiveDate(null)
+  uiStore.setTimeLineState(null)
 }, 1500)
 
 // 滚动处理函数
@@ -566,8 +600,9 @@ onMounted(() => {
             if (!isNaN(index)) {
               // 如果该位置没有图片，触发加载
               if (!imageStore.images[index]) {
-                const page = Math.floor(index / imageStore.pageSize) + 1
-                imageStore.fetchImages(page)
+                const pageSize = uiStore.pageSize
+                const page = Math.floor(index / pageSize) + 1
+                imageStore.fetchImages(page, pageSize)
               }
             }
           }

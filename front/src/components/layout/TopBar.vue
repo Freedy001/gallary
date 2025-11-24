@@ -1,65 +1,73 @@
 <template>
-  <header class="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
+  <header class="relative z-30 flex h-20 w-full items-center justify-between border-b border-white/5 bg-transparent px-8 transition-all duration-300 backdrop-blur-sm">
     <!-- 左侧：搜索按钮 -->
-    <div v-if="!uiStore.isSelectionMode">
+    <div v-if="!uiStore.isSelectionMode" class="w-96">
       <button
         @click="uiStore.openCommandPalette"
-        class="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-600 transition-colors hover:border-gray-400 hover:bg-gray-50"
+        class="group flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-400 transition-all hover:border-primary-500/30 hover:bg-white/10 hover:text-white hover:shadow-[0_0_15px_rgba(139,92,246,0.1)]"
       >
-        <MagnifyingGlassIcon class="h-4 w-4" />
-        <span>搜索图片...</span>
-        <kbd class="ml-8 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
-          {{ isMac ? '⌘' : 'Ctrl' }}K
-        </kbd>
+        <MagnifyingGlassIcon class="h-5 w-5 text-gray-500 transition-colors group-hover:text-primary-400" />
+        <span class="font-light tracking-wide">搜索影像记忆...</span>
+        <div class="ml-auto flex gap-1">
+          <kbd class="hidden rounded bg-white/10 px-2 py-0.5 text-xs font-mono text-gray-500 group-hover:text-gray-300 md:inline-block">
+            {{ isMac ? '⌘' : 'Ctrl' }}
+          </kbd>
+          <kbd class="hidden rounded bg-white/10 px-2 py-0.5 text-xs font-mono text-gray-500 group-hover:text-gray-300 md:inline-block">
+            K
+          </kbd>
+        </div>
       </button>
     </div>
 
     <!-- 选择模式下的左侧 -->
-    <div v-else class="flex items-center gap-4">
-      <span class="text-lg font-medium text-gray-900">已选择 {{ imageStore.selectedCount }} 项</span>
+    <div v-else class="flex items-center gap-6 animate-fade-in">
+      <div class="flex items-center gap-3 rounded-lg bg-primary-500/10 px-4 py-2 border border-primary-500/20">
+        <span class="h-2 w-2 rounded-full bg-primary-500 animate-pulse"></span>
+        <span class="text-lg font-medium text-white">已选择 {{ imageStore.selectedCount }} 项</span>
+      </div>
       <button
         @click="handleSelectAll"
-        class="text-sm text-blue-600 hover:text-blue-700"
+        class="text-sm font-medium text-primary-400 hover:text-primary-300 hover:underline underline-offset-4"
       >
-        {{ isAllSelected ? '取消全选' : '全选' }}
+        {{ isAllSelected ? '取消全选' : '全选所有' }}
       </button>
     </div>
 
     <!-- 右侧：上传按钮 + 视图密度滑块 -->
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-6">
       <!-- 选择模式下的操作按钮 -->
-      <div v-if="uiStore.isSelectionMode" class="flex items-center gap-3">
+      <div v-if="uiStore.isSelectionMode" class="flex items-center gap-4">
         <button
           v-if="imageStore.selectedCount > 0"
           @click="handleBatchDelete"
-          class="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100"
+          class="flex items-center gap-2 rounded-xl bg-red-500/10 border border-red-500/20 px-5 py-2.5 text-sm font-medium text-red-400 transition-all hover:bg-red-500/20 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]"
         >
           <TrashIcon class="h-4 w-4" />
           <span>删除 ({{ imageStore.selectedCount }})</span>
         </button>
         <button
           @click="exitSelectionMode"
-          class="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          class="rounded-xl border border-white/10 bg-white/5 px-6 py-2.5 text-sm font-medium text-white hover:bg-white/10 transition-colors"
         >
           完成
         </button>
       </div>
 
       <!-- 正常模式下的操作按钮 -->
-      <div v-else class="flex items-center gap-3">
+      <div v-else class="flex items-center gap-4">
         <button
           @click="enterSelectionMode"
-          class="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+          class="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
         >
           选择
         </button>
         <!-- 上传按钮 -->
         <button
           @click="handleUploadClick"
-          class="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          class="relative flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-black transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95"
         >
           <ArrowUpTrayIcon class="h-4 w-4" />
-          <span>上传图片</span>
+          <span>上传</span>
         </button>
       </div>
 
@@ -73,22 +81,21 @@
       />
 
       <!-- 分隔线 -->
-      <div class="h-8 w-px bg-gray-300" />
+      <div class="h-8 w-px bg-white/10" />
 
       <!-- 视图密度滑块 -->
-      <div class="flex items-center gap-3">
-        <span class="text-sm text-gray-600">密度</span>
-        <div class="flex items-center gap-2">
-          <Squares2X2Icon class="h-4 w-4 text-gray-500" />
+      <div class="flex items-center gap-3 group">
+        <div class="flex items-center gap-2 px-2 py-1 rounded-lg group-hover:bg-white/5 transition-colors">
+          <Squares2X2Icon class="h-4 w-4 text-gray-500 group-hover:text-gray-300" />
           <input
             type="range"
             min="1"
             max="10"
             :value="uiStore.gridDensity"
             @input="handleDensityChange"
-            class="w-32 cursor-pointer accent-blue-600"
+            class="w-24 cursor-pointer accent-white h-1 bg-white/10 rounded-full appearance-none hover:bg-white/20"
           />
-          <Square3Stack3DIcon class="h-4 w-4 text-gray-500" />
+          <Square3Stack3DIcon class="h-4 w-4 text-gray-500 group-hover:text-gray-300" />
         </div>
       </div>
     </div>
@@ -162,14 +169,10 @@ function handleFileSelect(event: Event) {
   if (!files || files.length === 0) return
 
   // 添加文件到上传队列
-  Array.from(files).forEach(file => {
-    uiStore.addUploadTask(file)
-  })
+  uiStore.addUploadTask(Array.from(files))
 
   // 打开上传抽屉
-  if (!uiStore.uploadDrawerOpen) {
-    uiStore.openUploadDrawer()
-  }
+  uiStore.openUploadDrawer()
 
   // 清空input，允许重复选择同一文件
   input.value = ''

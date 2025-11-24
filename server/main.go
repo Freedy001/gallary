@@ -61,16 +61,19 @@ func main() {
 
 	// 6. 初始化Repository层
 	imageRepo := repository.NewImageRepository()
+	shareRepo := repository.NewShareRepository()
 
 	// 7. 初始化Service层
 	imageService := service.NewImageService(imageRepo, storageImpl, cfg)
+	shareService := service.NewShareService(shareRepo)
 
 	// 8. 初始化Handler层
 	authHandler := handler.NewAuthHandler(cfg)
 	imageHandler := handler.NewImageHandler(imageService)
+	shareHandler := handler.NewShareHandler(shareService)
 
 	// 9. 设置路由
-	r := router.SetupRouter(cfg, authHandler, imageHandler)
+	r := router.SetupRouter(cfg, authHandler, imageHandler, shareHandler)
 
 	// 10. 创建HTTP服务器
 	srv := &http.Server{

@@ -1,12 +1,12 @@
 <template>
   <Teleport to="body">
-    <Transition name="fade">
+    <Transition name="modal-overlay">
       <div
         v-if="modelValue"
-        class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4"
+        class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-sm"
         @click.self="handleClose"
       >
-        <Transition name="modal">
+        <Transition name="modal-content" appear>
           <LiquidGlassCard
             v-if="modelValue"
             :class="[
@@ -15,19 +15,18 @@
             ]"
             :hover-effect="false"
             content-class="p-0"
-            style="background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%)"
             @click.stop
           >
             <!-- 头部 -->
             <div v-if="title || $slots.header" class="flex items-center justify-between border-b border-white/10 px-6 py-4">
               <slot name="header">
-                <h3 class="text-lg font-semibold text-gray-900">{{ title }}</h3>
+                <h3 class="text-xl font-semibold text-white">{{ title }}</h3>
               </slot>
 
               <button
                 v-if="closable"
                 @click="handleClose"
-                class="rounded-lg p-1 text-gray-500 hover:bg-black/5 hover:text-gray-700 transition-colors"
+                class="rounded-lg p-1 text-white/50 hover:bg-white/10 hover:text-white transition-colors"
               >
                 <XMarkIcon class="h-5 w-5" />
               </button>
@@ -91,18 +90,36 @@ function handleClose() {
 </script>
 
 <style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: transform 0.3s ease, opacity 0.3s ease;
+/* 背景遮罩层动画 - 保持 backdrop-filter 稳定 */
+.modal-overlay-enter-active {
+  transition: opacity 0.3s ease;
 }
 
-.modal-enter-from {
-  transform: scale(0.95);
+.modal-overlay-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay-enter-from,
+.modal-overlay-leave-to {
   opacity: 0;
 }
 
-.modal-leave-to {
-  transform: scale(0.95);
+/* 内容区域动画 */
+.modal-content-enter-active {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.modal-content-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.modal-content-enter-from {
+  transform: scale(0.95) translateY(10px);
+  opacity: 0;
+}
+
+.modal-content-leave-to {
+  transform: scale(0.95) translateY(-10px);
   opacity: 0;
 }
 </style>

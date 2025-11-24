@@ -1,6 +1,6 @@
 import http from './http'
 import type {
-  ApiResponse,
+  ApiResponse, ClusterResult,
   Image,
   Pageable,
   SearchParams,
@@ -48,8 +48,35 @@ export const imageApi = {
   },
 
   // 更新单个图片元数据
-  updateMetadata(data: UpdateMetadataRequest): Promise<ApiResponse<Image>> {
+  updateMetadata(data: UpdateMetadataRequest): Promise<ApiResponse<number[]>> {
     return http.put(`/api/images/metadata`, data)
+  },
+
+  // 获取图片聚合数据
+  getClusters(minLat: number, maxLat: number, minLng: number, maxLng: number, zoom: number): Promise<ApiResponse<ClusterResult[]>> {
+    return http.get('/api/images/clusters', {
+      params: {
+        min_lat: minLat,
+        max_lat: maxLat,
+        min_lng: minLng,
+        max_lng: maxLng,
+        zoom
+      }
+    })
+  },
+
+  // 获取聚合组内的图片
+  getClusterImages(minLat: number, maxLat: number, minLng: number, maxLng: number, page = 1, pageSize = 20): Promise<ApiResponse<Pageable<Image>>> {
+    return http.get('/api/images/clusters/images', {
+      params: {
+        min_lat: minLat,
+        max_lat: maxLat,
+        min_lng: minLng,
+        max_lng: maxLng,
+        page,
+        page_size: pageSize
+      }
+    })
   },
 
   // 获取图片 URL

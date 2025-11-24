@@ -1,0 +1,599 @@
+definitions:
+  handler.AuthCheckResponse:
+    properties:
+      authenticated:
+        example: true
+        type: boolean
+    type: object
+  handler.LoginRequest:
+    properties:
+      password:
+        type: string
+    required:
+    - password
+    type: object
+  handler.LoginResponse:
+    properties:
+      expires_in:
+        example: 86400
+        type: integer
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    type: object
+  model.Image:
+    properties:
+      aperture:
+        type: string
+      camera_make:
+        type: string
+      camera_model:
+        type: string
+      created_at:
+        description: 系统字段
+        type: string
+      deleted_at:
+        type: string
+      file_hash:
+        type: string
+      file_size:
+        type: integer
+      focal_length:
+        type: string
+      height:
+        type: integer
+      id:
+        type: integer
+      iso:
+        type: integer
+      latitude:
+        type: number
+      location_name:
+        type: string
+      longitude:
+        type: number
+      metadata:
+        items:
+          $ref: '#/definitions/model.ImageMetadata'
+        type: array
+      mime_type:
+        type: string
+      original_name:
+        type: string
+      shutter_speed:
+        type: string
+      storage_path:
+        type: string
+      storage_type:
+        type: string
+      tags:
+        description: 关联
+        items:
+          $ref: '#/definitions/model.Tag'
+        type: array
+      taken_at:
+        description: EXIF 元数据
+        type: string
+      thumbnail_height:
+        type: integer
+      thumbnail_path:
+        description: 缩略图相关
+        type: string
+      thumbnail_width:
+        type: integer
+      updated_at:
+        type: string
+      width:
+        type: integer
+    type: object
+  model.ImageMetadata:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      image_id:
+        type: integer
+      meta_key:
+        type: string
+      meta_value:
+        type: string
+      updated_at:
+        type: string
+      value_type:
+        type: string
+    type: object
+  model.Tag:
+    properties:
+      color:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  service.BatchUpdateMetadataRequest:
+    properties:
+      image_ids:
+        description: 要更新的图片ID列表
+        items:
+          type: integer
+        type: array
+      latitude:
+        type: number
+      location_name:
+        description: 地理位置信息
+        type: string
+      longitude:
+        type: number
+      metadata:
+        description: 自定义元数据
+        items:
+          $ref: '#/definitions/service.MetadataUpdate'
+        type: array
+      original_name:
+        description: 基本信息
+        type: string
+      tags:
+        description: 标签信息
+        items:
+          type: string
+        type: array
+    required:
+    - image_ids
+    type: object
+  service.MetadataUpdate:
+    properties:
+      key:
+        type: string
+      value:
+        type: string
+      value_type:
+        type: string
+    required:
+    - key
+    type: object
+  service.UpdateMetadataRequest:
+    properties:
+      latitude:
+        type: number
+      location_name:
+        description: 地理位置信息
+        type: string
+      longitude:
+        type: number
+      metadata:
+        description: 自定义元数据
+        items:
+          $ref: '#/definitions/service.MetadataUpdate'
+        type: array
+      original_name:
+        description: 基本信息
+        type: string
+      tags:
+        description: 标签信息
+        items:
+          type: string
+        type: array
+    type: object
+  utils.PageData:
+    properties:
+      list: {}
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  utils.Response:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /api/auth/check:
+    get:
+      description: 检查当前token是否有效
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 认证状态
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.AuthCheckResponse'
+              type: object
+      summary: 检查认证状态
+      tags:
+      - 认证
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 使用密码登录获取JWT token
+      parameters:
+      - description: 登录信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登录成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/handler.LoginResponse'
+              type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "401":
+          description: 密码错误
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: 生成token失败
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 管理员登录
+      tags:
+      - 认证
+  /api/images:
+    get:
+      description: 分页获取图片列表
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 图片列表
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  allOf:
+                  - $ref: '#/definitions/utils.PageData'
+                  - properties:
+                      list:
+                        items:
+                          $ref: '#/definitions/model.Image'
+                        type: array
+                    type: object
+              type: object
+        "500":
+          description: 获取失败
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 获取图片列表
+      tags:
+      - 图片管理
+  /api/images/{id}:
+    delete:
+      description: 根据ID删除图片
+      parameters:
+      - description: 图片ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "400":
+          description: 无效的图片ID
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: 删除失败
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 删除图片
+      tags:
+      - 图片管理
+    get:
+      description: 根据图片ID获取详情
+      parameters:
+      - description: 图片ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 图片详情
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.Image'
+              type: object
+        "400":
+          description: 无效的图片ID
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "404":
+          description: 图片不存在
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 获取图片详情
+      tags:
+      - 图片管理
+  /api/images/{id}/download:
+    get:
+      description: 根据ID下载图片原文件
+      parameters:
+      - description: 图片ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: 图片文件
+          schema:
+            type: file
+        "400":
+          description: 无效的图片ID
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "404":
+          description: 图片不存在
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 下载图片
+      tags:
+      - 图片管理
+  /api/images/{id}/metadata:
+    put:
+      consumes:
+      - application/json
+      description: 更新单个图片的名称、地理位置、自定义元数据和标签
+      parameters:
+      - description: 图片ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 元数据更新请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.UpdateMetadataRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.Image'
+              type: object
+        "400":
+          description: 无效的参数
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "404":
+          description: 图片不存在
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: 更新失败
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 更新图片元数据
+      tags:
+      - 图片管理
+  /api/images/batch-delete:
+    post:
+      consumes:
+      - application/json
+      description: 根据ID列表批量删除图片
+      parameters:
+      - description: 图片ID列表
+        in: body
+        name: ids
+        required: true
+        schema:
+          items:
+            type: integer
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "400":
+          description: 无效的参数
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: 删除失败
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 批量删除图片
+      tags:
+      - 图片管理
+  /api/images/batch-metadata:
+    put:
+      consumes:
+      - application/json
+      description: 批量更新多个图片的名称、地理位置、自定义元数据和标签
+      parameters:
+      - description: 批量元数据更新请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.BatchUpdateMetadataRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/model.Image'
+                  type: array
+              type: object
+        "400":
+          description: 无效的参数
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: 更新失败
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 批量更新图片元数据
+      tags:
+      - 图片管理
+  /api/images/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 上传单个图片文件，支持去重
+      parameters:
+      - description: 图片文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 上传成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/model.Image'
+              type: object
+        "400":
+          description: 请选择要上传的文件
+          schema:
+            $ref: '#/definitions/utils.Response'
+        "500":
+          description: 上传失败
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 上传图片
+      tags:
+      - 图片管理
+  /api/search:
+    get:
+      description: 根据多种条件搜索图片
+      parameters:
+      - description: 关键词
+        in: query
+        name: keyword
+        type: string
+      - description: 开始日期
+        in: query
+        name: start_date
+        type: string
+      - description: 结束日期
+        in: query
+        name: end_date
+        type: string
+      - description: 地点
+        in: query
+        name: location
+        type: string
+      - description: 相机型号
+        in: query
+        name: camera_model
+        type: string
+      - description: 标签ID列表(逗号分隔)
+        in: query
+        name: tags
+        type: string
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 搜索结果
+          schema:
+            allOf:
+            - $ref: '#/definitions/utils.Response'
+            - properties:
+                data:
+                  allOf:
+                  - $ref: '#/definitions/utils.PageData'
+                  - properties:
+                      list:
+                        items:
+                          $ref: '#/definitions/model.Image'
+                        type: array
+                    type: object
+              type: object
+        "500":
+          description: 搜索失败
+          schema:
+            $ref: '#/definitions/utils.Response'
+      summary: 搜索图片
+      tags:
+      - 图片管理
+swagger: "2.0"

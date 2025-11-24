@@ -13,6 +13,7 @@ func SetupRouter(
 	cfg *config.Config,
 	authHandler *handler.AuthHandler,
 	imageHandler *handler.ImageHandler,
+	shareHandler *handler.ShareHandler,
 ) *gin.Engine {
 	// 设置运行模式
 	gin.SetMode(cfg.Server.Mode)
@@ -46,6 +47,8 @@ func SetupRouter(
 			images.POST("/batch-delete", imageHandler.BatchDelete)
 			images.PUT("/metadata", imageHandler.BatchUpdateMetadata)
 			images.GET("", imageHandler.List)
+			images.GET("/clusters", imageHandler.GetClusters)
+			images.GET("/clusters/images", imageHandler.GetClusterImages)
 			images.GET("/:id", imageHandler.GetByID)
 			images.DELETE("/:id", imageHandler.Delete)
 			images.GET("/:id/download", imageHandler.Download)
@@ -53,6 +56,22 @@ func SetupRouter(
 
 		// 搜索路由（需要认证）
 		api.GET("/search", middleware.AuthMiddleware(cfg), imageHandler.Search)
+
+		// 分享管理路由（需要认证）
+		shares := api.Group("/shares")
+		shares.Use(middleware.AuthMiddleware(cfg))
+		{
+			shares.POST("", shareHandler.Create)
+			shares.GET("", shareHandler.List)
+			shares.DELETE("/:id", shareHandler.Delete)
+		}
+
+		// 公开分享访问路由（无需认证，或单独认证）
+		publicShares := api.Group("/s")
+		{
+			publicShares.GET("/:code/info", shareHandler.GetPublicInfo)
+			publicShares.POST("/:code/images", shareHandler.SharedImages)
+		}
 	}
 
 	// 健康检查
