@@ -125,7 +125,7 @@ func (h *ShareHandler) GetPublicInfo(c *gin.Context) {
 		"description":  share.Description,
 		"has_password": share.Password != nil && *share.Password != "",
 		"expire_at":    share.ExpireAt,
-		"create_at":    share.CreatedAt,
+		"created_at":   share.CreatedAt,
 		"share_code":   share.ShareCode,
 	})
 }
@@ -142,8 +142,7 @@ func (h *ShareHandler) GetPublicInfo(c *gin.Context) {
 //	@Param			page_size	query		int													false	"每页数量"	default(20)
 //	@Param			request		body		object{password=string}								false	"密码（如需要）"
 //	@Success		200			{object}	utils.Response{data=utils.PageData{list=model.Image}}	"分享详情"
-//	@Failure		401			{object}	utils.Response										"密码错误"
-//	@Failure		403			{object}	utils.Response										"分享已失效"
+//	@Failure		403			{object}	utils.Response										"密码错误或分享已失效"
 //	@Router			/api/s/{code}/images [post]
 func (h *ShareHandler) SharedImages(c *gin.Context) {
 	code := c.Param("code")
@@ -159,12 +158,8 @@ func (h *ShareHandler) SharedImages(c *gin.Context) {
 	result, total, err := h.service.SharedImages(c.Request.Context(), code, req.Password, page, pageSize)
 	if err != nil {
 		logger.Error("验证分享失败", zap.Error(err))
-		// 区分密码错误和过期失效
-		if err.Error() == "密码错误" {
-			utils.Unauthorized(c, err.Error())
-		} else {
-			utils.Forbidden(c, err.Error())
-		}
+		// 使用 403 而非 401，避免前端 HTTP 拦截器跳转登录
+		utils.Forbidden(c, err.Error())
 		return
 	}
 	utils.PageResponse(c, result, total, page, pageSize)

@@ -13,7 +13,7 @@
         <!-- 关闭按钮 -->
         <button
             @click="close"
-            class="absolute right-4 top-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70 glass-control"
+            class="absolute right-4 top-4 z-50 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70 glass-control active:scale-95"
         >
           <XMarkIcon class="h-6 w-6"/>
         </button>
@@ -22,29 +22,32 @@
         <button
             v-if="hasPrevious"
             @click="previous"
-            class="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white transition-colors hover:bg-black/70 glass-control"
+            class="absolute left-2 sm:left-4 top-1/2 z-40 -translate-y-1/2 rounded-full bg-black/50 p-2 sm:p-3 text-white transition-colors hover:bg-black/70 glass-control active:scale-95 hidden sm:block"
         >
-          <ChevronLeftIcon class="h-6 w-6"/>
+          <ChevronLeftIcon class="h-5 w-5 sm:h-6 sm:w-6"/>
         </button>
 
         <!-- 下一张 -->
         <button
             v-if="hasNext"
             @click="next"
-            class="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white transition-colors hover:bg-black/70 glass-control"
+            class="absolute right-2 sm:right-4 top-1/2 z-40 -translate-y-1/2 rounded-full bg-black/50 p-2 sm:p-3 text-white transition-colors hover:bg-black/70 glass-control active:scale-95 hidden sm:block"
         >
-          <ChevronRightIcon class="h-6 w-6"/>
+          <ChevronRightIcon class="h-5 w-5 sm:h-6 sm:w-6"/>
         </button>
 
         <!-- 图片容器 -->
         <div
             ref="imageContainerRef"
-            class="relative flex h-full w-full items-center justify-center overflow-hidden z-0"
+            class="relative flex h-full w-full items-center justify-center overflow-hidden z-0 touch-none"
             @wheel.prevent="handleWheel"
             @mousedown="handleMouseDown"
             @mousemove="handleMouseMove"
             @mouseup="handleMouseUp"
             @mouseleave="handleMouseUp"
+            @touchstart="handleTouchStart"
+            @touchmove="handleTouchMove"
+            @touchend="handleTouchEnd"
             @click.self="close"
         >
           <!-- 加载动画 -->
@@ -64,9 +67,10 @@
                   :class="{ 'cursor-grab': !originScale() && !isDragging, 'cursor-grabbing': isDragging }"
                   :style="{
                   transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
-                  transition: isDragging ? 'none' : 'transform 200ms'
+                  transition: (isDragging || isSwiping) ? 'none' : 'transform 200ms',
+                  '-webkit-touch-callout': isWeChat ? 'default' : 'none'
                 }"
-                  style="user-select: none"
+                  style="user-select: none; -webkit-user-select: none;"
                   draggable="false"
               />
             </div>
@@ -89,44 +93,54 @@
         <Transition name="slide-up">
           <div
               v-if="showDetails"
-              class="absolute bottom-0 left-0 right-0 p-6 z-20"
+              class="absolute bottom-0 left-0 right-0 p-3 sm:p-6 z-40"
               @click.stop
           >
             <LiquidGlassCard
-                class="mx-auto max-w-4xl menu-item relative"
-                :content-class="'p-4 pb-3.5'"
+                class="mx-auto w-full sm:max-w-4xl menu-item relative"
+                :content-class="'p-3 sm:p-4 pb-3.5'"
                 :target-element="mainImageRef"
                 :target-image="imageUrl"
             >
               <!-- Toggle Hide Button -->
               <button
                   @click="showDetails = false"
-                  class="absolute top-2 right-5 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                  class="absolute top-2 right-2 sm:right-5 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
                   title="隐藏详情 (I)"
               >
                 <ChevronDownIcon class="h-5 w-5"/>
               </button>
 
+              <!-- 微信提示 -->
+              <div v-if="isWeChat" class="mb-4 text-center">
+                <p class="text-white/90 text-sm font-medium bg-white/10 py-2 px-4 rounded-lg inline-block backdrop-blur-sm">
+                  长按图片可保存或发送给朋友
+                </p>
+              </div>
+
               <!-- 文件信息 -->
-              <div class="mb-3.5 text-white">
+              <div class="mb-3 text-white pr-8">
                 <!-- 加载中占位符 -->
                 <template v-if="!currentImage">
-                  <div class="h-7 w-48 bg-white/20 rounded animate-pulse"></div>
+                  <div class="h-6 sm:h-7 w-32 sm:w-48 bg-white/20 rounded animate-pulse"></div>
                   <div class="mt-2 flex gap-4">
-                    <div class="h-5 w-32 bg-white/10 rounded animate-pulse"></div>
-                    <div class="h-5 w-24 bg-white/10 rounded animate-pulse"></div>
-                    <div class="h-5 w-20 bg-white/10 rounded animate-pulse"></div>
+                    <div class="h-4 sm:h-5 w-24 sm:w-32 bg-white/10 rounded animate-pulse"></div>
                   </div>
                 </template>
                 <!-- 实际内容 -->
                 <template v-else>
-                  <h3 class="text-lg font-semibold text-shadow">{{ currentImage.original_name }}</h3>
-                  <div class="mt-2 flex flex-wrap gap-4 text-sm text-gray-100 text-shadow-sm">
+                  <h3 class="text-base sm:text-lg font-semibold text-shadow truncate">{{
+                      currentImage.original_name
+                    }}</h3>
+                  <div
+                      class="mt-1.5 sm:mt-2 flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-100 text-shadow-sm">
                     <span v-if="currentImage.taken_at">{{ formatDate(currentImage.taken_at) }}</span>
-                    <span v-if="currentImage.camera_model">{{ currentImage.camera_model }}</span>
-                    <!-- EXIF 信息 -->
+                    <span v-if="currentImage.camera_model" class="hidden sm:inline">{{
+                        currentImage.camera_model
+                      }}</span>
+                    <!-- EXIF 信息 - 移动端隐藏部分详情 -->
                     <div v-if="currentImage.aperture || currentImage.shutter_speed || currentImage.iso"
-                         class="flex gap-3 border-l border-white/30 pl-3">
+                         class="hidden sm:flex gap-3 border-l border-white/30 pl-3">
                       <span v-if="currentImage.aperture">{{ currentImage.aperture }}</span>
                       <span v-if="currentImage.shutter_speed">{{ currentImage.shutter_speed }}s</span>
                       <span v-if="currentImage.iso">ISO{{ currentImage.iso }}</span>
@@ -136,64 +150,71 @@
                         currentImage.height
                       }}</span>
                     <span>{{ formatFileSize(currentImage.file_size) }}</span>
-                    <span v-if="currentImage.location_name"
-                          class="border-l border-white/30 pl-3 flex items-center gap-1">
-                      <MapPinIcon class="h-3 w-3"/>
-                      {{ currentImage.location_name }}
-                    </span>
                   </div>
                 </template>
               </div>
 
               <!-- 操作按钮 -->
-              <div class="flex items-center gap-2" style="user-select: none">
-                <button
-                    @click="zoomOut(0.25)"
-                    class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/20 backdrop-blur-md transition-all border border-white/10"
-                >
-                  <MinusIcon class="h-4 w-4"/>
-                </button>
-                <span class="px-3 text-sm text-white font-medium text-shadow-sm">{{ Math.round(scale * 100) }}%</span>
-                <button
-                    @click="zoomIn(0.25)"
-                    class="rounded-lg bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/20 backdrop-blur-md transition-all border border-white/10"
-                >
-                  <PlusIcon class="h-4 w-4"/>
-                </button>
+              <div class="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar"
+                   style="user-select: none">
+                <!-- 缩放控制组 -->
+                <div class="flex items-center bg-white/5 rounded-lg border border-white/10 p-0.5 shrink-0">
+                  <button
+                      @click="zoomOut(0.25)"
+                      class="rounded-md p-1.5 sm:px-3 sm:py-2 text-sm text-white hover:bg-white/10 transition-all"
+                  >
+                    <MinusIcon class="h-4 w-4"/>
+                  </button>
+                  <span class="px-2 text-xs sm:text-sm text-white font-medium min-w-[3rem] text-center">{{
+                      Math.round(scale * 100)
+                    }}%</span>
+                  <button
+                      @click="zoomIn(0.25)"
+                      class="rounded-md p-1.5 sm:px-3 sm:py-2 text-sm text-white hover:bg-white/10 transition-all"
+                  >
+                    <PlusIcon class="h-4 w-4"/>
+                  </button>
+                </div>
+
                 <button
                     @click="resetZoom"
-                    class="rounded-lg bg-white/10 px-3 py-1.5 text-sm text-white hover:bg-white/20 backdrop-blur-md transition-all border border-white/10"
+                    class="hidden sm:block rounded-lg bg-white/10 px-3 py-1.5 text-sm text-white hover:bg-white/20 backdrop-blur-md transition-all border border-white/10 shrink-0"
                 >
                   重置
                 </button>
 
-                <div class="flex-1 ">
+                <div class="flex-1 flex justify-center px-2 min-w-0">
                   <button
                       @click="showThumbnails = !showThumbnails"
-                      class="flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors w-full justify-center py-1"
+                      class="flex items-center justify-center gap-2 text-sm text-white/70 hover:text-white transition-colors py-1 w-full sm:w-auto"
                   >
-                    <span v-if="showThumbnails">隐藏预览</span>
-                    <span v-else>显示预览 ({{ imageStore.images.length }})</span>
+                    <span class="hidden sm:inline" v-if="showThumbnails">隐藏预览</span>
+                    <span class="hidden sm:inline" v-else>显示预览 ({{ imageStore.images.length }})</span>
                     <ChevronUpIcon v-if="showThumbnails" class="h-4 w-4"/>
                     <ChevronDownIcon v-else class="h-4 w-4"/>
                   </button>
                 </div>
 
-                <button
-                    @click="downloadImage"
-                    class="flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 backdrop-blur-md transition-all border border-white/10"
-                >
-                  <ArrowDownTrayIcon class="h-4 w-4"/>
-                  下载
-                </button>
+                <div class="flex items-center gap-2 shrink-0">
+                  <button
+                      v-if="!isWeChat"
+                      @click="downloadImage"
+                      class="flex items-center gap-2 rounded-lg bg-white/10 p-2 sm:px-4 sm:py-2 text-sm text-white hover:bg-white/20 backdrop-blur-md transition-all border border-white/10"
+                      title="下载"
+                  >
+                    <ArrowDownTrayIcon class="h-4 w-4"/>
+                    <span class="hidden sm:inline">下载</span>
+                  </button>
 
-                <button
-                    @click="deleteImage"
-                    class="flex items-center gap-2 rounded-lg bg-red-600/80 px-4 py-2 text-sm text-white hover:bg-red-600 backdrop-blur-md transition-all shadow-lg"
-                >
-                  <TrashIcon class="h-4 w-4"/>
-                  删除
-                </button>
+                  <button
+                      @click="deleteImage"
+                      class="flex items-center gap-2 rounded-lg bg-red-600/80 p-2 sm:px-4 sm:py-2 text-sm text-white hover:bg-red-600 backdrop-blur-md transition-all shadow-lg"
+                      title="删除"
+                  >
+                    <TrashIcon class="h-4 w-4"/>
+                    <span class="hidden sm:inline">删除</span>
+                  </button>
+                </div>
               </div>
 
               <!-- 缩略图列表 -->
@@ -202,7 +223,7 @@
                   <div
                       v-if="showThumbnails"
                       ref="thumbnailsRef"
-                      class="flex gap-1 overflow-hidden px-1 mt-2"
+                      class="flex gap-1 sm:gap-2 overflow-x-auto px-1 mt-3 no-scrollbar pb-1"
                       @wheel.stop
                   >
                     <div
@@ -246,7 +267,6 @@ import {
   PlusIcon,
   ArrowDownTrayIcon,
   TrashIcon,
-  MapPinIcon,
   InformationCircleIcon,
   ChevronDownIcon,
   ChevronUpIcon,
@@ -260,10 +280,17 @@ const scale = ref(1)
 const translate = ref({x: 0, y: 0})
 const isDragging = ref(false)
 const dragStart = ref({x: 0, y: 0})
+// Touch handling state
+const touchStart = ref({x: 0, y: 0})
+const initialTouchDistance = ref(0)
+const initialTouchScale = ref(1)
+const isSwiping = ref(false) // 标记是否正在滑动切换图片
+
 const slideDirection = ref<'slide-left' | 'slide-right'>('slide-left')
 const showDetails = ref(true)
 const showThumbnails = ref(true)
 const thumbnailsRef = ref<HTMLElement>()
+const isWeChat = ref(false)
 
 const currentImage = computed(() => {
   return imageStore.images[imageStore.viewerIndex] || null
@@ -349,6 +376,104 @@ function handleMouseMove(e: MouseEvent) {
 
 function handleMouseUp() {
   isDragging.value = false
+}
+
+function getDistance(touches: TouchList) {
+  return touches[0] && touches[1] ? Math.hypot(
+      touches[0].clientX - touches[1].clientX,
+      touches[0].clientY - touches[1].clientY
+  ) : null
+}
+
+function handleTouchStart(e: TouchEvent) {
+  if (e.touches.length === 1 && e.touches[0]) {
+    // Single finger: Pan or prepare for Swipe
+    const touch = e.touches[0]
+    touchStart.value = {x: touch.clientX, y: touch.clientY}
+
+    if (scale.value > 1) {
+      isDragging.value = true
+      dragStart.value = {
+        x: touch.clientX - translate.value.x,
+        y: touch.clientY - translate.value.y
+      }
+    } else {
+      // 原始比例时，准备滑动切换
+      isSwiping.value = true
+    }
+  } else if (e.touches.length === 2) {
+    // Two fingers: Pinch
+    isDragging.value = false
+    isSwiping.value = false
+    initialTouchDistance.value = getDistance(e.touches)
+    initialTouchScale.value = scale.value
+  }
+}
+
+function handleTouchMove(e: TouchEvent) {
+  // Prevent default to stop page scrolling/zooming
+  if (e.cancelable) {
+    e.preventDefault()
+  }
+
+  if (e.touches.length === 1 && e.touches[0]) {
+    const touch = e.touches[0]
+
+    if (scale.value > 1 && isDragging.value) {
+      // Pan when zoomed
+      translate.value = {
+        x: touch.clientX - dragStart.value.x,
+        y: touch.clientY - dragStart.value.y
+      }
+    } else if (scale.value === 1 && isSwiping.value) {
+      // Swipe visual feedback (only X axis)
+      const deltaX = touch.clientX - touchStart.value.x
+      translate.value = {x: deltaX, y: 0}
+    }
+  } else if (e.touches.length === 2) {
+    // Pinch zoom
+    const currentDistance = getDistance(e.touches)
+    if (initialTouchDistance.value > 0 && currentDistance) {
+      const ratio = currentDistance / initialTouchDistance.value
+      // Limit zoom level
+      scale.value = Math.min(Math.max(initialTouchScale.value * ratio, 0.5), 5)
+    }
+  }
+}
+
+function handleTouchEnd(e: TouchEvent) {
+  if (e.touches.length === 0) {
+    // All fingers lifted
+    if (scale.value <= 1 && isSwiping.value) {
+      // Ensure scale resets to 1 if slightly zoomed out
+      // Check for swipe gesture
+      const deltaX = translate.value.x
+      const threshold = 50 // Swipe threshold
+
+      if (Math.abs(deltaX) > threshold) {
+        if (deltaX > 0) {
+          previous()
+        } else {
+          next()
+        }
+      } else {
+        // Snap back if threshold not met
+        resetZoom()
+      }
+    }
+    isDragging.value = false
+    isSwiping.value = false
+  } else if (e.touches.length === 1 && e.touches[0]) {
+    // One finger remains (e.g. after pinch)
+    // Switch to panning mode smoothly
+    const touch = e.touches[0]
+    dragStart.value = {
+      x: touch.clientX - translate.value.x,
+      y: touch.clientY - translate.value.y
+    }
+    isDragging.value = scale.value > 1
+    isSwiping.value = false
+  }
 }
 
 function originScale(): boolean {
@@ -451,6 +576,9 @@ watch(
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
+  // Check WeChat
+  const ua = navigator.userAgent.toLowerCase()
+  isWeChat.value = ua.includes('micromessenger')
 })
 
 onUnmounted(() => {

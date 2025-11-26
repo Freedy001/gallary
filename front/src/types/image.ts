@@ -69,13 +69,6 @@ export interface UpdateMetadataRequest {
 }
 
 export interface ClusterResult {
-  latitude: number
-  longitude: number
-  count: number
-  cover_image: Image
-}
-
-export interface ClusterResult {
   min_lat: number
   max_lat: number
   min_lng: number
@@ -84,4 +77,12 @@ export interface ClusterResult {
   longitude: number
   count: number
   cover_image: Image
+}
+
+export interface GeoBounds {
+  min_lat: number
+  max_lat: number
+  min_lng: number
+  max_lng: number
+  count: number
 }

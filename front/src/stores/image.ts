@@ -18,6 +18,7 @@ export const useImageStore = defineStore('image', () => {
 
   // Computed
   const selectedCount = computed(() => selectedImages.value.size)
+  const selectedIds = computed(() => Array.from(selectedImages.value))
 
   const loadingPages = new Set<number>()
   let imageFetcher: (page: number, size: number) => Promise<Pageable<Image>>;
@@ -131,6 +132,7 @@ export const useImageStore = defineStore('image', () => {
     total,
     // Computed
     selectedCount,
+    selectedIds,
 
     // Actions
     fetchImages,

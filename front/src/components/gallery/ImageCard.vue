@@ -31,6 +31,7 @@
       <div class="mt-1 flex items-center gap-2 text-xs text-gray-400 font-light">
         <span v-if="image.taken_at">{{ formatDate(image.taken_at) }}</span>
         <span v-if="image.camera_model" class="truncate opacity-80">{{ image.camera_model }}</span>
+        <span v-if="image.location_name" class="truncate">{{ image.location_name }}</span>
       </div>
     </div>
   </div>

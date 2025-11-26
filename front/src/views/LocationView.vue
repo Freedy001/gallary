@@ -27,8 +27,10 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import ImageViewer from '@/components/gallery/ImageViewer.vue'
 import {imageApi} from '@/api/image'
 import {useUIStore} from '@/stores/ui'
-import type {ClusterResult} from '@/types'
+import type {ClusterResult, GeoBounds} from '@/types'
 import AMapLoader from '@amap/amap-jsapi-loader'
+import "@amap/amap-jsapi-types";
+
 import {useImageStore} from "@/stores/image.ts";
 
 let map: any = null
@@ -134,20 +136,47 @@ const initMap = async () => {
       plugins: [],
     })
 
-    // 默认中国中心
-    const centerLng = 104.195397
-    const centerLat = 35.86166
-    const zoom = 4
+    // 获取图片地理边界来决定初始中心和缩放
+    let centerLng = 104.195397  // 默认中国中心
+    let centerLat = 35.86166
+    let zoom = 4
+    let geoBounds: GeoBounds | null = null
+
+    try {
+      const boundsRes = await imageApi.getGeoBounds()
+      if (boundsRes.data) {
+        geoBounds = boundsRes.data
+        // 计算中心点作为初始值
+        centerLat = (geoBounds.min_lat + geoBounds.max_lat) / 2
+        centerLng = (geoBounds.min_lng + geoBounds.max_lng) / 2
+      }
+    } catch (e) {
+      console.warn('获取地理边界失败，使用默认位置', e)
+    }
 
     map = new AMap.Map("location-map-container", {
       viewMode: "3D",
+      layers: [
+        // 卫星
+        new AMap.TileLayer.Satellite(),
+        // 路网
+        new AMap.TileLayer.RoadNet()
+      ],
       zoom: zoom,
       center: [centerLng, centerLat],
-      resizeEnable: true
+      resizeEnable: true,
     })
 
     map.on('complete', () => {
       loading.value = false
+      // 如果有地理边界，使用 setBounds 自动适配
+      if (geoBounds) {
+        const bounds = new (window as any).AMap.Bounds(
+          [geoBounds.min_lng, geoBounds.min_lat],  // 西南角
+          [geoBounds.max_lng, geoBounds.max_lat]   // 东北角
+        )
+        map.setBounds(bounds, false, [100, 100, 100, 100])  // 添加 60px 边距
+      }
       updateClusters()
     })
 

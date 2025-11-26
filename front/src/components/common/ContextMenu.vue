@@ -2,10 +2,10 @@
   <div
       v-if="modelValue"
       :style="style"
-      class="fixed z-50 py-1 min-w-[160px] w-max overflow-hidden !rounded-xl "
+      class="fixed z-50 min-w-[200px] w-max !rounded-[24px]"
       @contextmenu.prevent
   >
-    <LiquidGlassCard :hover-effect="false" content-class="p-0">
+    <LiquidGlassCard :hover-effect="false" content-class="p-1 pt-2">
       <slot></slot>
     </LiquidGlassCard>
   </div>

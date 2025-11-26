@@ -38,6 +38,7 @@ type ImageRepository interface {
 	// 聚合相关
 	GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, gridSizeLat, gridSizeLng float64) ([]*model.ClusterResult, error)
 	GetClusterImages(ctx context.Context, minLat, maxLat, minLng, maxLng float64, page, pageSize int) ([]*model.Image, int64, error)
+	GetGeoBounds(ctx context.Context) (*model.GeoBounds, error)
 }
 
 // SearchParams 搜索参数
@@ -434,4 +435,36 @@ func (r *imageRepository) GetClusterImages(ctx context.Context, minLat, maxLat, 
 	}
 
 	return images, total, nil
+}
+
+// GetGeoBounds 获取所有带坐标图片的地理边界
+func (r *imageRepository) GetGeoBounds(ctx context.Context) (*model.GeoBounds, error) {
+	var result struct {
+		MinLat float64
+		MaxLat float64
+		MinLng float64
+		MaxLng float64
+		Count  int64
+	}
+
+	err := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).
+		Select("MIN(latitude) as min_lat, MAX(latitude) as max_lat, MIN(longitude) as min_lng, MAX(longitude) as max_lng, COUNT(*) as count").
+		Where("latitude IS NOT NULL AND longitude IS NOT NULL").
+		Scan(&result).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Count == 0 {
+		return nil, nil
+	}
+
+	return &model.GeoBounds{
+		MinLat: result.MinLat,
+		MaxLat: result.MaxLat,
+		MinLng: result.MinLng,
+		MaxLng: result.MaxLng,
+		Count:  result.Count,
+	}, nil
 }

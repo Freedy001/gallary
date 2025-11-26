@@ -7,7 +7,7 @@
     ]"
   >
     <!-- Logo区域 -->
-    <div class="flex h-20 items-center justify-between px-6">
+    <div class="flex h-20 items-center justify-between px-6" style="user-select: none">
       <div v-if="!uiStore.sidebarCollapsed" class="flex items-center gap-2 overflow-hidden whitespace-nowrap">
         <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-primary-500/80 to-primary-700/80 shadow-[0_0_15px_rgba(139,92,246,0.2)] flex items-center justify-center border border-white/10">
            <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

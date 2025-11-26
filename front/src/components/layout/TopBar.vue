@@ -39,6 +39,14 @@
       <div v-if="uiStore.isSelectionMode" class="flex items-center gap-4">
         <button
           v-if="imageStore.selectedCount > 0"
+          @click="handleBatchDownload"
+          class="flex items-center gap-2 rounded-xl bg-blue-500/10 border border-blue-500/20 px-5 py-2.5 text-sm font-medium text-blue-400 transition-all hover:bg-blue-500/20 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+        >
+          <ArrowDownTrayIcon class="h-4 w-4" />
+          <span>下载 ({{ imageStore.selectedCount }})</span>
+        </button>
+        <button
+          v-if="imageStore.selectedCount > 0"
           @click="handleBatchDelete"
           class="flex items-center gap-2 rounded-xl bg-red-500/10 border border-red-500/20 px-5 py-2.5 text-sm font-medium text-red-400 transition-all hover:bg-red-500/20 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]"
         >
@@ -109,10 +117,12 @@ import { useImageStore } from '@/stores/image'
 import {
   MagnifyingGlassIcon,
   ArrowUpTrayIcon,
+  ArrowDownTrayIcon,
   Squares2X2Icon,
   Square3Stack3DIcon,
   TrashIcon,
 } from '@heroicons/vue/24/outline'
+import { imageApi } from '@/api/image'
 
 const uiStore = useUIStore()
 const imageStore = useImageStore()
@@ -156,6 +166,12 @@ async function handleBatchDelete() {
     console.error('批量删除失败', error)
     alert('删除失败')
   }
+}
+
+async function handleBatchDownload() {
+  if (imageStore.selectedCount === 0) return
+
+  imageApi.downloadZipped(imageStore.selectedIds)
 }
 
 function handleUploadClick() {

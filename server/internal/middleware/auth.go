@@ -19,23 +19,32 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		// 获取Authorization头
+		var tokenString string
+
+		// 1. 优先从 Authorization 头获取
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				tokenString = parts[1]
+			}
+		}
+
+		// 2. 如果头部没有，尝试从表单参数获取（支持表单下载等场景）
+		if tokenString == "" {
+			tokenString = c.PostForm("token")
+		}
+
+		// 3. 如果还没有，尝试从 URL 查询参数获取
+		if tokenString == "" {
+			tokenString = c.Query("token")
+		}
+
+		if tokenString == "" {
 			utils.Unauthorized(c, "未提供认证token")
 			c.Abort()
 			return
 		}
-
-		// 解析Bearer token
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			utils.Unauthorized(c, "认证格式错误")
-			c.Abort()
-			return
-		}
-
-		tokenString := parts[1]
 
 		// 验证token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {

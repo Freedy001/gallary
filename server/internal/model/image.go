@@ -57,6 +57,15 @@ type ClusterResult struct {
 	CoverImage *Image  `json:"cover_image"` // 封面图片
 }
 
+// GeoBounds 地理边界
+type GeoBounds struct {
+	MinLat float64 `json:"min_lat"` // 最小纬度
+	MaxLat float64 `json:"max_lat"` // 最大纬度
+	MinLng float64 `json:"min_lng"` // 最小经度
+	MaxLng float64 `json:"max_lng"` // 最大经度
+	Count  int64   `json:"count"`   // 带有坐标的图片数量
+}
+
 // TableName 指定表名
 func (Image) TableName() string {
 	return "images"

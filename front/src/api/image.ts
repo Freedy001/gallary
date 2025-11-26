@@ -1,6 +1,6 @@
 import http from './http'
 import type {
-  ApiResponse, ClusterResult,
+  ApiResponse, ClusterResult, GeoBounds,
   Image,
   Pageable,
   SearchParams,
@@ -42,6 +42,40 @@ export const imageApi = {
     return http.download(`/api/images/${id}/download`, filename)
   },
 
+  downloadBatch(images: Image[]): Promise<void> {
+    return Promise.all(images.filter(i => i && i.id).map(ims => http.download(`/api/images/${ims.id}/download`, ims.original_name))).then()
+  },
+
+  // 批量下载图片（打包为 ZIP，流式下载）
+  downloadZipped(ids: number[]): void {
+    // 创建隐藏的表单提交，让浏览器直接处理下载
+    const form = document.createElement('form')
+    form.method = 'POST'
+    form.action = '/api/images/batch-download'
+    form.style.display = 'none'
+
+    // 添加 ids 参数
+    const input = document.createElement('input')
+    input.type = 'hidden'
+    input.name = 'ids'
+    input.value = JSON.stringify(ids)
+    form.appendChild(input)
+
+    // 添加 token
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      const tokenInput = document.createElement('input')
+      tokenInput.type = 'hidden'
+      tokenInput.name = 'token'
+      tokenInput.value = token
+      form.appendChild(tokenInput)
+    }
+
+    document.body.appendChild(form)
+    form.submit()
+    document.body.removeChild(form)
+  },
+
   // 搜索图片
   search(params: SearchParams): Promise<ApiResponse<Pageable<Image>>> {
     return http.get('/api/search', {params})
@@ -77,6 +111,11 @@ export const imageApi = {
         page_size: pageSize
       }
     })
+  },
+
+  // 获取图片地理边界
+  getGeoBounds(): Promise<ApiResponse<GeoBounds | null>> {
+    return http.get('/api/images/geo-bounds')
   },
 
   // 获取图片 URL

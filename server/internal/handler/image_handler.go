@@ -2,8 +2,11 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"gallary/server/pkg/database"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -199,6 +202,66 @@ func (h *ImageHandler) Download(c *gin.Context) {
 	c.DataFromReader(200, -1, "application/octet-stream", reader, nil)
 }
 
+// BatchDownload 批量下载图片
+//
+//	@Summary		批量下载图片
+//	@Description	根据ID列表批量下载图片，打包为ZIP（流式传输）
+//	@Tags			图片管理
+//	@Accept			json
+//	@Produce		application/zip
+//	@Param			ids	body		[]int64			true	"图片ID列表"
+//	@Success		200	{file}		binary			"ZIP文件"
+//	@Failure		400	{object}	utils.Response	"无效的参数"
+//	@Failure		500	{object}	utils.Response	"下载失败"
+//	@Router			/api/images/batch-download [post]
+func (h *ImageHandler) BatchDownload(c *gin.Context) {
+	var ids []int64
+
+	// 支持 JSON 和表单两种方式
+	contentType := c.ContentType()
+	if contentType == "application/json" {
+		var req struct {
+			IDs []int64 `json:"ids" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			utils.BadRequest(c, "无效的参数")
+			return
+		}
+		ids = req.IDs
+	} else {
+		// 表单方式：ids 是 JSON 字符串
+		idsStr := c.PostForm("ids")
+		if idsStr == "" {
+			utils.BadRequest(c, "无效的参数")
+			return
+		}
+		if err := json.Unmarshal([]byte(idsStr), &ids); err != nil {
+			utils.BadRequest(c, "无效的参数格式")
+			return
+		}
+	}
+
+	if len(ids) == 0 {
+		utils.BadRequest(c, "请选择要下载的图片")
+		return
+	}
+
+	// 生成文件名
+	filename := fmt.Sprintf("images_%s.zip", time.Now().Format("20060102_150405"))
+
+	// 设置响应头，开始流式传输
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Header("Transfer-Encoding", "chunked")
+
+	// 直接写入到响应流
+	_, err := h.service.DownloadBatch(c.Request.Context(), ids, c.Writer)
+	if err != nil {
+		logger.Error("批量下载图片失败", zap.Error(err))
+		return
+	}
+}
+
 // Search 搜索图片
 //
 //	@Summary		搜索图片
@@ -378,4 +441,24 @@ func (h *ImageHandler) GetClusterImages(c *gin.Context) {
 	}
 
 	utils.PageResponse(c, images, total, page, pageSize)
+}
+
+// GetGeoBounds 获取所有带坐标图片的地理边界
+//
+//	@Summary		获取图片地理边界
+//	@Description	获取所有带有地理坐标的图片的边界范围，用于地图初始化
+//	@Tags			图片管理
+//	@Produce		json
+//	@Success		200	{object}	utils.Response{data=model.GeoBounds}	"地理边界"
+//	@Failure		500	{object}	utils.Response							"获取失败"
+//	@Router			/api/images/geo-bounds [get]
+func (h *ImageHandler) GetGeoBounds(c *gin.Context) {
+	bounds, err := h.service.GetGeoBounds(c.Request.Context())
+	if err != nil {
+		logger.Error("获取地理边界失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.Success(c, bounds)
 }

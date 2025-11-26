@@ -1,20 +1,44 @@
 <template>
   <div class="p-3">
     <!-- 加载状态 -->
-    <div v-if="imageStore.loading && (!imageStore.images || imageStore.images.length === 0)" class="py-12 text-center">
-      <div class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600"></div>
-      <p class="mt-4 text-sm text-gray-600">加载中...</p>
+    <div v-if="imageStore.loading && (!imageStore.images || imageStore.images.length === 0)"
+         class="flex min-h-[60vh] items-center justify-center">
+      <div class="text-center">
+        <div
+            class="inline-block h-12 w-12 animate-spin rounded-full border-2 border-white/5 border-t-primary-500 shadow-[0_0_15px_rgba(139,92,246,0.3)]"></div>
+        <p class="mt-6 text-sm text-white/40 tracking-[0.2em] uppercase font-medium">Loading</p>
+      </div>
     </div>
 
     <!-- 空状态 -->
     <div v-else-if="!imageStore.images || imageStore.images.length === 0"
-         class="flex min-h-[60vh] items-center justify-center py-20">
-      <div class="text-center">
-        <div class="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-gray-100">
-          <PhotoIcon class="h-12 w-12 text-gray-400"/>
+         class="flex min-h-[60vh] flex-col items-center justify-center py-20">
+      <div class="text-center relative z-10" style="user-select: none">
+        <div class="relative group mx-auto mb-8">
+          <!-- 背景光晕 -->
+          <div
+              class="absolute -inset-4 rounded-full bg-primary-500/20 blur-2xl opacity-50 group-hover:opacity-75 transition-all duration-700"></div>
+
+          <!-- 图标容器 -->
+          <div
+              class="relative mx-auto flex h-32 w-32 items-center justify-center rounded-full bg-white/5 ring-1 ring-white/10 backdrop-blur-xl shadow-2xl transition-all duration-500 group-hover:scale-105 group-hover:bg-white/10 group-hover:ring-white/20">
+            <SparklesIcon class="h-16 w-16 text-primary-400/90 drop-shadow-[0_0_15px_rgba(139,92,246,0.5)]"/>
+          </div>
+
+          <!-- 装饰元素 -->
+          <div
+              class="absolute top-0 right-0 h-8 w-8 rounded-full bg-white/5 ring-1 ring-white/10 backdrop-blur-md flex items-center justify-center animate-bounce"
+              style="animation-duration: 3s;">
+            <CloudArrowUpIcon class="h-4 w-4 text-primary-300"/>
+          </div>
         </div>
-        <h3 class="mt-6 text-xl font-semibold text-gray-900">还没有图片</h3>
-        <p class="mt-3 text-base text-gray-600">上传您的第一张图片开始使用</p>
+
+        <h3 class="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white to-white/60 sm:text-4xl font-display mb-3">
+          暂无图片
+        </h3>
+        <p class="mt-2 max-w-sm mx-auto text-lg text-white/50 leading-relaxed font-light">
+          上传您的第一张图片，开启您的光影画廊
+        </p>
       </div>
     </div>
 
@@ -33,6 +57,9 @@
         </ContextMenuItem>
         <ContextMenuItem :icon="ArrowDownTrayIcon" @click="handleDownload">
           下载 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+        </ContextMenuItem>
+        <ContextMenuItem :icon="ArchiveBoxArrowDownIcon" @click="handleBatchDownload">
+          打包下载 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
         </ContextMenuItem>
         <ContextMenuItem :icon="TrashIcon" :danger="true" @click="handleDelete">
           删除 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
@@ -54,11 +81,7 @@
       />
 
       <!-- 框选区域 -->
-      <div
-          v-if="isSelecting"
-          class="absolute z-50 border border-blue-500 bg-blue-500/20"
-          :style="selectionBoxStyle"
-      ></div>
+      <SelectionBox :style="selectionBoxStyle"/>
 
       <!-- 瀑布流布局 -->
       <div v-if="isWaterfall" class="flex gap-4">
@@ -89,7 +112,7 @@
                   class="absolute inset-0 cursor-pointer rounded-lg transition-colors"
                   :class="[
                   imageStore.selectedImages.has(item.image.id)
-                    ? 'bg-blue-500/20 ring-2 ring-blue-500'
+                    ? 'bg-primary-500/20 ring-2 ring-primary-500'
                     : 'hover:bg-black/10'
                 ]"
                   @click.stop="handleImageClick(item.image, item.index)"
@@ -100,7 +123,7 @@
                       class="flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors"
                       :class="[
                       imageStore.selectedImages.has(item.image.id)
-                        ? 'border-blue-500 bg-blue-500 text-white'
+                        ? 'border-primary-500 bg-primary-500 text-white'
                         : 'border-white/70 bg-black/20 hover:bg-black/40'
                     ]"
                   >
@@ -112,8 +135,8 @@
 
             <!-- 占位符 -->
             <div v-else
-                 class="w-full animate-pulse rounded-lg bg-gray-200 flex items-center justify-center min-h-[200px]">
-              <PhotoIcon class="h-8 w-8 text-gray-300"/>
+                 class="w-full animate-pulse rounded-2xl bg-white/5 ring-1 ring-white/10 flex items-center justify-center min-h-[200px]">
+              <PhotoIcon class="h-8 w-8 text-white/10"/>
             </div>
           </div>
         </div>
@@ -148,7 +171,7 @@
                 class="absolute inset-0 cursor-pointer rounded-lg transition-colors"
                 :class="[
                 imageStore.selectedImages.has(image.id)
-                  ? 'bg-blue-500/20 ring-2 ring-blue-500'
+                  ? 'bg-primary-500/20 ring-2 ring-primary-500'
                   : 'hover:bg-black/10'
               ]"
                 @click.stop="handleImageClick(image, index)"
@@ -159,7 +182,7 @@
                     class="flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors"
                     :class="[
                     imageStore.selectedImages.has(image.id)
-                      ? 'border-blue-500 bg-blue-500 text-white'
+                      ? 'border-primary-500 bg-primary-500 text-white'
                       : 'border-white/70 bg-black/20 hover:bg-black/40'
                   ]"
                 >
@@ -170,8 +193,9 @@
           </template>
 
           <!-- 占位符 -->
-          <div v-else class="h-full w-full animate-pulse rounded-lg bg-gray-200 flex items-center justify-center">
-            <PhotoIcon class="h-8 w-8 text-gray-300"/>
+          <div v-else
+               class="h-full w-full animate-pulse rounded-2xl bg-white/5 ring-1 ring-white/10 flex items-center justify-center">
+            <PhotoIcon class="h-8 w-8 text-white/10"/>
           </div>
         </div>
       </div>
@@ -197,14 +221,19 @@ import {
   PencilIcon,
   PhotoIcon,
   TrashIcon,
-  ShareIcon
+  ShareIcon,
+  SparklesIcon,
+  ArchiveBoxArrowDownIcon,
+  CloudArrowUpIcon
 } from '@heroicons/vue/24/outline'
 import ImageCard from './ImageCard.vue'
 import ContextMenu from '@/components/common/ContextMenu.vue'
 import ContextMenuItem from '@/components/common/ContextMenuItem.vue'
+import SelectionBox from '@/components/common/SelectionBox.vue'
 import MetadataEditor from './menu/MetadataEditor.vue'
 import CreateShare from '@/components/gallery/menu/CreateShare.vue'
 import ImageViewer from "@/components/gallery/ImageViewer.vue";
+import {useBoxSelection} from '@/composables/useBoxSelection'
 
 const index = ref<number>(-1)
 
@@ -270,15 +299,20 @@ const handleEdit = () => {
   contextMenu.value.visible = false
 }
 
-const handleDownload = async () => {
+const handleDownload = () => {
   contextMenu.value.visible = false
-  // Loop download
-  for (const id of contextMenuTargetIds.value) {
-    const img = imageStore.images.find(i => i?.id === id)
-    if (img) {
-      await imageApi.download(id, img.original_name)
-    }
+  for (let targetId of contextMenuTargetIds.value) {
+    if (targetId === undefined) continue;
+
+    const img = imageStore.images.find(i => i?.id === targetId)
+    if (img) imageApi.download(targetId, img.original_name)
   }
+}
+
+const handleBatchDownload = () => {
+  contextMenu.value.visible = false
+  // 多个文件使用批量下载
+  imageApi.downloadZipped(contextMenuTargetIds.value.filter((id): id is number => id !== undefined))
 }
 
 const handleDelete = async () => {
@@ -339,32 +373,21 @@ watch(() => uiStore.gridColumns, () => {
   updateColumnCount()
 })
 
-// 框选相关状态
-const isSelecting = ref(false)
-const selectionStart = ref({x: 0, y: 0})
-const selectionCurrent = ref({x: 0, y: 0})
-const lastMousePos = ref({x: 0, y: 0})
 const itemRefs = new Map<number, HTMLElement>() // Key is index
-const itemRects = new Map<number, { left: number, top: number, right: number, bottom: number }>() // Key is index
-const initialSelection = new Set<number>()
-let isDragOperation = false
 const observer = ref<IntersectionObserver | null>(null)
 const scrollContainer = ref<HTMLElement | null>(null)
 
-const selectionBoxStyle = computed(() => {
-  if (!isSelecting.value) return {}
-
-  const left = Math.min(selectionStart.value.x, selectionCurrent.value.x)
-  const top = Math.min(selectionStart.value.y, selectionCurrent.value.y)
-  const width = Math.abs(selectionCurrent.value.x - selectionStart.value.x)
-  const height = Math.abs(selectionCurrent.value.y - selectionStart.value.y)
-
-  return {
-    left: `${left}px`,
-    top: `${top}px`,
-    width: `${width}px`,
-    height: `${height}px`
-  }
+const {
+  selectionBoxStyle,
+  handleMouseDown,
+  isDragOperation
+} = useBoxSelection({
+  containerRef,
+  itemRefs,
+  onSelectionEnd: () => {
+    uiStore.setSelectionMode(true)
+  },
+  useScroll: false
 })
 
 function setItemRef(el: Element | ComponentPublicInstance | null, index: number) {
@@ -378,128 +401,6 @@ function setItemRef(el: Element | ComponentPublicInstance | null, index: number)
   } else {
     itemRefs.delete(index)
   }
-}
-
-function handleMouseDown(e: MouseEvent) {
-  // 仅在选择模式下，且使用左键点击时触发
-  if (e.button !== 0 || !containerRef.value) return
-  // 阻止默认事件，防止选中文本
-  // 但不阻止冒泡，否则可能影响其他交互？
-  // e.preventDefault()
-
-  isDragOperation = false
-
-  const containerRect = containerRef.value.getBoundingClientRect()
-  const startX = e.clientX - containerRect.left
-  const startY = e.clientY - containerRect.top
-
-  selectionStart.value = {x: startX, y: startY}
-  selectionCurrent.value = {x: startX, y: startY}
-  lastMousePos.value = {x: e.clientX, y: e.clientY}
-
-  // 缓存所有图片位置 (相对于容器)
-  itemRects.clear()
-  itemRefs.forEach((el, index) => {
-    itemRects.set(index, {
-      left: el.offsetLeft,
-      top: el.offsetTop,
-      right: el.offsetLeft + el.offsetWidth,
-      bottom: el.offsetTop + el.offsetHeight
-    })
-  })
-
-  // 记录初始选中状态
-  initialSelection.clear()
-  imageStore.selectedImages.forEach(id => initialSelection.add(id))
-
-  window.addEventListener('mousemove', handleMouseMove)
-  window.addEventListener('mouseup', handleMouseUp)
-  window.addEventListener('scroll', handleScroll, true)
-}
-
-function updateSelectionPos(clientX: number, clientY: number) {
-  if (!containerRef.value) return
-
-  const containerRect = containerRef.value.getBoundingClientRect()
-  selectionCurrent.value = {
-    x: clientX - containerRect.left,
-    y: clientY - containerRect.top
-  }
-
-  updateSelection()
-}
-
-function handleMouseMove(e: MouseEvent) {
-  lastMousePos.value = {x: e.clientX, y: e.clientY}
-
-  if (!isSelecting.value) {
-    if (!containerRef.value) return
-    const containerRect = containerRef.value.getBoundingClientRect()
-    const startX = selectionStart.value.x + containerRect.left
-    const startY = selectionStart.value.y + containerRect.top
-
-    // 判断是否达到拖拽阈值 (5px)
-    const dx = e.clientX - startX
-    const dy = e.clientY - startY
-    if (dx * dx + dy * dy > 25) {
-      isSelecting.value = true
-    } else {
-      return
-    }
-  }
-
-  updateSelectionPos(e.clientX, e.clientY)
-}
-
-function handleMouseUp() {
-  window.removeEventListener('mousemove', handleMouseMove)
-  window.removeEventListener('mouseup', handleMouseUp)
-  window.removeEventListener('scroll', handleScroll, true)
-
-  if (isSelecting.value) {
-    uiStore.setSelectionMode(true)
-    isSelecting.value = false
-    isDragOperation = true
-    // 延迟重置拖拽标志，确保在 click 事件触发时 flag 为 true
-    setTimeout(() => {
-      isDragOperation = false
-    }, 0)
-  }
-}
-
-function updateSelection() {
-  const left = Math.min(selectionStart.value.x, selectionCurrent.value.x)
-  const top = Math.min(selectionStart.value.y, selectionCurrent.value.y)
-  const right = Math.max(selectionStart.value.x, selectionCurrent.value.x)
-  const bottom = Math.max(selectionStart.value.y, selectionCurrent.value.y)
-
-  // 基于初始选中状态计算
-  const newSelection = new Set(initialSelection)
-
-  itemRects.forEach((rect, index) => {
-    // 判断矩形相交
-    const isIntersecting = !(
-        rect.right < left ||
-        rect.left > right ||
-        rect.bottom < top ||
-        rect.top > bottom
-    )
-
-    if (isIntersecting) {
-      const image = imageStore.images[index]
-      if (image) {
-        // 如果原本已选中，则取消选中；如果原本未选中，则选中
-        if (initialSelection.has(image.id)) {
-          newSelection.delete(image.id)
-        } else {
-          newSelection.add(image.id)
-        }
-      }
-    }
-  })
-
-  // 更新 store
-  imageStore.selectedImages = newSelection
 }
 
 // 根据密度动态计算网格列数
@@ -531,7 +432,7 @@ const gridClass = computed(() => {
 
 function handleImageClick(image: Image, index: number) {
   // 如果是拖拽操作结束，不处理点击
-  if (isDragOperation) return
+  if (isDragOperation()) return
 
   if (uiStore.isSelectionMode) {
     imageStore.toggleSelect(image.id)
