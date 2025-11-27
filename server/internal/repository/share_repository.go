@@ -157,7 +157,8 @@ func (r *shareRepository) GetImagesPaginated(ctx context.Context, shareID int64,
 	// 先获取总数
 	if err := database.GetDB(ctx).WithContext(ctx).
 		Model(&model.ShareImage{}).
-		Where("share_id = ?", shareID).
+		Joins("JOIN images ON images.id = share_images.image_id").
+		Where("share_images.share_id = ? and images.delete_at is not null", shareID).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

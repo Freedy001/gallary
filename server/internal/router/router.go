@@ -14,6 +14,7 @@ func SetupRouter(
 	authHandler *handler.AuthHandler,
 	imageHandler *handler.ImageHandler,
 	shareHandler *handler.ShareHandler,
+	settingHandler *handler.SettingHandler,
 ) *gin.Engine {
 	// 设置运行模式
 	gin.SetMode(cfg.Server.Mode)
@@ -36,7 +37,7 @@ func SetupRouter(
 		auth := api.Group("/auth")
 		{
 			auth.POST("/login", authHandler.Login)
-			auth.GET("/check", middleware.AuthMiddleware(cfg), authHandler.Check)
+			auth.GET("/check", authHandler.Check)
 		}
 
 		// 图片相关路由（需要认证）
@@ -54,6 +55,11 @@ func SetupRouter(
 			images.GET("/:id", imageHandler.GetByID)
 			images.DELETE("/:id", imageHandler.Delete)
 			images.GET("/:id/download", imageHandler.Download)
+
+			// 回收站相关路由
+			images.GET("/trash", imageHandler.ListDeleted)
+			images.POST("/trash/restore", imageHandler.RestoreImages)
+			images.POST("/trash/delete", imageHandler.PermanentlyDelete)
 		}
 
 		// 搜索路由（需要认证）
@@ -73,6 +79,17 @@ func SetupRouter(
 		{
 			publicShares.GET("/:code/info", shareHandler.GetPublicInfo)
 			publicShares.POST("/:code/images", shareHandler.SharedImages)
+		}
+
+		// 设置路由（无需认证）
+		settings := api.Group("/settings")
+		{
+			settings.GET("", settingHandler.GetAll)
+			settings.GET("/:category", settingHandler.GetByCategory)
+			settings.GET("/password/status", settingHandler.GetPasswordStatus)
+			settings.PUT("/password", settingHandler.UpdatePassword)
+			settings.PUT("/storage", settingHandler.UpdateStorage)
+			settings.PUT("/cleanup", settingHandler.UpdateCleanup)
 		}
 	}
 

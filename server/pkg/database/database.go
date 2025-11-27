@@ -74,6 +74,7 @@ func AutoMigrate() error {
 		&model.ImageMetadata{},
 		&model.Share{},
 		&model.ShareImage{},
+		&model.Setting{},
 	)
 	if err != nil {
 		return fmt.Errorf("数据库迁移失败: %w", err)

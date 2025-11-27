@@ -272,8 +272,10 @@ import {
   ChevronUpIcon,
 } from '@heroicons/vue/24/outline'
 import {useImageStore} from "@/stores/image.ts";
+import {useDialogStore} from "@/stores/dialog";
 
 const imageStore = useImageStore()
+const dialogStore = useDialogStore()
 
 const imageContainerRef = ref<HTMLElement>()
 const scale = ref(1)
@@ -494,7 +496,14 @@ async function downloadImage() {
 async function deleteImage() {
   if (!currentImage.value) return
 
-  if (!confirm(`确定要删除 "${currentImage.value.original_name}" 吗？`)) {
+  const confirmed = await dialogStore.confirm({
+    title: '确认删除',
+    message: `确定要删除 "${currentImage.value.original_name}" 吗？`,
+    type: 'warning',
+    confirmText: '删除'
+  })
+
+  if (!confirmed) {
     return
   }
 

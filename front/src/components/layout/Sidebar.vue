@@ -149,6 +149,56 @@
           <CalendarIcon class="h-5 w-5 flex-shrink-0" />
           <span v-if="!uiStore.sidebarCollapsed">时光轴</span>
         </button>
+
+        <!-- 分隔线 -->
+        <div class="my-4 border-t border-white/5 mx-2"></div>
+
+        <!-- 最近删除 -->
+        <router-link
+          to="/gallery/trash"
+          v-slot="{ isActive }"
+          custom
+        >
+          <button
+            @click="navigateTo('/gallery/trash')"
+            :class="[
+              'group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300 relative overflow-hidden',
+              isActive
+                ? 'text-white bg-white/10 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]'
+                : 'text-gray-400 hover:text-gray-100 hover:bg-white/5',
+               uiStore.sidebarCollapsed ? 'justify-center' : ''
+            ]"
+          >
+            <div v-if="isActive" class="absolute left-0 top-0 bottom-0 w-1 bg-primary-500 shadow-[0_0_10px_rgba(139,92,246,0.6)]"></div>
+            <TrashIcon :class="['h-5 w-5 flex-shrink-0 transition-transform duration-300', isActive ? 'text-primary-400 scale-110' : 'group-hover:scale-110']" />
+            <span v-if="!uiStore.sidebarCollapsed" class="tracking-wide">最近删除</span>
+          </button>
+        </router-link>
+
+        <!-- 分隔线 -->
+        <div class="my-4 border-t border-white/5 mx-2"></div>
+
+        <!-- 系统设置 -->
+        <router-link
+          to="/gallery/settings"
+          v-slot="{ isActive }"
+          custom
+        >
+          <button
+            @click="navigateTo('/gallery/settings')"
+            :class="[
+              'group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300 relative overflow-hidden',
+              isActive
+                ? 'text-white bg-white/10 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]'
+                : 'text-gray-400 hover:text-gray-100 hover:bg-white/5',
+               uiStore.sidebarCollapsed ? 'justify-center' : ''
+            ]"
+          >
+            <div v-if="isActive" class="absolute left-0 top-0 bottom-0 w-1 bg-primary-500 shadow-[0_0_10px_rgba(139,92,246,0.6)]"></div>
+            <Cog6ToothIcon :class="['h-5 w-5 flex-shrink-0 transition-transform duration-300', isActive ? 'text-primary-400 scale-110' : 'group-hover:scale-110']" />
+            <span v-if="!uiStore.sidebarCollapsed" class="tracking-wide">系统设置</span>
+          </button>
+        </router-link>
       </div>
     </nav>
 
@@ -180,6 +230,8 @@ import {
   Bars3Icon,
   ChevronLeftIcon,
   ShareIcon,
+  TrashIcon,
+  Cog6ToothIcon,
 } from '@heroicons/vue/24/outline'
 
 const router = useRouter()

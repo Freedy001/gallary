@@ -90,3 +90,8 @@ share:
   default_expire_hours: 168 # 7天
   # 分享码长度
   code_length: 8
+
+# 回收站配置
+trash:
+  # 自动删除天数，0表示不自动删除
+  auto_delete_days: 30

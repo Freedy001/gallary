@@ -63,6 +63,12 @@ type ImageService interface {
 	GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, zoom int) ([]*model.ClusterResult, error)
 	GetClusterImages(ctx context.Context, minLat, maxLat, minLng, maxLng float64, page, pageSize int) ([]*model.Image, int64, error)
 	GetGeoBounds(ctx context.Context) (*model.GeoBounds, error)
+
+	// 回收站相关方法
+	ListDeleted(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error)
+	RestoreImages(ctx context.Context, ids []int64) error
+	PermanentlyDelete(ctx context.Context, ids []int64) error
+	CleanupExpiredTrash(ctx context.Context) (int, error)
 }
 
 type imageService struct {
@@ -624,4 +630,108 @@ func (s *imageService) GetClusterImages(ctx context.Context, minLat, maxLat, min
 // GetGeoBounds 获取所有带坐标图片的地理边界
 func (s *imageService) GetGeoBounds(ctx context.Context) (*model.GeoBounds, error) {
 	return s.repo.GetGeoBounds(ctx)
+}
+
+// ListDeleted 获取已删除的图片列表
+func (s *imageService) ListDeleted(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	return s.repo.ListDeleted(ctx, page, pageSize)
+}
+
+// RestoreImages 恢复已删除的图片
+func (s *imageService) RestoreImages(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	logger.Info("恢复已删除的图片",
+		zap.Int("count", len(ids)),
+		zap.Any("ids", ids))
+
+	return s.repo.RestoreBatch(ctx, ids)
+}
+
+// PermanentlyDelete 彻底删除图片（包括物理文件）
+func (s *imageService) PermanentlyDelete(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	// 获取要删除的图片信息
+	images, err := s.repo.FindDeletedByIDs(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("获取图片信息失败: %w", err)
+	}
+
+	// 删除物理文件
+	for _, image := range images {
+		// 删除原图
+		if err := s.storage.Delete(ctx, image.StoragePath); err != nil {
+			logger.Warn("删除原图文件失败",
+				zap.Int64("id", image.ID),
+				zap.String("path", image.StoragePath),
+				zap.Error(err))
+		}
+
+		// 删除缩略图
+		if image.ThumbnailPath != "" {
+			if err := s.storage.Delete(ctx, image.ThumbnailPath); err != nil {
+				logger.Warn("删除缩略图文件失败",
+					zap.Int64("id", image.ID),
+					zap.String("path", image.ThumbnailPath),
+					zap.Error(err))
+			}
+		}
+	}
+
+	// 从数据库物理删除记录
+	if err := s.repo.HardDeleteBatch(ctx, ids); err != nil {
+		return fmt.Errorf("物理删除数据库记录失败: %w", err)
+	}
+
+	logger.Info("彻底删除图片完成",
+		zap.Int("count", len(images)),
+		zap.Any("ids", ids))
+
+	return nil
+}
+
+// CleanupExpiredTrash 清理过期的已删除图片
+func (s *imageService) CleanupExpiredTrash(ctx context.Context) (int, error) {
+	days := s.cfg.Trash.AutoDeleteDays
+	if days <= 0 {
+		return 0, nil // 不自动删除
+	}
+
+	// 查找过期的已删除图片
+	images, err := s.repo.FindExpiredDeleted(ctx, days)
+	if err != nil {
+		return 0, fmt.Errorf("查找过期图片失败: %w", err)
+	}
+
+	if len(images) == 0 {
+		return 0, nil
+	}
+
+	// 收集ID
+	ids := make([]int64, len(images))
+	for i, img := range images {
+		ids[i] = img.ID
+	}
+
+	// 彻底删除
+	if err := s.PermanentlyDelete(ctx, ids); err != nil {
+		return 0, err
+	}
+
+	logger.Info("自动清理过期已删除图片完成",
+		zap.Int("count", len(ids)),
+		zap.Int("expire_days", days))
+
+	return len(ids), nil
 }

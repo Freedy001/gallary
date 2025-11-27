@@ -114,6 +114,7 @@
 import { ref, computed } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useImageStore } from '@/stores/image'
+import { useDialogStore } from '@/stores/dialog'
 import {
   MagnifyingGlassIcon,
   ArrowUpTrayIcon,
@@ -126,6 +127,7 @@ import { imageApi } from '@/api/image'
 
 const uiStore = useUIStore()
 const imageStore = useImageStore()
+const dialogStore = useDialogStore()
 const fileInputRef = ref<HTMLInputElement>()
 
 const isMac = computed(() => {
@@ -154,7 +156,14 @@ function handleSelectAll() {
 }
 
 async function handleBatchDelete() {
-  if (!confirm(`确定要删除选中的 ${imageStore.selectedCount} 张图片吗？`)) return
+  const confirmed = await dialogStore.confirm({
+    title: '确认删除',
+    message: `确定要删除选中的 ${imageStore.selectedCount} 张图片吗？`,
+    type: 'warning',
+    confirmText: '删除'
+  })
+
+  if (!confirmed) return
 
   try {
     await imageStore.deleteBatch()
@@ -164,7 +173,11 @@ async function handleBatchDelete() {
     }
   } catch (error) {
     console.error('批量删除失败', error)
-    alert('删除失败')
+    dialogStore.alert({
+      title: '删除失败',
+      message: '批量删除过程中发生错误，请重试。',
+      type: 'error'
+    })
   }
 }
 

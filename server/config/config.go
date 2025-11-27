@@ -17,6 +17,7 @@ type Config struct {
 	Logger   LoggerConfig   `mapstructure:"logger"`
 	CORS     CORSConfig     `mapstructure:"cors"`
 	Share    ShareConfig    `mapstructure:"share"`
+	Trash    TrashConfig    `mapstructure:"trash"`
 }
 
 type ServerConfig struct {
@@ -121,6 +122,10 @@ type ShareConfig struct {
 	CodeLength         int `mapstructure:"code_length"`
 }
 
+type TrashConfig struct {
+	AutoDeleteDays int `mapstructure:"auto_delete_days"`
+}
+
 var GlobalConfig *Config
 
 // LoadConfig 加载配置文件
@@ -180,6 +185,8 @@ func setDefaults() {
 
 	viper.SetDefault("share.default_expire_hours", 168)
 	viper.SetDefault("share.code_length", 8)
+
+	viper.SetDefault("trash.auto_delete_days", 30)
 }
 
 // GetAddr 获取服务器地址

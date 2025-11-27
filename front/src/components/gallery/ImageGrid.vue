@@ -49,21 +49,33 @@
         <ContextMenuItem v-if="contextMenuTargetIds.length === 1" :icon="EyeIcon" @click="handleView">
           查看
         </ContextMenuItem>
-        <ContextMenuItem :icon="ShareIcon" @click="handleShare">
-          分享 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
-        </ContextMenuItem>
-        <ContextMenuItem :icon="PencilIcon" @click="handleEdit">
-          编辑元数据 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
-        </ContextMenuItem>
-        <ContextMenuItem :icon="ArrowDownTrayIcon" @click="handleDownload">
-          下载 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
-        </ContextMenuItem>
-        <ContextMenuItem :icon="ArchiveBoxArrowDownIcon" @click="handleBatchDownload">
-          打包下载 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
-        </ContextMenuItem>
-        <ContextMenuItem :icon="TrashIcon" :danger="true" @click="handleDelete">
-          删除 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
-        </ContextMenuItem>
+
+        <template v-if="props.mode === 'gallery'">
+          <ContextMenuItem :icon="ShareIcon" @click="handleShare">
+            分享 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+          </ContextMenuItem>
+          <ContextMenuItem :icon="PencilIcon" @click="handleEdit">
+            编辑元数据 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+          </ContextMenuItem>
+          <ContextMenuItem :icon="ArrowDownTrayIcon" @click="handleDownload">
+            下载 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+          </ContextMenuItem>
+          <ContextMenuItem :icon="ArchiveBoxArrowDownIcon" @click="handleBatchDownload">
+            打包下载 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+          </ContextMenuItem>
+          <ContextMenuItem :icon="TrashIcon" :danger="true" @click="handleDelete">
+            删除 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+          </ContextMenuItem>
+        </template>
+
+        <template v-else-if="props.mode === 'trash'">
+          <ContextMenuItem :icon="ArrowUturnLeftIcon" @click="handleRestore">
+            恢复 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+          </ContextMenuItem>
+          <ContextMenuItem :icon="XMarkIcon" :danger="true" @click="handlePermanentDelete">
+            彻底删除 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+          </ContextMenuItem>
+        </template>
       </ContextMenu>
 
       <MetadataEditor
@@ -212,6 +224,7 @@ import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useDebounceFn, useThrottleFn} from '@vueuse/core'
 import {useImageStore} from '@/stores/image'
 import {useUIStore} from '@/stores/ui'
+import {useDialogStore} from '@/stores/dialog'
 import {imageApi} from '@/api/image'
 import type {Image} from '@/types'
 import {
@@ -224,7 +237,9 @@ import {
   ShareIcon,
   SparklesIcon,
   ArchiveBoxArrowDownIcon,
-  CloudArrowUpIcon
+  CloudArrowUpIcon,
+  ArrowUturnLeftIcon,
+  XMarkIcon
 } from '@heroicons/vue/24/outline'
 import ImageCard from './ImageCard.vue'
 import ContextMenu from '@/components/common/ContextMenu.vue'
@@ -235,10 +250,17 @@ import CreateShare from '@/components/gallery/menu/CreateShare.vue'
 import ImageViewer from "@/components/gallery/ImageViewer.vue";
 import {useBoxSelection} from '@/composables/useBoxSelection'
 
+const props = withDefaults(defineProps<{
+  mode?: 'gallery' | 'trash'
+}>(), {
+  mode: 'gallery'
+})
+
 const index = ref<number>(-1)
 
 const imageStore = useImageStore()
 const uiStore = useUIStore()
+const dialogStore = useDialogStore()
 const containerRef = ref<HTMLElement>()
 
 // 右键菜单状态
@@ -317,7 +339,13 @@ const handleBatchDownload = () => {
 
 const handleDelete = async () => {
   contextMenu.value.visible = false
-  if (!confirm(`Are you sure you want to delete ${contextMenuTargetIds.value.length} images?`)) return
+  const confirmed = await dialogStore.confirm({
+    title: 'Delete Images',
+    message: `Are you sure you want to delete ${contextMenuTargetIds.value.length} images?`,
+    type: 'warning',
+    confirmText: 'Delete'
+  })
+  if (!confirmed) return
 
   try {
     await imageApi.deleteBatch(contextMenuTargetIds.value)
@@ -329,6 +357,40 @@ const handleDelete = async () => {
     imageStore.selectedImages.clear()
   } catch (e) {
     console.error('Delete failed', e)
+  }
+}
+
+const handleRestore = async () => {
+  contextMenu.value.visible = false
+  try {
+    await imageApi.restoreImages(contextMenuTargetIds.value)
+    // 从列表移除已恢复的图片
+    imageStore.images = imageStore.images.filter(img => img === null || !contextMenuTargetIds.value.includes(img.id))
+    imageStore.total -= contextMenuTargetIds.value.length
+    imageStore.selectedImages.clear()
+  } catch (err) {
+    console.error('恢复图片失败', err)
+  }
+}
+
+const handlePermanentDelete = async () => {
+  contextMenu.value.visible = false
+  const confirmed = await dialogStore.confirm({
+    title: '确认彻底删除',
+    message: `确定要彻底删除 ${contextMenuTargetIds.value.length} 张图片吗？此操作不可恢复。`,
+    type: 'error',
+    confirmText: '彻底删除'
+  })
+  if (!confirmed) return
+
+  try {
+    await imageApi.permanentlyDelete(contextMenuTargetIds.value)
+    // 从列表移除已删除的图片
+    imageStore.images = imageStore.images.filter(img => img === null || !contextMenuTargetIds.value.includes(img.id))
+    imageStore.total -= contextMenuTargetIds.value.length
+    imageStore.selectedImages.clear()
+  } catch (err) {
+    console.error('彻底删除图片失败', err)
   }
 }
 

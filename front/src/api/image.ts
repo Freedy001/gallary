@@ -122,4 +122,22 @@ export const imageApi = {
   getImageUrl(storagePath: string): string {
     return `/static/images/${storagePath}`
   },
+
+  // 回收站相关 API
+  // 获取已删除图片列表
+  getDeletedList(page = 1, pageSize = 20): Promise<ApiResponse<Pageable<Image>>> {
+    return http.get('/api/images/trash', {
+      params: {page, page_size: pageSize}
+    })
+  },
+
+  // 恢复已删除图片
+  restoreImages(ids: number[]): Promise<ApiResponse<null>> {
+    return http.post('/api/images/trash/restore', {ids})
+  },
+
+  // 彻底删除图片
+  permanentlyDelete(ids: number[]): Promise<ApiResponse<null>> {
+    return http.post('/api/images/trash/delete', {ids})
+  },
 }

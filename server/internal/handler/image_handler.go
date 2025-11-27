@@ -462,3 +462,100 @@ func (h *ImageHandler) GetGeoBounds(c *gin.Context) {
 
 	utils.Success(c, bounds)
 }
+
+// ListDeleted 获取已删除的图片列表
+//
+//	@Summary		获取已删除图片列表
+//	@Description	分页获取回收站中的图片列表
+//	@Tags			回收站
+//	@Produce		json
+//	@Param			page		query		int														false	"页码"	default(1)
+//	@Param			page_size	query		int														false	"每页数量"	default(20)
+//	@Success		200			{object}	utils.Response{data=utils.PageData{list=[]model.Image}}	"已删除图片列表"
+//	@Failure		500			{object}	utils.Response											"获取失败"
+//	@Router			/api/images/trash [get]
+func (h *ImageHandler) ListDeleted(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	images, total, err := h.service.ListDeleted(c.Request.Context(), page, pageSize)
+	if err != nil {
+		logger.Error("获取已删除图片列表失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.PageResponse(c, images, total, page, pageSize)
+}
+
+// RestoreImages 恢复已删除的图片
+//
+//	@Summary		恢复图片
+//	@Description	从回收站恢复已删除的图片
+//	@Tags			回收站
+//	@Accept			json
+//	@Produce		json
+//	@Param			ids	body		[]int64			true	"图片ID列表"
+//	@Success		200	{object}	utils.Response	"恢复成功"
+//	@Failure		400	{object}	utils.Response	"无效的参数"
+//	@Failure		500	{object}	utils.Response	"恢复失败"
+//	@Router			/api/images/trash/restore [post]
+func (h *ImageHandler) RestoreImages(c *gin.Context) {
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数")
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		utils.BadRequest(c, "请选择要恢复的图片")
+		return
+	}
+
+	if err := h.service.RestoreImages(c.Request.Context(), req.IDs); err != nil {
+		logger.Error("恢复图片失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "恢复成功", nil)
+}
+
+// PermanentlyDelete 彻底删除图片
+//
+//	@Summary		彻底删除图片
+//	@Description	从回收站彻底删除图片（包括物理文件）
+//	@Tags			回收站
+//	@Accept			json
+//	@Produce		json
+//	@Param			ids	body		[]int64			true	"图片ID列表"
+//	@Success		200	{object}	utils.Response	"删除成功"
+//	@Failure		400	{object}	utils.Response	"无效的参数"
+//	@Failure		500	{object}	utils.Response	"删除失败"
+//	@Router			/api/images/trash/delete [post]
+func (h *ImageHandler) PermanentlyDelete(c *gin.Context) {
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数")
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		utils.BadRequest(c, "请选择要删除的图片")
+		return
+	}
+
+	if err := h.service.PermanentlyDelete(c.Request.Context(), req.IDs); err != nil {
+		logger.Error("彻底删除图片失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "彻底删除成功", nil)
+}

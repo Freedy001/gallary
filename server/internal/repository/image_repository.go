@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"gallary/server/pkg/database"
 
 	"gorm.io/gorm"
@@ -23,6 +25,14 @@ type ImageRepository interface {
 	FindByIDs(ctx context.Context, ids []int64) ([]*model.Image, error)
 	Search(ctx context.Context, params *SearchParams) ([]*model.Image, int64, error)
 	Restore(ctx context.Context, id int64) error // 恢复逻辑删除的记录
+
+	// 回收站相关方法
+	ListDeleted(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error)
+	FindDeletedByIDs(ctx context.Context, ids []int64) ([]*model.Image, error)
+	RestoreBatch(ctx context.Context, ids []int64) error
+	HardDelete(ctx context.Context, id int64) error
+	HardDeleteBatch(ctx context.Context, ids []int64) error
+	FindExpiredDeleted(ctx context.Context, days int) ([]*model.Image, error)
 
 	// 元数据相关方法
 	GetMetadata(ctx context.Context, imageID int64) ([]model.ImageMetadata, error)
@@ -467,4 +477,79 @@ func (r *imageRepository) GetGeoBounds(ctx context.Context) (*model.GeoBounds, e
 		MaxLng: result.MaxLng,
 		Count:  result.Count,
 	}, nil
+}
+
+// ListDeleted 分页获取已删除的图片列表
+func (r *imageRepository) ListDeleted(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error) {
+	var images []*model.Image
+	var total int64
+
+	offset := (page - 1) * pageSize
+
+	// 使用 Unscoped 查询已删除的记录
+	db := database.GetDB(ctx).WithContext(ctx).Unscoped().Model(&model.Image{}).
+		Where("deleted_at IS NOT NULL")
+
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := db.Preload("Tags").
+		Order("deleted_at DESC").
+		Limit(pageSize).
+		Offset(offset).
+		Find(&images).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return images, total, nil
+}
+
+// FindDeletedByIDs 根据ID列表查找已删除的图片
+func (r *imageRepository) FindDeletedByIDs(ctx context.Context, ids []int64) ([]*model.Image, error) {
+	var images []*model.Image
+	err := database.GetDB(ctx).WithContext(ctx).Unscoped().
+		Where("id IN ? AND deleted_at IS NOT NULL", ids).
+		Find(&images).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return images, nil
+}
+
+// RestoreBatch 批量恢复已删除的图片
+func (r *imageRepository) RestoreBatch(ctx context.Context, ids []int64) error {
+	return database.GetDB(ctx).WithContext(ctx).Unscoped().Model(&model.Image{}).
+		Where("id IN ?", ids).
+		Update("deleted_at", nil).Error
+}
+
+// HardDelete 物理删除单个图片记录
+func (r *imageRepository) HardDelete(ctx context.Context, id int64) error {
+	return database.GetDB(ctx).WithContext(ctx).Unscoped().Delete(&model.Image{}, id).Error
+}
+
+// HardDeleteBatch 物理删除批量图片记录
+func (r *imageRepository) HardDeleteBatch(ctx context.Context, ids []int64) error {
+	return database.GetDB(ctx).WithContext(ctx).Unscoped().Delete(&model.Image{}, ids).Error
+}
+
+// FindExpiredDeleted 查找超过指定天数的已删除图片
+func (r *imageRepository) FindExpiredDeleted(ctx context.Context, days int) ([]*model.Image, error) {
+	var images []*model.Image
+	expireTime := time.Now().AddDate(0, 0, -days)
+
+	err := database.GetDB(ctx).WithContext(ctx).Unscoped().
+		Where("deleted_at IS NOT NULL AND deleted_at < ?", expireTime).
+		Find(&images).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return images, nil
 }

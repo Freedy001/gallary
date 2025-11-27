@@ -170,6 +170,7 @@
 import { ref, reactive } from 'vue'
 import Modal from '@/components/common/Modal.vue'
 import { shareApi } from '@/api/share.ts'
+import { useDialogStore } from '@/stores/dialog'
 import {
   ShareIcon,
   CheckCircleIcon,
@@ -195,6 +196,7 @@ const shareCode = ref('')
 const shareLink = ref('')
 const showPassword = ref(false)
 const copied = ref(false)
+const dialogStore = useDialogStore()
 
 const expireOptions = [
   { label: '永久', value: 0 },
@@ -249,7 +251,7 @@ async function handleSubmit() {
     emit('created', code)
   } catch (error) {
     console.error('Create share failed:', error)
-    alert('创建分享失败')
+    dialogStore.alert({ title: '错误', message: '创建分享失败', type: 'error' })
   } finally {
     loading.value = false
   }
@@ -264,7 +266,7 @@ async function copyLink() {
     }, 2000)
   } catch (err) {
     console.error('Failed to copy:', err)
-    alert('复制失败')
+    dialogStore.alert({ title: '错误', message: '复制失败', type: 'error' })
   }
 }
 

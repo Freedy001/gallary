@@ -39,6 +39,7 @@ export interface Image {
   metadata: Metadata[]
   created_at: string
   updated_at: string
+  deleted_at?: string | null
 }
 
 export interface SearchParams {

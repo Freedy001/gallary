@@ -139,6 +139,7 @@
 import { ref, onMounted } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { shareApi } from '@/api/share'
+import { useDialogStore } from '@/stores/dialog'
 import type { Share } from '@/types'
 import {
   ShareIcon,
@@ -152,6 +153,7 @@ const loading = ref(false)
 const shares = ref<Share[]>([])
 const currentPage = ref(1)
 const totalPages = ref(1)
+const dialogStore = useDialogStore()
 
 async function fetchShares(page = 1) {
   loading.value = true
@@ -194,22 +196,29 @@ async function copyLink(code: string) {
   const link = getShareLink(code)
   try {
     await navigator.clipboard.writeText(link)
-    alert('链接已复制到剪贴板')
+    dialogStore.alert({ title: '成功', message: '链接已复制到剪贴板', type: 'success' })
   } catch (err) {
     console.error('Failed to copy:', err)
-    alert('复制失败')
+    dialogStore.alert({ title: '错误', message: '复制失败', type: 'error' })
   }
 }
 
 async function deleteShare(share: Share) {
-  if (!confirm(`确定要删除分享"${share.title || '未命名'}"吗？`)) return
+  const confirmed = await dialogStore.confirm({
+    title: '确认删除',
+    message: `确定要删除分享"${share.title || '未命名'}"吗？`,
+    type: 'warning',
+    confirmText: '删除'
+  })
+
+  if (!confirmed) return
 
   try {
     await shareApi.delete(share.id)
     fetchShares(currentPage.value)
   } catch (error) {
     console.error('Failed to delete share:', error)
-    alert('删除失败')
+    dialogStore.alert({ title: '错误', message: '删除失败', type: 'error' })
   }
 }
 

@@ -48,6 +48,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/TimelineView.vue'),
     meta: {requiresAuth: true, disabled: true},
   },
+  {
+    path: '/gallery/trash',
+    name: 'Trash',
+    component: () => import('@/views/TrashView.vue'),
+    meta: {requiresAuth: true},
+  },
+  {
+    path: '/gallery/settings',
+    name: 'Settings',
+    component: () => import('@/views/SettingsView.vue'),
+    meta: {requiresAuth: false},
+  },
 ]
 
 const router = createRouter({
