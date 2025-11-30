@@ -202,6 +202,37 @@ func (h *ImageHandler) Download(c *gin.Context) {
 	c.DataFromReader(200, -1, "application/octet-stream", reader, nil)
 }
 
+// ProxyFile 代理获取图片文件（用于阿里云盘等需要后端代理的存储）
+//
+//	@Summary		代理获取图片
+//	@Description	通过后端代理获取图片文件内容，用于无法直接访问的存储类型
+//	@Tags			图片管理
+//	@Produce		image/*
+//	@Param			id	path		int				true	"图片ID"
+//	@Success		200	{file}		binary			"图片文件"
+//	@Failure		400	{object}	utils.Response	"无效的图片ID"
+//	@Failure		404	{object}	utils.Response	"图片不存在"
+//	@Router			/api/images/{id}/file [get]
+func (h *ImageHandler) ProxyFile(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的图片ID")
+		return
+	}
+
+	reader, mimeType, err := h.service.ProxyFile(c.Request.Context(), id)
+	if err != nil {
+		logger.Error("代理获取图片失败", zap.Error(err))
+		utils.NotFound(c, err.Error())
+		return
+	}
+	defer reader.Close()
+
+	// 设置缓存头，图片可以缓存较长时间
+	c.Header("Cache-Control", "public, max-age=31536000")
+	c.DataFromReader(200, -1, mimeType, reader, nil)
+}
+
 // BatchDownload 批量下载图片
 //
 //	@Summary		批量下载图片

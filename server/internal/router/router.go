@@ -15,6 +15,9 @@ func SetupRouter(
 	imageHandler *handler.ImageHandler,
 	shareHandler *handler.ShareHandler,
 	settingHandler *handler.SettingHandler,
+	storageHandler *handler.StorageHandler,
+	migrationHandler *handler.MigrationHandler,
+	dynamicStaticConfig *middleware.DynamicStaticConfig,
 ) *gin.Engine {
 	// 设置运行模式
 	gin.SetMode(cfg.Server.Mode)
@@ -25,10 +28,8 @@ func SetupRouter(
 	r.Use(gin.Recovery())
 	r.Use(middleware.CORSMiddleware(&cfg.CORS))
 
-	// 静态文件服务（用于访问本地存储的图片）
-	if cfg.Storage.Default == "local" {
-		r.Static(cfg.Storage.Local.URLPrefix, cfg.Storage.Local.BasePath)
-	}
+	// 动态静态文件中间件
+	r.Use(middleware.DynamicStaticMiddleware(dynamicStaticConfig))
 
 	// API路由组
 	api := r.Group("/api")
@@ -55,6 +56,7 @@ func SetupRouter(
 			images.GET("/:id", imageHandler.GetByID)
 			images.DELETE("/:id", imageHandler.Delete)
 			images.GET("/:id/download", imageHandler.Download)
+			images.GET("/:id/file", imageHandler.ProxyFile)
 
 			// 回收站相关路由
 			images.GET("/trash", imageHandler.ListDeleted)
@@ -90,6 +92,29 @@ func SetupRouter(
 			settings.PUT("/password", settingHandler.UpdatePassword)
 			settings.PUT("/storage", settingHandler.UpdateStorage)
 			settings.PUT("/cleanup", settingHandler.UpdateCleanup)
+		}
+
+		// 存储统计路由（需要认证）
+		storageGroup := api.Group("/storage")
+		storageGroup.Use(middleware.AuthMiddleware(cfg))
+		{
+			storageGroup.GET("/stats", storageHandler.GetStats)
+
+			// 阿里云盘登录相关路由
+			aliyunpan := storageGroup.Group("/aliyunpan")
+			{
+				aliyunpan.POST("/qrcode", storageHandler.GenerateAliyunPanQRCode)
+				aliyunpan.GET("/qrcode/status", storageHandler.CheckAliyunPanQRCodeStatus)
+			}
+
+			// 迁移相关路由
+			migration := storageGroup.Group("/migration")
+			{
+				migration.POST("", migrationHandler.Start)
+				migration.GET("/active", migrationHandler.GetActive)
+				migration.GET("/:id", migrationHandler.GetByID)
+				migration.POST("/:id/cancel", migrationHandler.Cancel)
+			}
 		}
 	}
 

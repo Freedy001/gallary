@@ -2,11 +2,11 @@
 
 /* Fallback variables for safety */
 :root {
-  --color-primary-500: #8b5cf6;
-  --color-primary-700: #6d28d9;
-  --color-surface-ground: #050505;
-  --color-text-primary: #f3f4f6;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    --color-primary-500: #8b5cf6;
+    --color-primary-700: #6d28d9;
+    --color-surface-ground: #050505;
+    --color-text-primary: #f3f4f6;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
 }
 
 button {
@@ -19,177 +19,220 @@ img {
 
 /* 自定义主题配置 */
 @theme {
-  /* 颜色系统 - 赛博霓虹 / 极夜黑 */
-  --color-primary-50: #f5f3ff;
-  --color-primary-100: #ede9fe;
-  --color-primary-500: #8b5cf6; /* Violet 500 */
-  --color-primary-600: #7c3aed; /* Violet 600 */
-  --color-primary-700: #6d28d9; /* Violet 700 */
+    /* 颜色系统 - 赛博霓虹 / 极夜黑 */
+    --color-primary-50: #f5f3ff;
+    --color-primary-100: #ede9fe;
+    --color-primary-500: #8b5cf6; /* Violet 500 */
+    --color-primary-600: #7c3aed; /* Violet 600 */
+    --color-primary-700: #6d28d9; /* Violet 700 */
+    /* 背景色 */
+    --color-surface-ground: #050505;
+    --color-surface-card: #121212;
+    --color-surface-glass: rgba(18, 18, 18, 0.6);
 
-  /* 背景色 */
-  --color-surface-ground: #050505;
-  --color-surface-card: #121212;
-  --color-surface-glass: rgba(18, 18, 18, 0.6);
+    /* 文字色 */
+    --color-text-primary: #f3f4f6;
+    --color-text-secondary: #9ca3af;
+    --color-text-muted: #6b7280;
 
-  /* 文字色 */
-  --color-text-primary: #f3f4f6;
-  --color-text-secondary: #9ca3af;
-  --color-text-muted: #6b7280;
+    /* 阴影系统 - 发光效果 */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 0 20px rgba(139, 92, 246, 0.15);
+    --shadow-glow: 0 0 15px rgba(139, 92, 246, 0.3);
 
-  /* 阴影系统 - 发光效果 */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 0 20px rgba(139, 92, 246, 0.15);
-  --shadow-glow: 0 0 15px rgba(139, 92, 246, 0.3);
+    /* 字体系统 - 更加现代的字体栈 */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    --font-display: 'Space Grotesk', var(--font-sans);
 
-  /* 字体系统 - 更加现代的字体栈 */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  --font-display: 'Space Grotesk', var(--font-sans);
+    /* 动画系统 */
+    --animate-shimmer: shimmer 2s linear infinite;
+    --animate-float: float 6s ease-in-out infinite;
+    --animate-pulse-slow: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
-  /* 动画系统 */
-  --animate-shimmer: shimmer 2s linear infinite;
-  --animate-float: float 6s ease-in-out infinite;
-  --animate-pulse-slow: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-
-  @keyframes shimmer {
-    0% {
-      background-position: 200% 0;
+    @keyframes shimmer {
+        0% {
+            background-position: 200% 0;
+        }
+        100% {
+            background-position: -200% 0;
+        }
     }
-    100% {
-      background-position: -200% 0;
+
+    @keyframes float {
+        0%, 100% {
+            transform: translateY(0);
+        }
+        50% {
+            transform: translateY(-10px);
+        }
     }
-  }
 
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
-  }
+    @keyframes pulse-slow {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.7;
+        }
+    }
 
-  @keyframes pulse-slow {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-  }
+    /* 极光动画定义 */
+    --animate-aurora-1: aurora-1 20s ease-in-out infinite alternate;
+    --animate-aurora-2: aurora-2 25s ease-in-out infinite alternate-reverse;
+    --animate-aurora-3: aurora-3 30s ease-in-out infinite alternate;
 
-  /* 极光动画定义 */
-  --animate-aurora-1: aurora-1 20s ease-in-out infinite alternate;
-  --animate-aurora-2: aurora-2 25s ease-in-out infinite alternate-reverse;
-  --animate-aurora-3: aurora-3 30s ease-in-out infinite alternate;
+    @keyframes aurora-1 {
+        0% {
+            transform: translate(0, 0) scale(1);
+            opacity: 0.4;
+        }
+        33% {
+            transform: translate(5%, 10%) scale(1.1);
+            opacity: 0.6;
+        }
+        66% {
+            transform: translate(-5%, 5%) scale(0.9);
+            opacity: 0.5;
+        }
+        100% {
+            transform: translate(0, 0) scale(1);
+            opacity: 0.4;
+        }
+    }
 
-  @keyframes aurora-1 {
-    0% { transform: translate(0, 0) scale(1); opacity: 0.4; }
-    33% { transform: translate(5%, 10%) scale(1.1); opacity: 0.6; }
-    66% { transform: translate(-5%, 5%) scale(0.9); opacity: 0.5; }
-    100% { transform: translate(0, 0) scale(1); opacity: 0.4; }
-  }
+    @keyframes aurora-2 {
+        0% {
+            transform: translate(0, 0) scale(1);
+            opacity: 0.3;
+        }
+        33% {
+            transform: translate(-5%, 10%) scale(1.2);
+            opacity: 0.5;
+        }
+        66% {
+            transform: translate(5%, -5%) scale(0.9);
+            opacity: 0.4;
+        }
+        100% {
+            transform: translate(0, 0) scale(1);
+            opacity: 0.3;
+        }
+    }
 
-  @keyframes aurora-2 {
-    0% { transform: translate(0, 0) scale(1); opacity: 0.3; }
-    33% { transform: translate(-5%, 10%) scale(1.2); opacity: 0.5; }
-    66% { transform: translate(5%, -5%) scale(0.9); opacity: 0.4; }
-    100% { transform: translate(0, 0) scale(1); opacity: 0.3; }
-  }
-
-  @keyframes aurora-3 {
-    0% { transform: translate(0, 0) scale(1); opacity: 0.2; }
-    33% { transform: translate(5%, -5%) scale(1.1); opacity: 0.4; }
-    66% { transform: translate(-5%, 10%) scale(0.9); opacity: 0.3; }
-    100% { transform: translate(0, 0) scale(1); opacity: 0.2; }
-  }
+    @keyframes aurora-3 {
+        0% {
+            transform: translate(0, 0) scale(1);
+            opacity: 0.2;
+        }
+        33% {
+            transform: translate(5%, -5%) scale(1.1);
+            opacity: 0.4;
+        }
+        66% {
+            transform: translate(-5%, 10%) scale(0.9);
+            opacity: 0.3;
+        }
+        100% {
+            transform: translate(0, 0) scale(1);
+            opacity: 0.2;
+        }
+    }
 }
 
 /* 全局基础样式 */
 body {
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #050505;
-  /* 静态背景移除，改为在 App.vue 中使用动态 DOM 元素 */
-  color: var(--color-text-primary);
-  overflow: hidden; /* 防止滚动条闪烁，交由内部容器处理 */
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #050505;
+    /* 静态背景移除，改为在 App.vue 中使用动态 DOM 元素 */
+    color: var(--color-text-primary);
+    overflow: hidden; /* 防止滚动条闪烁，交由内部容器处理 */
 }
 
 /* ... rest of file ... */
 
 /* 全局噪点纹理 - 提升质感 */
 body::before {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0.03;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 /* 滚动条样式 - 极简暗黑 */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+    width: 6px;
+    height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+    background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-  transition: background 0.2s;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    transition: background 0.2s;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.2);
 }
 
 /* Vue 过渡动画 - 更平滑的曲线 */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .fade-enter-from,
 .fade-leave-to {
-  opacity: 0;
+    opacity: 0;
 }
 
 .slide-up-enter-active,
 .slide-up-leave-active {
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
 }
 
 .slide-up-enter-from,
 .slide-up-leave-to {
-  transform: translateY(40px);
-  opacity: 0;
+    transform: translateY(40px);
+    opacity: 0;
 }
 
 /* 图片加载骨架屏动画 - 暗黑版 */
 .image-loading {
-  background: linear-gradient(90deg, #1a1a1a 25%, #262626 50%, #1a1a1a 75%);
-  background-size: 200% 100%;
-  animation: var(--animate-shimmer);
+    background: linear-gradient(90deg, #1a1a1a 25%, #262626 50%, #1a1a1a 75%);
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
 }
 
 /* 命令面板动画 */
 .command-palette-enter-active {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .command-palette-leave-active {
-  transition: all 0.2s ease-in;
+    transition: all 0.2s ease-in;
 }
 
 .command-palette-enter-from {
-  opacity: 0;
-  transform: translateY(-20px) scale(0.95);
-  filter: blur(10px);
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+    filter: blur(10px);
 }
 
 .command-palette-leave-to {
-  opacity: 0;
-  transform: translateY(-10px) scale(0.98);
-  filter: blur(5px);
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+    filter: blur(5px);
 }

@@ -30,7 +30,8 @@ const (
 // 设置键名常量
 const (
 	// 认证相关
-	SettingKeyAdminPassword = "admin_password"
+	SettingKeyAdminPassword   = "admin_password"
+	SettingKeyPasswordVersion = "password_version" // 密码版本号，用于使旧token失效
 
 	// 存储相关
 	SettingKeyStorageDefaultType = "storage_default_type"
@@ -58,6 +59,11 @@ const (
 	SettingKeyMinIOBucket          = "minio_bucket"
 	SettingKeyMinIOUseSSL          = "minio_use_ssl"
 	SettingKeyMinIOURLPrefix       = "minio_url_prefix"
+
+	// 阿里云盘相关
+	SettingKeyAliyunPanRefreshToken = "aliyunpan_refresh_token"
+	SettingKeyAliyunPanBasePath     = "aliyunpan_base_path"
+	SettingKeyAliyunPanDriveType    = "aliyunpan_drive_type"
 
 	// 清理相关
 	SettingKeyTrashAutoDeleteDays = "trash_auto_delete_days"

@@ -235,7 +235,7 @@
                     >
                       <img
                           v-if="img"
-                          :src="imageApi.getImageUrl(img.thumbnail_path || img.storage_path)"
+                          :src="img.thumbnail_url || img.url"
                           class="h-full w-full object-cover"
                           loading="lazy"
                           :alt="img.original_name"
@@ -257,7 +257,6 @@
 
 <script setup lang="ts">
 import {computed, ref, onMounted, onUnmounted, watch} from 'vue'
-import {imageApi} from '@/api/image'
 import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
 import {
   XMarkIcon,
@@ -273,6 +272,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import {useImageStore} from "@/stores/image.ts";
 import {useDialogStore} from "@/stores/dialog";
+import {imageApi} from '@/api/image'
 
 const imageStore = useImageStore()
 const dialogStore = useDialogStore()
@@ -300,7 +300,7 @@ const currentImage = computed(() => {
 
 const imageUrl = computed(() => {
   if (!currentImage.value) return ''
-  return imageApi.getImageUrl(currentImage.value.storage_path)
+  return currentImage.value.url
 })
 
 const hasPrevious = computed(() => imageStore.viewerIndex > 0)

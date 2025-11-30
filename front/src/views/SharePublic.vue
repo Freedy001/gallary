@@ -182,7 +182,7 @@
                   ]"></div>
               <template v-if="image">
                 <img
-                    :src="imageApi.getImageUrl(image.thumbnail_path || image.storage_path)"
+                    :src="image.thumbnail_url || image.url"
                     :alt="image.original_name"
                     class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                     loading="lazy"

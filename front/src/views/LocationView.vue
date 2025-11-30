@@ -75,7 +75,7 @@ const renderMarkers = (clusters: ClusterResult[]) => {
     const {latitude, longitude, count, cover_image, min_lat, max_lat, min_lng, max_lng} = cluster
     if (!cover_image) return
 
-    const imageUrl = imageApi.getImageUrl(cover_image.thumbnail_path || cover_image.storage_path)
+    const imageUrl = cover_image.thumbnail_url || cover_image.url
 
     // 创建自定义内容
     const content = `

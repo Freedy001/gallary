@@ -25,6 +25,9 @@ export interface Image {
   mime_type: string
   width: number
   height: number
+  // URL 字段（由后端生成）
+  url: string                    // 原图访问URL
+  thumbnail_url?: string         // 缩略图访问URL
   taken_at: string | null
   latitude: number | null
   longitude: number | null

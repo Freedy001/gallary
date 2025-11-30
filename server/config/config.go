@@ -11,7 +11,6 @@ type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
 	Admin    AdminConfig    `mapstructure:"admin"`
 	Database DatabaseConfig `mapstructure:"database"`
-	Storage  StorageConfig  `mapstructure:"storage"`
 	Image    ImageConfig    `mapstructure:"image"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	Logger   LoggerConfig   `mapstructure:"logger"`
@@ -27,7 +26,8 @@ type ServerConfig struct {
 }
 
 type AdminConfig struct {
-	Password string `mapstructure:"password"`
+	Password        string `mapstructure:"password"`
+	PasswordVersion int64  `mapstructure:"-"` // 运行时使用，不从配置文件读取
 }
 
 type DatabaseConfig struct {
@@ -42,45 +42,6 @@ type DatabaseConfig struct {
 	MaxOpenConns int    `mapstructure:"max_open_conns"`
 	LogLevel     string `mapstructure:"log_level"`
 }
-
-type StorageConfig struct {
-	Default string             `mapstructure:"default"`
-	Local   LocalStorageConfig `mapstructure:"local"`
-	OSS     OSSStorageConfig   `mapstructure:"oss"`
-	S3      S3StorageConfig    `mapstructure:"s3"`
-	MinIO   MinIOStorageConfig `mapstructure:"minio"`
-}
-
-type LocalStorageConfig struct {
-	BasePath  string `mapstructure:"base_path"`
-	URLPrefix string `mapstructure:"url_prefix"`
-}
-
-type OSSStorageConfig struct {
-	Endpoint        string `mapstructure:"endpoint"`
-	AccessKeyID     string `mapstructure:"access_key_id"`
-	AccessKeySecret string `mapstructure:"access_key_secret"`
-	Bucket          string `mapstructure:"bucket"`
-	URLPrefix       string `mapstructure:"url_prefix"`
-}
-
-type S3StorageConfig struct {
-	Region          string `mapstructure:"region"`
-	AccessKeyID     string `mapstructure:"access_key_id"`
-	SecretAccessKey string `mapstructure:"secret_access_key"`
-	Bucket          string `mapstructure:"bucket"`
-	URLPrefix       string `mapstructure:"url_prefix"`
-}
-
-type MinIOStorageConfig struct {
-	Endpoint        string `mapstructure:"endpoint"`
-	AccessKeyID     string `mapstructure:"access_key_id"`
-	SecretAccessKey string `mapstructure:"secret_access_key"`
-	Bucket          string `mapstructure:"bucket"`
-	UseSSL          bool   `mapstructure:"use_ssl"`
-	URLPrefix       string `mapstructure:"url_prefix"`
-}
-
 type ImageConfig struct {
 	AllowedTypes []string        `mapstructure:"allowed_types"`
 	MaxSize      int64           `mapstructure:"max_size"`
@@ -163,11 +124,6 @@ func setDefaults() {
 	viper.SetDefault("database.max_open_conns", 100)
 	viper.SetDefault("database.log_level", "info")
 
-	viper.SetDefault("storage.default", "local")
-	viper.SetDefault("storage.local.base_path", "./storage/images")
-	viper.SetDefault("storage.local.thumbnail_path", "./storage/thumbnails")
-	viper.SetDefault("storage.local.url_prefix", "/static/images")
-
 	viper.SetDefault("image.max_size", 52428800) // 50MB
 	viper.SetDefault("image.thumbnail.width", 300)
 	viper.SetDefault("image.thumbnail.height", 300)
@@ -219,3 +175,56 @@ func (c *ImageConfig) IsAllowedType(mimeType string) bool {
 	}
 	return false
 }
+
+type StorageType string
+
+const (
+	StorageTypeLocal     StorageType = "local"
+	StorageTypeAliyunpan StorageType = "aliyunpan"
+)
+
+type StorageConfig struct {
+	Default   StorageType            `mapstructure:"default"`
+	Local     LocalStorageConfig     `mapstructure:"local"`
+	AliyunPan AliyunPanStorageConfig `mapstructure:"aliyunpan"`
+	//OSS       OSSStorageConfig       `mapstructure:"oss"`
+	//S3        S3StorageConfig        `mapstructure:"s3"`
+	//MinIO     MinIOStorageConfig     `mapstructure:"minio"`
+}
+
+type LocalStorageConfig struct {
+	BasePath  string `mapstructure:"base_path"`
+	URLPrefix string `mapstructure:"url_prefix"`
+}
+
+type AliyunPanStorageConfig struct {
+	RefreshToken string `mapstructure:"refresh_token"` // 刷新Token
+	BasePath     string `mapstructure:"base_path"`     // 云盘存储基础路径
+	DriveType    string `mapstructure:"drive_type"`    // 网盘类型: file/album/resource
+}
+
+//type OSSStorageConfig struct {
+//	Endpoint        string `mapstructure:"endpoint"`
+//	AccessKeyID     string `mapstructure:"access_key_id"`
+//	AccessKeySecret string `mapstructure:"access_key_secret"`
+//	Bucket          string `mapstructure:"bucket"`
+//	URLPrefix       string `mapstructure:"url_prefix"`
+//}
+//
+//type S3StorageConfig struct {
+//	Region          string `mapstructure:"region"`
+//	AccessKeyID     string `mapstructure:"access_key_id"`
+//	SecretAccessKey string `mapstructure:"secret_access_key"`
+//	Bucket          string `mapstructure:"bucket"`
+//	URLPrefix       string `mapstructure:"url_prefix"`
+//}
+//
+//type MinIOStorageConfig struct {
+//	Endpoint        string `mapstructure:"endpoint"`
+//	AccessKeyID     string `mapstructure:"access_key_id"`
+//	SecretAccessKey string `mapstructure:"secret_access_key"`
+//	Bucket          string `mapstructure:"bucket"`
+//	UseSSL          bool   `mapstructure:"use_ssl"`
+//	URLPrefix       string `mapstructure:"url_prefix"`
+//}
+//

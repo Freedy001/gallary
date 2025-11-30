@@ -57,6 +57,27 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
+		// 验证密码版本号
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			// 获取token中的密码版本号
+			tokenPV := int64(0)
+			if pv, exists := claims["pv"]; exists {
+				switch v := pv.(type) {
+				case float64:
+					tokenPV = int64(v)
+				case int64:
+					tokenPV = v
+				}
+			}
+
+			// 比较密码版本号，如果token的版本号小于当前版本号，则token已失效
+			if tokenPV < cfg.Admin.PasswordVersion {
+				utils.Unauthorized(c, "密码已更改，请重新登录")
+				c.Abort()
+				return
+			}
+		}
+
 		c.Next()
 	}
 }

@@ -50,35 +50,40 @@ type MetadataUpdate struct {
 
 // ImageService 图片服务接口
 type ImageService interface {
-	Upload(ctx context.Context, file *multipart.FileHeader) (*model.Image, error)
-	GetByID(ctx context.Context, id int64) (*model.Image, error)
-	List(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error)
+	Upload(ctx context.Context, file *multipart.FileHeader) (*model.ImageVO, error)
+	GetByID(ctx context.Context, id int64) (*model.ImageVO, error)
+	List(ctx context.Context, page, pageSize int) ([]*model.ImageVO, int64, error)
 	Delete(ctx context.Context, id int64) error
 	DeleteBatch(ctx context.Context, ids []int64) error
-	Search(ctx context.Context, params *repository.SearchParams) ([]*model.Image, int64, error)
+	Search(ctx context.Context, params *repository.SearchParams) ([]*model.ImageVO, int64, error)
 	Download(ctx context.Context, id int64) (io.ReadCloser, string, error)
 	DownloadBatch(ctx context.Context, ids []int64, writer io.Writer) (string, error)
+	ProxyFile(ctx context.Context, id int64) (io.ReadCloser, string, error)
 	BatchUpdateMetadata(ctx context.Context, req *UpdateMetadataRequest) ([]int64, error)
-	GetImagesWithLocation(ctx context.Context) ([]*model.Image, error)
-	GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, zoom int) ([]*model.ClusterResult, error)
-	GetClusterImages(ctx context.Context, minLat, maxLat, minLng, maxLng float64, page, pageSize int) ([]*model.Image, int64, error)
+	GetImagesWithLocation(ctx context.Context) ([]*model.ImageVO, error)
+	GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, zoom int) ([]*model.ClusterResultVO, error)
+	GetClusterImages(ctx context.Context, minLat, maxLat, minLng, maxLng float64, page, pageSize int) ([]*model.ImageVO, int64, error)
 	GetGeoBounds(ctx context.Context) (*model.GeoBounds, error)
 
 	// 回收站相关方法
-	ListDeleted(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error)
+	ListDeleted(ctx context.Context, page, pageSize int) ([]*model.ImageVO, int64, error)
 	RestoreImages(ctx context.Context, ids []int64) error
 	PermanentlyDelete(ctx context.Context, ids []int64) error
 	CleanupExpiredTrash(ctx context.Context) (int, error)
+
+	// VO 转换辅助方法
+	ToVO(ctx context.Context, image *model.Image) (*model.ImageVO, error)
+	ToVOList(ctx context.Context, images []*model.Image) ([]*model.ImageVO, error)
 }
 
 type imageService struct {
 	repo    repository.ImageRepository
-	storage storage.Storage
+	storage *storage.StorageManager
 	cfg     *config.Config
 }
 
 // NewImageService 创建图片服务实例
-func NewImageService(repo repository.ImageRepository, storage storage.Storage, cfg *config.Config) ImageService {
+func NewImageService(repo repository.ImageRepository, storage *storage.StorageManager, cfg *config.Config) ImageService {
 	return &imageService{
 		repo:    repo,
 		storage: storage,
@@ -87,7 +92,7 @@ func NewImageService(repo repository.ImageRepository, storage storage.Storage, c
 }
 
 // Upload 上传图片（包含去重逻辑）
-func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHeader) (*model.Image, error) {
+func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHeader) (*model.ImageVO, error) {
 	// 1. 验证文件类型
 	if !s.cfg.Image.IsAllowedType(fileHeader.Header.Get("Content-Type")) {
 		return nil, fmt.Errorf("不支持的文件类型: %s", fileHeader.Header.Get("Content-Type"))
@@ -142,13 +147,18 @@ func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHea
 			}
 
 			// 重新获取完整的记录信息
-			return s.repo.FindByID(ctx, existingImage.ID)
+			restored, err := s.repo.FindByID(ctx, existingImage.ID)
+			if err != nil {
+				return nil, err
+			}
+			return s.ToVO(ctx, restored)
 		}
 
 		logger.Info("检测到重复图片，返回已存在的图片",
 			zap.String("hash", fileHash),
 			zap.Int64("existing_id", existingImage.ID))
-		return existingImage, fmt.Errorf("图片已存在 hash: " + fileHash)
+		vo, _ := s.ToVO(ctx, existingImage)
+		return vo, fmt.Errorf("图片已存在 hash: " + fileHash)
 	}
 
 	// 8. 生成存储路径（按日期分目录）
@@ -177,7 +187,7 @@ func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHea
 	image := &model.Image{
 		OriginalName: fileHeader.Filename,
 		StoragePath:  finalPath,
-		StorageType:  s.cfg.Storage.Default,
+		StorageType:  s.storage.GetType(ctx),
 		FileSize:     fileHeader.Size,
 		FileHash:     fileHash,
 		MimeType:     fileHeader.Header.Get("Content-Type"),
@@ -220,7 +230,7 @@ func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHea
 		zap.String("hash", image.FileHash),
 		zap.String("original_name", image.OriginalName))
 
-	return image, nil
+	return s.ToVO(ctx, image)
 }
 
 func (s *imageService) thumbImages(ctx context.Context, tempFile *os.File, image *model.Image, imageHash string) error {
@@ -261,9 +271,14 @@ func (s *imageService) thumbImages(ctx context.Context, tempFile *os.File, image
 		"/",
 	)
 
-	// 上传缩略图到存储系统
+	// 缩略图始终上传到本地存储
+	localStorage := s.storage.GetLocalStorage()
+	if localStorage == nil {
+		return fmt.Errorf("本地存储未初始化")
+	}
+
 	_, _ = thumbnailTempFile.Seek(0, 0)
-	thumbnailPath, err := s.storage.Upload(ctx, thumbnailTempFile, thumbStoragePath)
+	thumbnailPath, err := localStorage.Upload(ctx, thumbnailTempFile, thumbStoragePath)
 	if err != nil {
 		return fmt.Errorf("上传缩略图失败: %w", err)
 	}
@@ -281,19 +296,34 @@ func (s *imageService) thumbImages(ctx context.Context, tempFile *os.File, image
 }
 
 // GetByID 根据ID获取图片
-func (s *imageService) GetByID(ctx context.Context, id int64) (*model.Image, error) {
-	return s.repo.FindByID(ctx, id)
+func (s *imageService) GetByID(ctx context.Context, id int64) (*model.ImageVO, error) {
+	image, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// 检查迁移状态
+	if image != nil && image.MigrationStatus != nil && *image.MigrationStatus != "" {
+		return nil, fmt.Errorf("图片正在迁移中，暂时不可访问")
+	}
+
+	return s.ToVO(ctx, image)
 }
 
 // List 获取图片列表
-func (s *imageService) List(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error) {
+func (s *imageService) List(ctx context.Context, page, pageSize int) ([]*model.ImageVO, int64, error) {
 	if page < 1 {
 		page = 1
 	}
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	return s.repo.List(ctx, page, pageSize)
+	images, total, err := s.repo.List(ctx, page, pageSize)
+	if err != nil {
+		return nil, 0, err
+	}
+	vos, err := s.ToVOList(ctx, images)
+	return vos, total, err
 }
 
 // Delete 删除图片（逻辑删除，不删除本地文件）
@@ -330,14 +360,19 @@ func (s *imageService) DeleteBatch(ctx context.Context, ids []int64) error {
 }
 
 // Search 搜索图片
-func (s *imageService) Search(ctx context.Context, params *repository.SearchParams) ([]*model.Image, int64, error) {
+func (s *imageService) Search(ctx context.Context, params *repository.SearchParams) ([]*model.ImageVO, int64, error) {
 	if params.Page < 1 {
 		params.Page = 1
 	}
 	if params.PageSize < 1 || params.PageSize > 100 {
 		params.PageSize = 20
 	}
-	return s.repo.Search(ctx, params)
+	images, total, err := s.repo.Search(ctx, params)
+	if err != nil {
+		return nil, 0, err
+	}
+	vos, err := s.ToVOList(ctx, images)
+	return vos, total, err
 }
 
 // Download 下载图片
@@ -348,6 +383,11 @@ func (s *imageService) Download(ctx context.Context, id int64) (io.ReadCloser, s
 		return nil, "", err
 	}
 
+	// 检查迁移状态
+	if image != nil && image.MigrationStatus != nil && *image.MigrationStatus != "" {
+		return nil, "", fmt.Errorf("图片正在迁移中，暂时不可下载")
+	}
+
 	// 从存储获取文件
 	reader, err := s.storage.Download(ctx, image.StoragePath)
 	if err != nil {
@@ -355,6 +395,28 @@ func (s *imageService) Download(ctx context.Context, id int64) (io.ReadCloser, s
 	}
 
 	return reader, image.OriginalName, nil
+}
+
+// ProxyFile 代理获取图片文件（用于阿里云盘等需要后端代理的存储）
+func (s *imageService) ProxyFile(ctx context.Context, id int64) (io.ReadCloser, string, error) {
+	// 获取图片信息
+	image, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// 检查迁移状态
+	if image != nil && image.MigrationStatus != nil && *image.MigrationStatus != "" {
+		return nil, "", fmt.Errorf("图片正在迁移中，暂时不可访问")
+	}
+
+	// 从对应的存储获取文件
+	reader, err := s.storage.Download(context.WithValue(ctx, storage.OverrideStorageType, image.StorageType), image.StoragePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("获取文件失败: %w", err)
+	}
+
+	return reader, image.MimeType, nil
 }
 
 // DownloadBatch 批量下载图片（打包为 ZIP，流式写入）
@@ -570,12 +632,16 @@ func (s *imageService) BatchUpdateMetadata(ctx context.Context, req *UpdateMetad
 }
 
 // GetImagesWithLocation 获取带有地理位置的图片
-func (s *imageService) GetImagesWithLocation(ctx context.Context) ([]*model.Image, error) {
-	return s.repo.GetImagesWithLocation(ctx)
+func (s *imageService) GetImagesWithLocation(ctx context.Context) ([]*model.ImageVO, error) {
+	images, err := s.repo.GetImagesWithLocation(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.ToVOList(ctx, images)
 }
 
 // GetClusters 获取图片聚合数据
-func (s *imageService) GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, zoom int) ([]*model.ClusterResult, error) {
+func (s *imageService) GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, zoom int) ([]*model.ClusterResultVO, error) {
 	// 根据缩放级别计算网格大小
 	// 这是一个启发式策略，可以根据实际效果调整
 	gridSize := 0.5 // 默认值
@@ -611,11 +677,33 @@ func (s *imageService) GetClusters(ctx context.Context, minLat, maxLat, minLng, 
 	}
 	gridSizeLng := gridSize / cosLat
 
-	return s.repo.GetClusters(ctx, minLat, maxLat, minLng, maxLng, gridSize, gridSizeLng)
+	clusters, err := s.repo.GetClusters(ctx, minLat, maxLat, minLng, maxLng, gridSize, gridSizeLng)
+	if err != nil {
+		return nil, err
+	}
+
+	// 转换为 VO
+	result := make([]*model.ClusterResultVO, 0, len(clusters))
+	for _, c := range clusters {
+		vo := &model.ClusterResultVO{
+			MinLat:    c.MinLat,
+			MaxLat:    c.MaxLat,
+			MinLng:    c.MinLng,
+			MaxLng:    c.MaxLng,
+			Latitude:  c.Latitude,
+			Longitude: c.Longitude,
+			Count:     c.Count,
+		}
+		if c.CoverImage != nil {
+			vo.CoverImage, _ = s.ToVO(ctx, c.CoverImage)
+		}
+		result = append(result, vo)
+	}
+	return result, nil
 }
 
 // GetClusterImages 获取指定聚合组内的图片（分页）
-func (s *imageService) GetClusterImages(ctx context.Context, minLat, maxLat, minLng, maxLng float64, page, pageSize int) ([]*model.Image, int64, error) {
+func (s *imageService) GetClusterImages(ctx context.Context, minLat, maxLat, minLng, maxLng float64, page, pageSize int) ([]*model.ImageVO, int64, error) {
 	// 参数验证
 	if page < 1 {
 		page = 1
@@ -624,7 +712,12 @@ func (s *imageService) GetClusterImages(ctx context.Context, minLat, maxLat, min
 		pageSize = 20
 	}
 
-	return s.repo.GetClusterImages(ctx, minLat, maxLat, minLng, maxLng, page, pageSize)
+	images, total, err := s.repo.GetClusterImages(ctx, minLat, maxLat, minLng, maxLng, page, pageSize)
+	if err != nil {
+		return nil, 0, err
+	}
+	vos, err := s.ToVOList(ctx, images)
+	return vos, total, err
 }
 
 // GetGeoBounds 获取所有带坐标图片的地理边界
@@ -633,14 +726,19 @@ func (s *imageService) GetGeoBounds(ctx context.Context) (*model.GeoBounds, erro
 }
 
 // ListDeleted 获取已删除的图片列表
-func (s *imageService) ListDeleted(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error) {
+func (s *imageService) ListDeleted(ctx context.Context, page, pageSize int) ([]*model.ImageVO, int64, error) {
 	if page < 1 {
 		page = 1
 	}
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	return s.repo.ListDeleted(ctx, page, pageSize)
+	images, total, err := s.repo.ListDeleted(ctx, page, pageSize)
+	if err != nil {
+		return nil, 0, err
+	}
+	vos, err := s.ToVOList(ctx, images)
+	return vos, total, err
 }
 
 // RestoreImages 恢复已删除的图片
@@ -668,23 +766,42 @@ func (s *imageService) PermanentlyDelete(ctx context.Context, ids []int64) error
 		return fmt.Errorf("获取图片信息失败: %w", err)
 	}
 
-	// 删除物理文件
-	for _, image := range images {
-		// 删除原图
-		if err := s.storage.Delete(ctx, image.StoragePath); err != nil {
-			logger.Warn("删除原图文件失败",
-				zap.Int64("id", image.ID),
-				zap.String("path", image.StoragePath),
-				zap.Error(err))
-		}
+	// 按存储类型分组原图路径
+	pathsByType := make(map[config.StorageType][]string)
+	// 缩略图路径（始终是本地存储）
+	var thumbnailPaths []string
 
-		// 删除缩略图
+	for _, image := range images {
+		pathsByType[image.StorageType] = append(pathsByType[image.StorageType], image.StoragePath)
 		if image.ThumbnailPath != "" {
-			if err := s.storage.Delete(ctx, image.ThumbnailPath); err != nil {
-				logger.Warn("删除缩略图文件失败",
-					zap.Int64("id", image.ID),
-					zap.String("path", image.ThumbnailPath),
-					zap.Error(err))
+			thumbnailPaths = append(thumbnailPaths, image.ThumbnailPath)
+		}
+	}
+
+	// 批量删除各存储类型的原图
+	for storageType, paths := range pathsByType {
+		results := s.storage.DeleteBatch(context.WithValue(ctx, storage.OverrideStorageType, storageType), paths)
+		for _, result := range results {
+			if result.Error != nil {
+				logger.Warn("删除原图文件失败",
+					zap.String("path", result.Path),
+					zap.String("storage_type", string(storageType)),
+					zap.Error(result.Error))
+			}
+		}
+	}
+
+	// 批量删除缩略图（本地存储）
+	if len(thumbnailPaths) > 0 {
+		localStorage := s.storage.GetLocalStorage()
+		if localStorage != nil {
+			results := localStorage.DeleteBatch(ctx, thumbnailPaths)
+			for _, result := range results {
+				if result.Error != nil {
+					logger.Warn("删除缩略图文件失败",
+						zap.String("path", result.Path),
+						zap.Error(result.Error))
+				}
 			}
 		}
 	}
@@ -734,4 +851,134 @@ func (s *imageService) CleanupExpiredTrash(ctx context.Context) (int, error) {
 		zap.Int("expire_days", days))
 
 	return len(ids), nil
+}
+
+// ToVO 将 Image 转换为 ImageVO（包含URL）
+func (s *imageService) ToVO(ctx context.Context, image *model.Image) (*model.ImageVO, error) {
+	if image == nil {
+		return nil, nil
+	}
+
+	var url string
+	var err error
+
+	// 阿里云盘存储使用后端代理URL
+	if image.StorageType == config.StorageTypeAliyunpan {
+		url = fmt.Sprintf("/api/images/%d/file", image.ID)
+	} else {
+		// 其他存储类型直接获取URL
+		url, err = s.storage.GetURL(context.WithValue(ctx, storage.OverrideStorageType, image.StorageType), image.StoragePath)
+		if err != nil {
+			logger.Warn("获取图片URL失败", zap.Error(err), zap.String("path", image.StoragePath), zap.String("storage_type", string(image.StorageType)))
+			url = ""
+		}
+	}
+
+	// 缩略图始终从本地存储获取
+	var thumbnailURL string
+	if image.ThumbnailPath != "" {
+		localStorage := s.storage.GetLocalStorage()
+		if localStorage != nil {
+			thumbnailURL, err = localStorage.GetURL(ctx, image.ThumbnailPath)
+			if err != nil {
+				logger.Warn("获取缩略图URL失败", zap.Error(err), zap.String("path", image.ThumbnailPath))
+				thumbnailURL = ""
+			}
+		}
+	}
+
+	return image.ToVO(url, thumbnailURL), nil
+}
+
+// ToVOList 批量将 Image 转换为 ImageVO（使用批量获取URL）
+func (s *imageService) ToVOList(ctx context.Context, images []*model.Image) ([]*model.ImageVO, error) {
+	if len(images) == 0 {
+		return []*model.ImageVO{}, nil
+	}
+
+	// 过滤掉 nil 图片，建立索引映射
+	validImages := make([]*model.Image, 0, len(images))
+	indexMap := make([]int, 0, len(images)) // validImages索引 -> 原始索引
+	for i, img := range images {
+		if img != nil {
+			validImages = append(validImages, img)
+			indexMap = append(indexMap, i)
+		}
+	}
+
+	if len(validImages) == 0 {
+		return []*model.ImageVO{}, nil
+	}
+
+	// 按存储类型分组原图路径，并建立 path -> validIndex 的映射
+	// 阿里云盘类型不需要批量获取URL，直接使用代理URL
+	pathsByType := make(map[config.StorageType][]string)
+	pathToValidIndex := make(map[string]int) // storagePath -> validImages索引
+
+	// 收集缩略图路径（始终本地存储）
+	thumbnailPaths := make([]string, 0, len(validImages))
+	thumbnailPathToValidIndex := make(map[string]int) // thumbnailPath -> validImages索引
+
+	for i, img := range validImages {
+		// 阿里云盘使用代理URL，不需要批量获取
+		if img.StorageType != config.StorageTypeAliyunpan {
+			pathsByType[img.StorageType] = append(pathsByType[img.StorageType], img.StoragePath)
+			pathToValidIndex[img.StoragePath] = i
+		}
+		if img.ThumbnailPath != "" {
+			thumbnailPaths = append(thumbnailPaths, img.ThumbnailPath)
+			thumbnailPathToValidIndex[img.ThumbnailPath] = i
+		}
+	}
+
+	// 存储每个图片的URL结果
+	urls := make([]string, len(validImages))
+	thumbnailURLs := make([]string, len(validImages))
+
+	// 对阿里云盘图片设置代理URL
+	for i, img := range validImages {
+		if img.StorageType == config.StorageTypeAliyunpan {
+			urls[i] = fmt.Sprintf("/api/images/%d/file", img.ID)
+		}
+	}
+
+	// 批量获取其他存储类型的原图URL
+	for storageType, paths := range pathsByType {
+		results := s.storage.GetURLBatch(context.WithValue(ctx, storage.OverrideStorageType, storageType), paths)
+		for _, result := range results {
+			if result.Error != nil {
+				logger.Warn("获取图片URL失败",
+					zap.Error(result.Error),
+					zap.String("path", result.Path),
+					zap.String("storage_type", string(storageType)))
+			} else if idx, ok := pathToValidIndex[result.Path]; ok {
+				urls[idx] = result.URL
+			}
+		}
+	}
+
+	// 批量获取缩略图URL（本地存储）
+	if len(thumbnailPaths) > 0 {
+		localStorage := s.storage.GetLocalStorage()
+		if localStorage != nil {
+			results := localStorage.GetURLBatch(ctx, thumbnailPaths)
+			for _, result := range results {
+				if result.Error != nil {
+					logger.Warn("获取缩略图URL失败",
+						zap.Error(result.Error),
+						zap.String("path", result.Path))
+				} else if idx, ok := thumbnailPathToValidIndex[result.Path]; ok {
+					thumbnailURLs[idx] = result.URL
+				}
+			}
+		}
+	}
+
+	// 构建结果
+	result := make([]*model.ImageVO, len(images))
+	for i, img := range validImages {
+		result[indexMap[i]] = img.ToVO(urls[i], thumbnailURLs[i])
+	}
+
+	return result, nil
 }

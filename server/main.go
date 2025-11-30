@@ -13,6 +13,7 @@ import (
 
 	"gallary/server/config"
 	"gallary/server/internal/handler"
+	"gallary/server/internal/middleware"
 	"gallary/server/internal/repository"
 	"gallary/server/internal/router"
 	"gallary/server/internal/service"
@@ -46,59 +47,75 @@ func main() {
 		logger.Fatal("数据库迁移失败", zap.Error(err))
 	}
 
-	// 5. 初始化存储
-	var storageImpl storage.Storage
-	switch cfg.Storage.Default {
-	case "local":
-		storageImpl, err = storage.NewLocalStorage(&cfg.Storage.Local)
-		if err != nil {
-			logger.Fatal("初始化本地存储失败", zap.Error(err))
-		}
-		logger.Info("使用本地存储")
-	default:
-		logger.Fatal("不支持的存储类型", zap.String("type", cfg.Storage.Default))
-	}
-
 	// 6. 初始化Repository层
 	imageRepo := repository.NewImageRepository()
 	shareRepo := repository.NewShareRepository()
 	settingRepo := repository.NewSettingRepository()
+	migrationRepo := repository.NewMigrationRepository()
 
-	// 7. 初始化Service层
-	imageService := service.NewImageService(imageRepo, storageImpl, cfg)
-	shareService := service.NewShareService(shareRepo)
+	// 7. 初始化设置服务并加载数据库设置
 	settingService := service.NewSettingService(settingRepo, cfg)
 
-	// 7.1 初始化默认设置（从 config.yaml 迁移）
+	// 7.1 初始化默认设置（使用代码默认值）
 	if err := settingService.InitializeDefaults(context.Background()); err != nil {
 		logger.Warn("初始化默认设置失败", zap.Error(err))
 	}
 
-	// 7.2 从数据库加载设置并应用到运行时
-	if err := settingService.ApplySettings(context.Background()); err != nil {
-		logger.Warn("应用设置失败", zap.Error(err))
+	// 7.2 从数据库加载设置并应用到运行时（必须在初始化存储之前）
+	var storageManager *storage.StorageManager
+	if storageManager, err = settingService.ResetStorage(context.Background()); err != nil {
+		logger.Warn("初始化存储失败", zap.Error(err))
 	}
 
-	// 8. 初始化Handler层
+	// 8. 初始化存储管理器（使用数据库中的设置）
+	if err != nil {
+		logger.Fatal("初始化存储管理器失败", zap.Error(err))
+	}
+
+	// 8.1 初始化动态静态文件配置
+	dynamicStaticConfig := middleware.NewDynamicStaticConfig()
+
+	// 8.2 获取当前本地存储配置（从数据库设置获取，设为空时使用默认值）
+	localBasePath, _ := settingService.GetSettingValue(context.Background(), "local_base_path")
+	localURLPrefix, _ := settingService.GetSettingValue(context.Background(), "local_url_prefix")
+
+	// 8.3 初始化迁移服务
+	migrationService := service.NewMigrationService(
+		migrationRepo,
+		imageRepo,
+		settingRepo,
+		dynamicStaticConfig,
+		storageManager,
+		localBasePath,
+		localURLPrefix,
+	)
+
+	// 9. 初始化Service层
+	imageService := service.NewImageService(imageRepo, storageManager, cfg)
+	shareService := service.NewShareService(shareRepo, storageManager)
+
+	// 10. 初始化Handler层
 	authHandler := handler.NewAuthHandler(cfg)
 	imageHandler := handler.NewImageHandler(imageService)
 	shareHandler := handler.NewShareHandler(shareService)
 	settingHandler := handler.NewSettingHandler(settingService)
+	storageHandler := handler.NewStorageHandler(storageManager)
+	migrationHandler := handler.NewMigrationHandler(migrationService)
 
-	// 9. 设置路由
-	r := router.SetupRouter(cfg, authHandler, imageHandler, shareHandler, settingHandler)
+	// 11. 设置路由
+	r := router.SetupRouter(cfg, authHandler, imageHandler, shareHandler, settingHandler, storageHandler, migrationHandler, dynamicStaticConfig)
 
-	// 10. 启动回收站自动清理任务
+	// 12. 启动回收站自动清理任务
 	stopCleanup := startTrashCleanupTask(imageService, cfg)
 	defer stopCleanup()
 
-	// 11. 创建HTTP服务器
+	// 13. 创建HTTP服务器
 	srv := &http.Server{
 		Addr:    cfg.Server.GetAddr(),
 		Handler: r,
 	}
 
-	// 11. 启动服务器（异步）
+	// 14. 启动服务器（异步）
 	go func() {
 		logger.Info("服务器启动成功",
 			zap.String("addr", cfg.Server.GetAddr()),
@@ -109,14 +126,14 @@ func main() {
 		}
 	}()
 
-	// 12. 等待中断信号优雅关闭
+	// 15. 等待中断信号优雅关闭
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	logger.Info("正在关闭服务器...")
 
-	// 13. 优雅关闭（5秒超时）
+	// 16. 优雅关闭（5秒超时）
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -124,7 +141,7 @@ func main() {
 		logger.Error("服务器强制关闭", zap.Error(err))
 	}
 
-	// 14. 关闭数据库连接
+	// 17. 关闭数据库连接
 	if err := database.Close(); err != nil {
 		logger.Error("关闭数据库连接失败", zap.Error(err))
 	}

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 
 	"gallary/server/config"
 )
@@ -27,6 +28,10 @@ func NewLocalStorage(cfg *config.LocalStorageConfig) (*LocalStorage, error) {
 		basePath:  cfg.BasePath,
 		urlPrefix: cfg.URLPrefix,
 	}, nil
+}
+
+func (s *LocalStorage) GetType(ctx context.Context) config.StorageType {
+	return config.StorageTypeLocal
 }
 
 // Upload 上传文件到本地
@@ -84,9 +89,35 @@ func (s *LocalStorage) Delete(ctx context.Context, path string) error {
 	return nil
 }
 
+// DeleteBatch 批量删除本地文件
+func (s *LocalStorage) DeleteBatch(ctx context.Context, paths []string) []DeleteResult {
+	results := make([]DeleteResult, len(paths))
+	for i, path := range paths {
+		results[i] = DeleteResult{
+			Path:  path,
+			Error: s.Delete(ctx, path),
+		}
+	}
+	return results
+}
+
 // GetURL 获取文件访问URL
 func (s *LocalStorage) GetURL(ctx context.Context, path string) (string, error) {
 	return fmt.Sprintf("%s/%s", s.urlPrefix, path), nil
+}
+
+// GetURLBatch 批量获取文件访问URL
+func (s *LocalStorage) GetURLBatch(ctx context.Context, paths []string) []URLResult {
+	results := make([]URLResult, len(paths))
+	for i, path := range paths {
+		url, err := s.GetURL(ctx, path)
+		results[i] = URLResult{
+			Path:  path,
+			URL:   url,
+			Error: err,
+		}
+	}
+	return results
 }
 
 // Exists 检查文件是否存在
@@ -102,4 +133,22 @@ func (s *LocalStorage) Exists(ctx context.Context, path string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// GetStats 获取存储统计信息
+func (s *LocalStorage) GetStats(ctx context.Context) (*StorageStats, error) {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(s.basePath, &stat); err != nil {
+		return nil, fmt.Errorf("获取存储统计失败: %w", err)
+	}
+
+	// 计算总容量和已用空间
+	total := stat.Blocks * uint64(stat.Bsize)
+	free := stat.Bfree * uint64(stat.Bsize)
+	used := total - free
+
+	return &StorageStats{
+		UsedBytes:  used,
+		TotalBytes: total,
+	}, nil
 }

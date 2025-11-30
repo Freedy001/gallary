@@ -2,11 +2,16 @@ import http from './http'
 
 // 存储配置类型
 export interface StorageConfig {
-  default_type: 'local' | 'oss' | 's3' | 'minio'
+  storage_default_type: 'local' | 'aliyunpan' | 'oss' | 's3' | 'minio'
 
   // 本地存储
   local_base_path?: string
   local_url_prefix?: string
+
+  // 阿里云盘
+  aliyunpan_refresh_token?: string
+  aliyunpan_base_path?: string
+  aliyunpan_drive_type?: 'file' | 'album' | 'resource'
 
   // OSS
   oss_endpoint?: string
@@ -67,5 +72,3 @@ export const settingsApi = {
   updateCleanup: (config: CleanupConfig) =>
     http.put<{ message: string }>('/api/settings/cleanup', config),
 }
-
-export default settingsApi

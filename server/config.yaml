@@ -4,12 +4,6 @@ server:
   port: 9099
   mode: "debug" # debug/release
 
-# 管理员配置
-admin:
-  # 如果不设置密码，则不需要认证
-  # 留空表示无需认证，或设置为 bcrypt 加密后的密码
-  password: "" # 示例: "$2a$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
 # 数据库配置
 database:
   host: "localhost"
@@ -22,16 +16,6 @@ database:
   max_idle_conns: 10
   max_open_conns: 100
   log_level: "debug" # silent/error/warn/info
-
-# 存储配置
-storage:
-  # 默认存储类型: local/oss/s3/minio
-  default: "local"
-
-  # 本地存储
-  local:
-    base_path: "../../storage/images"
-    url_prefix: "/static/images"
 
 # 图片处理配置
 image:

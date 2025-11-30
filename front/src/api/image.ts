@@ -118,11 +118,6 @@ export const imageApi = {
     return http.get('/api/images/geo-bounds')
   },
 
-  // 获取图片 URL
-  getImageUrl(storagePath: string): string {
-    return `/static/images/${storagePath}`
-  },
-
   // 回收站相关 API
   // 获取已删除图片列表
   getDeletedList(page = 1, pageSize = 20): Promise<ApiResponse<Pageable<Image>>> {

@@ -207,11 +207,16 @@
       <UploadDrawer :collapsed="uiStore.sidebarCollapsed" />
 
       <div v-if="!uiStore.sidebarCollapsed" class="mt-4 text-xs text-gray-500 font-mono tracking-wider flex items-center justify-between">
-        <span>TOTAL ASSETS</span>
+        <span>总影像</span>
         <span class="text-primary-400 font-bold">{{ imageStore.total }}</span>
       </div>
       <div v-else class="mt-4 flex justify-center">
         <span class="text-[10px] font-bold text-primary-500/70">{{ imageStore.total }}</span>
+      </div>
+
+      <!-- 存储容量 -->
+      <div class="mt-3">
+        <StorageUsage :collapsed="uiStore.sidebarCollapsed" />
       </div>
     </div>
   </aside>
@@ -222,6 +227,7 @@ import { useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useImageStore } from '@/stores/image'
 import UploadDrawer from '@/components/upload/UploadDrawer.vue'
+import StorageUsage from '@/components/common/StorageUsage.vue'
 import {
   PhotoIcon,
   MapPinIcon,

@@ -39,7 +39,6 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { imageApi } from '@/api/image'
 import { PhotoIcon } from '@heroicons/vue/24/outline'
 import type { Image } from '@/types'
 
@@ -62,13 +61,13 @@ const imageError = ref(false)
 const imageUrl = computed(() => {
   if (imageError.value) return null
 
-  // 优先使用缩略图
-  if (props.image.thumbnail_path) {
-    return imageApi.getImageUrl(props.image.thumbnail_path)
+  // 优先使用缩略图 URL
+  if (props.image.thumbnail_url) {
+    return props.image.thumbnail_url
   }
 
-  // 否则使用原图
-  return imageApi.getImageUrl(props.image.storage_path)
+  // 否则使用原图 URL
+  return props.image.url
 })
 
 function handleImageError() {

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"gallary/server/config"
 	"time"
 
 	"gorm.io/gorm"
@@ -8,15 +9,15 @@ import (
 
 // Image 图片模型
 type Image struct {
-	ID           int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	OriginalName string `gorm:"type:varchar(255);not null" json:"original_name"`
-	StoragePath  string `gorm:"type:varchar(500);not null" json:"storage_path"`
-	StorageType  string `gorm:"type:varchar(20);not null;default:local" json:"storage_type"`
-	FileSize     int64  `gorm:"not null" json:"file_size"`
-	FileHash     string `gorm:"type:varchar(64);uniqueIndex;not null" json:"file_hash"`
-	MimeType     string `gorm:"type:varchar(50);not null" json:"mime_type"`
-	Width        int    `gorm:"type:int;not null" json:"width,omitempty"`
-	Height       int    `gorm:"type:int;not null" json:"height,omitempty"`
+	ID           int64              `gorm:"primaryKey;autoIncrement" json:"id"`
+	OriginalName string             `gorm:"type:varchar(255);not null" json:"original_name"`
+	StoragePath  string             `gorm:"type:varchar(500);not null" json:"storage_path"`
+	StorageType  config.StorageType `gorm:"type:varchar(20);not null;default:local" json:"storage_type"`
+	FileSize     int64              `gorm:"not null" json:"file_size"`
+	FileHash     string             `gorm:"type:varchar(64);uniqueIndex;not null" json:"file_hash"`
+	MimeType     string             `gorm:"type:varchar(50);not null" json:"mime_type"`
+	Width        int                `gorm:"type:int;not null" json:"width,omitempty"`
+	Height       int                `gorm:"type:int;not null" json:"height,omitempty"`
 
 	// 缩略图相关
 	ThumbnailPath   string `gorm:"type:varchar(500);not null" json:"thumbnail_path,omitempty"`
@@ -38,6 +39,10 @@ type Image struct {
 	// 关联
 	Tags     []Tag           `gorm:"many2many:image_tags" json:"tags,omitempty"`
 	Metadata []ImageMetadata `gorm:"foreignKey:ImageID" json:"metadata,omitempty"`
+
+	// 迁移状态
+	MigrationStatus *string `gorm:"type:varchar(20)" json:"migration_status,omitempty"`
+	MigrationTaskID *int64  `gorm:"index" json:"migration_task_id,omitempty"`
 
 	// 系统字段
 	CreatedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
@@ -67,6 +72,6 @@ type GeoBounds struct {
 }
 
 // TableName 指定表名
-func (Image) TableName() string {
+func (*Image) TableName() string {
 	return "images"
 }

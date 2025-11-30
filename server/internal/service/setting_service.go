@@ -9,6 +9,7 @@ import (
 	"gallary/server/config"
 	"gallary/server/internal/model"
 	"gallary/server/internal/repository"
+	"gallary/server/internal/storage"
 	"gallary/server/pkg/logger"
 
 	"go.uber.org/zap"
@@ -17,11 +18,16 @@ import (
 
 // StorageConfigDTO 存储配置 DTO
 type StorageConfigDTO struct {
-	DefaultType string `json:"default_type" binding:"required,oneof=local oss s3 minio"`
+	DefaultType string `json:"default_type" binding:"required,oneof=local aliyunpan oss s3 minio"`
 
 	// 本地存储
 	LocalBasePath  string `json:"local_base_path,omitempty"`
 	LocalURLPrefix string `json:"local_url_prefix,omitempty"`
+
+	// 阿里云盘
+	AliyunPanRefreshToken string `json:"aliyunpan_refresh_token,omitempty"`
+	AliyunPanBasePath     string `json:"aliyunpan_base_path,omitempty"`
+	AliyunPanDriveType    string `json:"aliyunpan_drive_type,omitempty"`
 
 	// OSS
 	OSSEndpoint        string `json:"oss_endpoint,omitempty"`
@@ -70,18 +76,22 @@ type SettingService interface {
 	UpdateCleanupConfig(ctx context.Context, dto *CleanupConfigDTO) error
 
 	// 应用设置到运行时
-	ApplySettings(ctx context.Context) error
+	ResetStorage(ctx context.Context) (*storage.StorageManager, error)
 
 	// 初始化默认设置（从 config.yaml 迁移）
 	InitializeDefaults(ctx context.Context) error
 
 	// 检查密码是否已设置
 	IsPasswordSet(ctx context.Context) (bool, error)
+
+	// 获取密码版本号
+	GetPasswordVersion(ctx context.Context) (int64, error)
 }
 
 type settingService struct {
-	repo repository.SettingRepository
-	cfg  *config.Config
+	repo           repository.SettingRepository
+	cfg            *config.Config
+	storageManager *storage.StorageManager
 }
 
 // NewSettingService 创建设置服务实例
@@ -113,6 +123,9 @@ func (s *settingService) GetAllSettings(ctx context.Context) (map[string]interfa
 
 // GetSettingsByCategory 按分类获取设置
 func (s *settingService) GetSettingsByCategory(ctx context.Context, category string) (map[string]interface{}, error) {
+	if category == "auth" {
+		return nil, fmt.Errorf("禁止获取认证类设置")
+	}
 	settings, err := s.repo.GetByCategory(ctx, category)
 	if err != nil {
 		return nil, fmt.Errorf("获取设置失败: %w", err)
@@ -120,19 +133,6 @@ func (s *settingService) GetSettingsByCategory(ctx context.Context, category str
 
 	result := make(map[string]interface{})
 	for _, setting := range settings {
-		// 不返回密码
-		if setting.Key == model.SettingKeyAdminPassword {
-			continue
-		}
-		// 不返回敏感的密钥信息（只返回是否已设置）
-		if s.isSensitiveKey(setting.Key) {
-			if setting.Value != "" {
-				result[setting.Key] = "******"
-			} else {
-				result[setting.Key] = ""
-			}
-			continue
-		}
 		result[setting.Key] = s.convertValue(setting.Value, setting.ValueType)
 	}
 
@@ -175,23 +175,39 @@ func (s *settingService) UpdatePassword(ctx context.Context, dto *PasswordUpdate
 		return fmt.Errorf("密码加密失败: %w", err)
 	}
 
-	// 保存新密码
-	setting := &model.Setting{
-		Category:  model.SettingCategoryAuth,
-		Key:       model.SettingKeyAdminPassword,
-		Value:     string(hashedPassword),
-		ValueType: model.SettingValueTypeString,
-		UpdatedAt: time.Now(),
+	// 获取当前密码版本号并递增
+	currentVersion, _ := s.GetPasswordVersion(ctx)
+	newVersion := currentVersion + 1
+
+	now := time.Now()
+
+	// 保存新密码和新版本号
+	settings := []model.Setting{
+		{
+			Category:  model.SettingCategoryAuth,
+			Key:       model.SettingKeyAdminPassword,
+			Value:     string(hashedPassword),
+			ValueType: model.SettingValueTypeString,
+			UpdatedAt: now,
+		},
+		{
+			Category:  model.SettingCategoryAuth,
+			Key:       model.SettingKeyPasswordVersion,
+			Value:     strconv.FormatInt(newVersion, 10),
+			ValueType: model.SettingValueTypeInt,
+			UpdatedAt: now,
+		},
 	}
 
-	if err := s.repo.Upsert(ctx, setting); err != nil {
+	if err := s.repo.BatchUpsert(ctx, settings); err != nil {
 		return fmt.Errorf("保存密码失败: %w", err)
 	}
 
 	// 更新运行时配置
 	s.cfg.Admin.Password = string(hashedPassword)
+	s.cfg.Admin.PasswordVersion = newVersion
 
-	logger.Info("密码已更新")
+	logger.Info("密码已更新", zap.Int64("password_version", newVersion))
 	return nil
 }
 
@@ -202,47 +218,18 @@ func (s *settingService) UpdateStorageConfig(ctx context.Context, dto *StorageCo
 		{Category: model.SettingCategoryStorage, Key: model.SettingKeyStorageDefaultType, Value: dto.DefaultType, ValueType: model.SettingValueTypeString, UpdatedAt: now},
 		{Category: model.SettingCategoryStorage, Key: model.SettingKeyLocalBasePath, Value: dto.LocalBasePath, ValueType: model.SettingValueTypeString, UpdatedAt: now},
 		{Category: model.SettingCategoryStorage, Key: model.SettingKeyLocalURLPrefix, Value: dto.LocalURLPrefix, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSEndpoint, Value: dto.OSSEndpoint, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSAccessKeyID, Value: dto.OSSAccessKeyID, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSBucket, Value: dto.OSSBucket, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSURLPrefix, Value: dto.OSSURLPrefix, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3Region, Value: dto.S3Region, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3AccessKeyID, Value: dto.S3AccessKeyID, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3Bucket, Value: dto.S3Bucket, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3URLPrefix, Value: dto.S3URLPrefix, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOEndpoint, Value: dto.MinIOEndpoint, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOAccessKeyID, Value: dto.MinIOAccessKeyID, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOBucket, Value: dto.MinIOBucket, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOUseSSL, Value: strconv.FormatBool(dto.MinIOUseSSL), ValueType: model.SettingValueTypeBool, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOURLPrefix, Value: dto.MinIOURLPrefix, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-	}
-
-	// 处理敏感字段（只有在非空时才更新）
-	if dto.OSSAccessKeySecret != "" && dto.OSSAccessKeySecret != "******" {
-		settings = append(settings, model.Setting{
-			Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSAccessKeySecret,
-			Value: dto.OSSAccessKeySecret, ValueType: model.SettingValueTypeString, UpdatedAt: now,
-		})
-	}
-	if dto.S3SecretAccessKey != "" && dto.S3SecretAccessKey != "******" {
-		settings = append(settings, model.Setting{
-			Category: model.SettingCategoryStorage, Key: model.SettingKeyS3SecretAccessKey,
-			Value: dto.S3SecretAccessKey, ValueType: model.SettingValueTypeString, UpdatedAt: now,
-		})
-	}
-	if dto.MinIOSecretAccessKey != "" && dto.MinIOSecretAccessKey != "******" {
-		settings = append(settings, model.Setting{
-			Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOSecretAccessKey,
-			Value: dto.MinIOSecretAccessKey, ValueType: model.SettingValueTypeString, UpdatedAt: now,
-		})
+		// 阿里云盘配置
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanBasePath, Value: dto.AliyunPanBasePath, ValueType: model.SettingValueTypeString, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanDriveType, Value: dto.AliyunPanDriveType, ValueType: model.SettingValueTypeString, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanRefreshToken, Value: dto.AliyunPanRefreshToken, ValueType: model.SettingValueTypeString, UpdatedAt: now},
 	}
 
 	if err := s.repo.BatchUpsert(ctx, settings); err != nil {
 		return fmt.Errorf("保存存储配置失败: %w", err)
 	}
 
-	// 应用设置到运行时
-	if err := s.applyStorageSettings(ctx); err != nil {
+	// 应用设置到运行时配置
+	if _, err := s.ResetStorage(ctx); err != nil {
 		logger.Warn("应用存储配置失败", zap.Error(err))
 	}
 
@@ -272,58 +259,23 @@ func (s *settingService) UpdateCleanupConfig(ctx context.Context, dto *CleanupCo
 }
 
 // ApplySettings 从数据库加载设置并应用到运行时
+// 注意：数据库中的设置会完全覆盖配置文件中的值
 func (s *settingService) ApplySettings(ctx context.Context) error {
 	settings, err := s.repo.GetAll(ctx)
 	if err != nil {
 		return fmt.Errorf("获取设置失败: %w", err)
 	}
 
+	// 如果数据库中有设置，则完全使用数据库的值覆盖配置文件的值
+	// 这确保界面上的设置不会受配置文件影响
 	for _, setting := range settings {
 		switch setting.Key {
 		case model.SettingKeyAdminPassword:
 			s.cfg.Admin.Password = setting.Value
-		case model.SettingKeyStorageDefaultType:
-			s.cfg.Storage.Default = setting.Value
-		case model.SettingKeyLocalBasePath:
-			if setting.Value != "" {
-				s.cfg.Storage.Local.BasePath = setting.Value
+		case model.SettingKeyPasswordVersion:
+			if version, err := strconv.ParseInt(setting.Value, 10, 64); err == nil {
+				s.cfg.Admin.PasswordVersion = version
 			}
-		case model.SettingKeyLocalURLPrefix:
-			if setting.Value != "" {
-				s.cfg.Storage.Local.URLPrefix = setting.Value
-			}
-		case model.SettingKeyOSSEndpoint:
-			s.cfg.Storage.OSS.Endpoint = setting.Value
-		case model.SettingKeyOSSAccessKeyID:
-			s.cfg.Storage.OSS.AccessKeyID = setting.Value
-		case model.SettingKeyOSSAccessKeySecret:
-			s.cfg.Storage.OSS.AccessKeySecret = setting.Value
-		case model.SettingKeyOSSBucket:
-			s.cfg.Storage.OSS.Bucket = setting.Value
-		case model.SettingKeyOSSURLPrefix:
-			s.cfg.Storage.OSS.URLPrefix = setting.Value
-		case model.SettingKeyS3Region:
-			s.cfg.Storage.S3.Region = setting.Value
-		case model.SettingKeyS3AccessKeyID:
-			s.cfg.Storage.S3.AccessKeyID = setting.Value
-		case model.SettingKeyS3SecretAccessKey:
-			s.cfg.Storage.S3.SecretAccessKey = setting.Value
-		case model.SettingKeyS3Bucket:
-			s.cfg.Storage.S3.Bucket = setting.Value
-		case model.SettingKeyS3URLPrefix:
-			s.cfg.Storage.S3.URLPrefix = setting.Value
-		case model.SettingKeyMinIOEndpoint:
-			s.cfg.Storage.MinIO.Endpoint = setting.Value
-		case model.SettingKeyMinIOAccessKeyID:
-			s.cfg.Storage.MinIO.AccessKeyID = setting.Value
-		case model.SettingKeyMinIOSecretAccessKey:
-			s.cfg.Storage.MinIO.SecretAccessKey = setting.Value
-		case model.SettingKeyMinIOBucket:
-			s.cfg.Storage.MinIO.Bucket = setting.Value
-		case model.SettingKeyMinIOUseSSL:
-			s.cfg.Storage.MinIO.UseSSL = setting.Value == "true"
-		case model.SettingKeyMinIOURLPrefix:
-			s.cfg.Storage.MinIO.URLPrefix = setting.Value
 		case model.SettingKeyTrashAutoDeleteDays:
 			if days, err := strconv.Atoi(setting.Value); err == nil {
 				s.cfg.Trash.AutoDeleteDays = days
@@ -335,7 +287,7 @@ func (s *settingService) ApplySettings(ctx context.Context) error {
 	return nil
 }
 
-// InitializeDefaults 从 config.yaml 初始化默认设置到数据库
+// InitializeDefaults 初始化默认设置到数据库（使用代码默认值，不从配置文件读取）
 func (s *settingService) InitializeDefaults(ctx context.Context) error {
 	// 检查是否已有设置
 	count, err := s.repo.Count(ctx)
@@ -352,33 +304,41 @@ func (s *settingService) InitializeDefaults(ctx context.Context) error {
 	logger.Info("初始化默认设置...")
 
 	now := time.Now()
+	// 使用代码默认值，不从 config.yaml 读取
+	// 这样界面上的设置不会受配置文件的影响
 	settings := []model.Setting{
-		// 认证设置
-		{Category: model.SettingCategoryAuth, Key: model.SettingKeyAdminPassword, Value: s.cfg.Admin.Password, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		// 认证设置 - 默认为空（不启用认证）
+		{Category: model.SettingCategoryAuth, Key: model.SettingKeyAdminPassword, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryAuth, Key: model.SettingKeyPasswordVersion, Value: "0", ValueType: model.SettingValueTypeInt, CreatedAt: now, UpdatedAt: now},
 
-		// 存储设置
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyStorageDefaultType, Value: s.cfg.Storage.Default, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyLocalBasePath, Value: s.cfg.Storage.Local.BasePath, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyLocalURLPrefix, Value: s.cfg.Storage.Local.URLPrefix, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSEndpoint, Value: s.cfg.Storage.OSS.Endpoint, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSAccessKeyID, Value: s.cfg.Storage.OSS.AccessKeyID, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSAccessKeySecret, Value: s.cfg.Storage.OSS.AccessKeySecret, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSBucket, Value: s.cfg.Storage.OSS.Bucket, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSURLPrefix, Value: s.cfg.Storage.OSS.URLPrefix, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3Region, Value: s.cfg.Storage.S3.Region, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3AccessKeyID, Value: s.cfg.Storage.S3.AccessKeyID, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3SecretAccessKey, Value: s.cfg.Storage.S3.SecretAccessKey, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3Bucket, Value: s.cfg.Storage.S3.Bucket, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3URLPrefix, Value: s.cfg.Storage.S3.URLPrefix, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOEndpoint, Value: s.cfg.Storage.MinIO.Endpoint, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOAccessKeyID, Value: s.cfg.Storage.MinIO.AccessKeyID, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOSecretAccessKey, Value: s.cfg.Storage.MinIO.SecretAccessKey, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOBucket, Value: s.cfg.Storage.MinIO.Bucket, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOUseSSL, Value: strconv.FormatBool(s.cfg.Storage.MinIO.UseSSL), ValueType: model.SettingValueTypeBool, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOURLPrefix, Value: s.cfg.Storage.MinIO.URLPrefix, ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		// 存储设置 - 使用代码默认值
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyStorageDefaultType, Value: "local", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyLocalBasePath, Value: "./storage/images", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyLocalURLPrefix, Value: "/static/images", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		// 阿里云盘默认设置
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanRefreshToken, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanBasePath, Value: "/gallery/images", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanDriveType, Value: "file", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		// OSS 默认设置
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSEndpoint, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSAccessKeyID, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSAccessKeySecret, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSBucket, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSURLPrefix, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3Region, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3AccessKeyID, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3SecretAccessKey, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3Bucket, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3URLPrefix, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOEndpoint, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOAccessKeyID, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOSecretAccessKey, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOBucket, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOUseSSL, Value: "false", ValueType: model.SettingValueTypeBool, CreatedAt: now, UpdatedAt: now},
+		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOURLPrefix, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
 
-		// 清理设置
-		{Category: model.SettingCategoryCleanup, Key: model.SettingKeyTrashAutoDeleteDays, Value: strconv.Itoa(s.cfg.Trash.AutoDeleteDays), ValueType: model.SettingValueTypeInt, CreatedAt: now, UpdatedAt: now},
+		// 清理设置 - 默认30天
+		{Category: model.SettingCategoryCleanup, Key: model.SettingKeyTrashAutoDeleteDays, Value: "30", ValueType: model.SettingValueTypeInt, CreatedAt: now, UpdatedAt: now},
 	}
 
 	if err := s.repo.BatchUpsert(ctx, settings); err != nil {
@@ -396,6 +356,22 @@ func (s *settingService) IsPasswordSet(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return setting != nil && setting.Value != "", nil
+}
+
+// GetPasswordVersion 获取密码版本号
+func (s *settingService) GetPasswordVersion(ctx context.Context) (int64, error) {
+	setting, err := s.repo.GetByKey(ctx, model.SettingKeyPasswordVersion)
+	if err != nil {
+		return 0, err
+	}
+	if setting == nil || setting.Value == "" {
+		return 0, nil
+	}
+	version, err := strconv.ParseInt(setting.Value, 10, 64)
+	if err != nil {
+		return 0, nil
+	}
+	return version, nil
 }
 
 // 辅助方法
@@ -416,6 +392,7 @@ func (s *settingService) convertValue(value string, valueType string) interface{
 
 func (s *settingService) isSensitiveKey(key string) bool {
 	sensitiveKeys := []string{
+		model.SettingKeyAliyunPanRefreshToken,
 		model.SettingKeyOSSAccessKeySecret,
 		model.SettingKeyS3SecretAccessKey,
 		model.SettingKeyMinIOSecretAccessKey,
@@ -428,59 +405,79 @@ func (s *settingService) isSensitiveKey(key string) bool {
 	return false
 }
 
-func (s *settingService) applyStorageSettings(ctx context.Context) error {
+func (s *settingService) ResetStorage(ctx context.Context) (*storage.StorageManager, error) {
 	// 重新加载存储相关设置到运行时配置
 	settings, err := s.repo.GetByCategory(ctx, model.SettingCategoryStorage)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	cfg := config.StorageConfig{}
 	for _, setting := range settings {
 		switch setting.Key {
 		case model.SettingKeyStorageDefaultType:
-			s.cfg.Storage.Default = setting.Value
+			cfg.Default = config.StorageType(setting.Value)
 		case model.SettingKeyLocalBasePath:
-			if setting.Value != "" {
-				s.cfg.Storage.Local.BasePath = setting.Value
-			}
+			cfg.Local.BasePath = setting.Value
 		case model.SettingKeyLocalURLPrefix:
-			if setting.Value != "" {
-				s.cfg.Storage.Local.URLPrefix = setting.Value
-			}
-		case model.SettingKeyOSSEndpoint:
-			s.cfg.Storage.OSS.Endpoint = setting.Value
-		case model.SettingKeyOSSAccessKeyID:
-			s.cfg.Storage.OSS.AccessKeyID = setting.Value
-		case model.SettingKeyOSSAccessKeySecret:
-			s.cfg.Storage.OSS.AccessKeySecret = setting.Value
-		case model.SettingKeyOSSBucket:
-			s.cfg.Storage.OSS.Bucket = setting.Value
-		case model.SettingKeyOSSURLPrefix:
-			s.cfg.Storage.OSS.URLPrefix = setting.Value
-		case model.SettingKeyS3Region:
-			s.cfg.Storage.S3.Region = setting.Value
-		case model.SettingKeyS3AccessKeyID:
-			s.cfg.Storage.S3.AccessKeyID = setting.Value
-		case model.SettingKeyS3SecretAccessKey:
-			s.cfg.Storage.S3.SecretAccessKey = setting.Value
-		case model.SettingKeyS3Bucket:
-			s.cfg.Storage.S3.Bucket = setting.Value
-		case model.SettingKeyS3URLPrefix:
-			s.cfg.Storage.S3.URLPrefix = setting.Value
-		case model.SettingKeyMinIOEndpoint:
-			s.cfg.Storage.MinIO.Endpoint = setting.Value
-		case model.SettingKeyMinIOAccessKeyID:
-			s.cfg.Storage.MinIO.AccessKeyID = setting.Value
-		case model.SettingKeyMinIOSecretAccessKey:
-			s.cfg.Storage.MinIO.SecretAccessKey = setting.Value
-		case model.SettingKeyMinIOBucket:
-			s.cfg.Storage.MinIO.Bucket = setting.Value
-		case model.SettingKeyMinIOUseSSL:
-			s.cfg.Storage.MinIO.UseSSL = setting.Value == "true"
-		case model.SettingKeyMinIOURLPrefix:
-			s.cfg.Storage.MinIO.URLPrefix = setting.Value
+			cfg.Local.URLPrefix = setting.Value
+		// 阿里云盘配置
+		case model.SettingKeyAliyunPanRefreshToken:
+			cfg.AliyunPan.RefreshToken = setting.Value
+		case model.SettingKeyAliyunPanBasePath:
+			cfg.AliyunPan.BasePath = setting.Value
+		case model.SettingKeyAliyunPanDriveType:
+			cfg.AliyunPan.DriveType = setting.Value
+			// OSS 配置
+			//case model.SettingKeyOSSEndpoint:
+			//	cfg.OSS.Endpoint = setting.Value
+			//case model.SettingKeyOSSAccessKeyID:
+			//	cfg.OSS.AccessKeyID = setting.Value
+			//case model.SettingKeyOSSAccessKeySecret:
+			//	cfg.OSS.AccessKeySecret = setting.Value
+			//case model.SettingKeyOSSBucket:
+			//	cfg.OSS.Bucket = setting.Value
+			//case model.SettingKeyOSSURLPrefix:
+			//	cfg.OSS.URLPrefix = setting.Value
+			//case model.SettingKeyS3Region:
+			//	cfg.S3.Region = setting.Value
+			//case model.SettingKeyS3AccessKeyID:
+			//	cfg.S3.AccessKeyID = setting.Value
+			//case model.SettingKeyS3SecretAccessKey:
+			//	cfg.S3.SecretAccessKey = setting.Value
+			//case model.SettingKeyS3Bucket:
+			//	cfg.S3.Bucket = setting.Value
+			//case model.SettingKeyS3URLPrefix:
+			//	cfg.S3.URLPrefix = setting.Value
+			//case model.SettingKeyMinIOEndpoint:
+			//	cfg.MinIO.Endpoint = setting.Value
+			//case model.SettingKeyMinIOAccessKeyID:
+			//	cfg.MinIO.AccessKeyID = setting.Value
+			//case model.SettingKeyMinIOSecretAccessKey:
+			//	cfg.MinIO.SecretAccessKey = setting.Value
+			//case model.SettingKeyMinIOBucket:
+			//	cfg.MinIO.Bucket = setting.Value
+			//case model.SettingKeyMinIOUseSSL:
+			//	cfg.MinIO.UseSSL = setting.Value == "true"
+			//case model.SettingKeyMinIOURLPrefix:
+			//	cfg.MinIO.URLPrefix = setting.Value
 		}
 	}
 
-	return nil
+	// 切换存储管理器
+	if s.storageManager == nil {
+		manager, err := storage.NewStorageManager(&cfg)
+		if err != nil {
+			return nil, err
+		}
+		s.storageManager = manager
+		return manager, nil
+	}
+
+	if err := s.storageManager.SwitchStorage(&cfg); err != nil {
+		logger.Error("切换存储失败", zap.Error(err))
+		return nil, fmt.Errorf("切换存储失败: %w", err)
+	}
+
+	return s.storageManager, nil
 }

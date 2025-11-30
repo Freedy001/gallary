@@ -70,10 +70,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// 生成JWT token
+	// 生成JWT token，包含密码版本号
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"exp": time.Now().Add(h.cfg.JWT.GetExpireDuration()).Unix(),
 		"iat": time.Now().Unix(),
+		"pv":  h.cfg.Admin.PasswordVersion, // 密码版本号
 	})
 
 	tokenString, err := token.SignedString([]byte(h.cfg.JWT.Secret))
