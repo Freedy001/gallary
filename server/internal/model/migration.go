@@ -23,13 +23,12 @@ type MigrationTask struct {
 	// 状态
 	Status MigrationStatus `gorm:"type:varchar(20);not null;default:pending" json:"status"`
 
-	// 旧配置
-	OldBasePath  string `gorm:"type:varchar(500);not null" json:"old_base_path"`
-	OldURLPrefix string `gorm:"type:varchar(500);not null" json:"old_url_prefix"`
+	OldStorageType StorageId `gorm:"type:varchar(20);not null" json:"old_storage_type"`
 
+	// 旧配置
+	OldBasePath string `gorm:"type:varchar(500);not null" json:"old_base_path"`
 	// 新配置
-	NewBasePath  string `gorm:"type:varchar(500);not null" json:"new_base_path"`
-	NewURLPrefix string `gorm:"type:varchar(500);not null" json:"new_url_prefix"`
+	NewBasePath string `gorm:"type:varchar(500);not null" json:"new_base_path"`
 
 	// 进度信息
 	TotalFiles     int `gorm:"not null;default:0" json:"total_files"`

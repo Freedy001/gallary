@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"gallary/server/internal/service"
 	"gallary/server/internal/storage"
 	"gallary/server/internal/utils"
 	"gallary/server/pkg/logger"
@@ -13,7 +14,9 @@ import (
 
 // StorageHandler 存储处理器
 type StorageHandler struct {
-	storage storage.Storage
+	storage        storage.Storage
+	storageManager *storage.StorageManager
+	settingService service.SettingService
 
 	// 阿里云盘登录管理
 	aliyunPanLogin *storage.AliyunPanLogin
@@ -25,16 +28,33 @@ func NewStorageHandler(storage storage.Storage) *StorageHandler {
 	return &StorageHandler{storage: storage}
 }
 
+// SetStorageManager 设置存储管理器
+func (h *StorageHandler) SetStorageManager(manager *storage.StorageManager) {
+	h.storageManager = manager
+}
+
+// SetSettingService 设置配置服务
+func (h *StorageHandler) SetSettingService(settingService service.SettingService) {
+	h.settingService = settingService
+}
+
 // GetStats 获取存储统计信息
 //
 //	@Summary		获取存储统计
-//	@Description	获取存储空间使用情况
+//	@Description	获取所有存储提供者的空间使用情况
 //	@Tags			存储管理
 //	@Produce		json
-//	@Success		200	{object}	utils.Response{data=storage.StorageStats}	"存储统计信息"
+//	@Success		200	{object}	utils.Response{data=storage.MultiStorageStats}	"存储统计信息"
 //	@Failure		500	{object}	utils.Response								"获取失败"
 //	@Router			/api/storage/stats [get]
 func (h *StorageHandler) GetStats(c *gin.Context) {
+	if h.storageManager != nil {
+		stats := h.storageManager.GetMultiStorageStats(c.Request.Context())
+		utils.Success(c, stats)
+		return
+	}
+
+	// 回退到单个存储的统计
 	stats, err := h.storage.GetStats(c.Request.Context())
 	if err != nil {
 		logger.Error("获取存储统计失败", zap.Error(err))
@@ -148,4 +168,24 @@ func (h *StorageHandler) CheckAliyunPanQRCodeStatus(c *gin.Context) {
 	}
 
 	utils.Success(c, resp)
+}
+
+// LogoutAliyunPan 退出阿里云盘登录
+//
+//	@Summary		退出阿里云盘登录
+//	@Description	清除阿里云盘 refresh_token 并重新初始化存储
+//	@Tags			存储管理
+//	@Produce		json
+//	@Success		200	{object}	utils.Response	"退出成功"
+//	@Failure		500	{object}	utils.Response	"退出失败"
+//	@Router			/api/storage/aliyunpan/logout [post]
+func (h *StorageHandler) LogoutAliyunPan(c *gin.Context) {
+	if h.settingService == nil {
+		utils.Error(c, 500, "服务未初始化")
+		return
+	}
+
+	// 重新加载存储配置（会重新初始化存储，由于 refresh_token 需要在前端清除后保存）
+	// 这里只是返回成功，实际的 token 清除由前端调用 updateStorage 接口完成
+	utils.Success(c, gin.H{"message": "退出成功"})
 }

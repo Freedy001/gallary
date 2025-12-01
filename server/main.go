@@ -67,6 +67,9 @@ func main() {
 		logger.Warn("初始化存储失败", zap.Error(err))
 	}
 
+	// 7.3 设置存储管理器到设置服务（用于获取阿里云盘用户信息）
+	settingService.SetStorageManager(storageManager)
+
 	// 8. 初始化存储管理器（使用数据库中的设置）
 	if err != nil {
 		logger.Fatal("初始化存储管理器失败", zap.Error(err))
@@ -75,19 +78,12 @@ func main() {
 	// 8.1 初始化动态静态文件配置
 	dynamicStaticConfig := middleware.NewDynamicStaticConfig()
 
-	// 8.2 获取当前本地存储配置（从数据库设置获取，设为空时使用默认值）
-	localBasePath, _ := settingService.GetSettingValue(context.Background(), "local_base_path")
-	localURLPrefix, _ := settingService.GetSettingValue(context.Background(), "local_url_prefix")
-
 	// 8.3 初始化迁移服务
 	migrationService := service.NewMigrationService(
 		migrationRepo,
 		imageRepo,
 		settingRepo,
-		dynamicStaticConfig,
 		storageManager,
-		localBasePath,
-		localURLPrefix,
 	)
 
 	// 9. 初始化Service层
@@ -100,7 +96,12 @@ func main() {
 	shareHandler := handler.NewShareHandler(shareService)
 	settingHandler := handler.NewSettingHandler(settingService)
 	storageHandler := handler.NewStorageHandler(storageManager)
+	storageHandler.SetStorageManager(storageManager)
+	storageHandler.SetSettingService(settingService)
 	migrationHandler := handler.NewMigrationHandler(migrationService)
+
+	// 10.1 连接 SettingService 和 MigrationService
+	settingService.SetMigrationService(migrationService)
 
 	// 11. 设置路由
 	r := router.SetupRouter(cfg, authHandler, imageHandler, shareHandler, settingHandler, storageHandler, migrationHandler, dynamicStaticConfig)

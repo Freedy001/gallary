@@ -49,6 +49,11 @@ type ImageRepository interface {
 	GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, gridSizeLat, gridSizeLng float64) ([]*model.ClusterResult, error)
 	GetClusterImages(ctx context.Context, minLat, maxLat, minLng, maxLng float64, page, pageSize int) ([]*model.Image, int64, error)
 	GetGeoBounds(ctx context.Context) (*model.GeoBounds, error)
+
+	// 迁移相关方法
+	CountByStorageType(ctx context.Context, storageType string) (int, error)
+	ListByStorageType(ctx context.Context, storageType string, page, pageSize int) ([]*model.Image, int64, error)
+	UpdateStoragePath(ctx context.Context, imageID int64, storagePath string) error
 }
 
 // SearchParams 搜索参数
@@ -552,4 +557,51 @@ func (r *imageRepository) FindExpiredDeleted(ctx context.Context, days int) ([]*
 	}
 
 	return images, nil
+}
+
+// CountByStorageType 按存储类型统计图片数量
+func (r *imageRepository) CountByStorageType(ctx context.Context, storageType string) (int, error) {
+	var count int64
+	err := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).
+		Where("storage_type = ?", storageType).
+		Count(&count).Error
+
+	if err != nil {
+		return 0, err
+	}
+
+	return int(count), nil
+}
+
+// ListByStorageType 按存储类型分页获取图片列表
+func (r *imageRepository) ListByStorageType(ctx context.Context, storageType string, page, pageSize int) ([]*model.Image, int64, error) {
+	var images []*model.Image
+	var total int64
+
+	offset := (page - 1) * pageSize
+
+	db := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).
+		Where("storage_type = ?", storageType)
+
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := db.Order("id ASC").
+		Limit(pageSize).
+		Offset(offset).
+		Find(&images).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return images, total, nil
+}
+
+// UpdateStoragePath 更新图片存储路径
+func (r *imageRepository) UpdateStoragePath(ctx context.Context, imageID int64, storagePath string) error {
+	return database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).
+		Where("id = ?", imageID).
+		Update("storage_path", storagePath).Error
 }

@@ -5,12 +5,12 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"gallary/server/config"
 	"gallary/server/internal/model"
 	"gallary/server/internal/repository"
 	"gallary/server/internal/storage"
 	"gallary/server/pkg/logger"
 	"math/big"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -169,13 +169,13 @@ func (s *shareService) toVO(ctx context.Context, image *model.Image) *model.Imag
 	var err error
 
 	// 阿里云盘存储使用后端代理URL
-	if image.StorageType == config.StorageTypeAliyunpan {
+	if strings.HasPrefix(image.StoragePath, "aliyunpan") {
 		url = fmt.Sprintf("/api/images/%d/file", image.ID)
 	} else {
 		// 其他存储类型直接获取URL
-		url, err = s.storage.GetURL(context.WithValue(ctx, storage.OverrideStorageType, image.StorageType), image.StoragePath)
+		url, err = s.storage.GetURL(context.WithValue(ctx, storage.OverrideStorageType, image.StorageId), image.StoragePath)
 		if err != nil {
-			logger.Warn("获取图片URL失败", zap.Error(err), zap.String("path", image.StoragePath), zap.String("storage_type", string(image.StorageType)))
+			logger.Warn("获取图片URL失败", zap.Error(err), zap.String("path", image.StoragePath), zap.String("storage_type", string(image.StorageId)))
 			url = ""
 		}
 	}

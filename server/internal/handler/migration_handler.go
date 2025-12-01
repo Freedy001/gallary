@@ -27,36 +27,6 @@ type StartMigrationRequest struct {
 	NewURLPrefix string `json:"new_url_prefix" binding:"required"`
 }
 
-// Start 开始存储迁移
-//
-//	@Summary		开始存储迁移
-//	@Description	开始将存储文件迁移到新目录
-//	@Tags			存储管理
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body		StartMigrationRequest		true	"迁移请求"
-//	@Success		200		{object}	utils.Response{data=model.MigrationTask}	"迁移任务信息"
-//	@Failure		400		{object}	utils.Response				"参数错误"
-//	@Failure		500		{object}	utils.Response				"迁移失败"
-//	@Router			/api/storage/migration [post]
-func (h *MigrationHandler) Start(c *gin.Context) {
-	var req StartMigrationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.Error(c, 400, "参数错误: "+err.Error())
-		return
-	}
-
-	task, err := h.migrationService.StartMigration(c.Request.Context(), req.NewBasePath, req.NewURLPrefix)
-	if err != nil {
-		logger.Error("开始迁移失败", zap.Error(err))
-		utils.Error(c, 500, err.Error())
-		return
-	}
-
-	logger.Info("迁移任务已创建", zap.Int64("task_id", task.ID))
-	utils.Success(c, task)
-}
-
 // GetActive 获取当前活跃的迁移任务
 //
 //	@Summary		获取活跃迁移任务
@@ -110,33 +80,4 @@ func (h *MigrationHandler) GetByID(c *gin.Context) {
 	}
 
 	utils.Success(c, task)
-}
-
-// Cancel 取消迁移任务
-//
-//	@Summary		取消迁移任务
-//	@Description	取消正在进行的迁移任务并回滚
-//	@Tags			存储管理
-//	@Produce		json
-//	@Param			id	path		int				true	"任务ID"
-//	@Success		200	{object}	utils.Response	"取消成功"
-//	@Failure		400	{object}	utils.Response	"参数错误"
-//	@Failure		500	{object}	utils.Response	"取消失败"
-//	@Router			/api/storage/migration/{id}/cancel [post]
-func (h *MigrationHandler) Cancel(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		utils.Error(c, 400, "无效的任务ID")
-		return
-	}
-
-	if err := h.migrationService.CancelMigration(c.Request.Context(), id); err != nil {
-		logger.Error("取消迁移失败", zap.Error(err))
-		utils.Error(c, 500, err.Error())
-		return
-	}
-
-	logger.Info("迁移任务已取消", zap.Int64("task_id", id))
-	utils.Success(c, nil)
 }

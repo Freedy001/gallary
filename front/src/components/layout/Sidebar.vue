@@ -208,10 +208,10 @@
 
       <div v-if="!uiStore.sidebarCollapsed" class="mt-4 text-xs text-gray-500 font-mono tracking-wider flex items-center justify-between">
         <span>总影像</span>
-        <span class="text-primary-400 font-bold">{{ imageStore.total }}</span>
+        <span class="text-primary-400 font-bold">{{ storageStore.totalImages }}</span>
       </div>
       <div v-else class="mt-4 flex justify-center">
-        <span class="text-[10px] font-bold text-primary-500/70">{{ imageStore.total }}</span>
+        <span class="text-[10px] font-bold text-primary-500/70">{{ storageStore.totalImages }}</span>
       </div>
 
       <!-- 存储容量 -->
@@ -223,9 +223,10 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
-import { useImageStore } from '@/stores/image'
+import { useStorageStore } from '@/stores/storage'
 import UploadDrawer from '@/components/upload/UploadDrawer.vue'
 import StorageUsage from '@/components/common/StorageUsage.vue'
 import {
@@ -242,11 +243,16 @@ import {
 
 const router = useRouter()
 const uiStore = useUIStore()
-const imageStore = useImageStore()
+const storageStore = useStorageStore()
 
 function navigateTo(path: string) {
   router.push(path)
 }
+
+onMounted(() => {
+  // 获取图片总数（带缓存）
+  storageStore.fetchTotalImages()
+})
 </script>
 
 <!--<script setup lang="ts">-->

@@ -56,9 +56,8 @@ type ImageService interface {
 	Delete(ctx context.Context, id int64) error
 	DeleteBatch(ctx context.Context, ids []int64) error
 	Search(ctx context.Context, params *repository.SearchParams) ([]*model.ImageVO, int64, error)
-	Download(ctx context.Context, id int64) (io.ReadCloser, string, error)
+	Download(ctx context.Context, image *model.Image) (io.ReadCloser, error)
 	DownloadBatch(ctx context.Context, ids []int64, writer io.Writer) (string, error)
-	ProxyFile(ctx context.Context, id int64) (io.ReadCloser, string, error)
 	BatchUpdateMetadata(ctx context.Context, req *UpdateMetadataRequest) ([]int64, error)
 	GetImagesWithLocation(ctx context.Context) ([]*model.ImageVO, error)
 	GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, zoom int) ([]*model.ClusterResultVO, error)
@@ -94,8 +93,8 @@ func NewImageService(repo repository.ImageRepository, storage *storage.StorageMa
 // Upload 上传图片（包含去重逻辑）
 func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHeader) (*model.ImageVO, error) {
 	// 1. 验证文件类型
-	if !s.cfg.Image.IsAllowedType(fileHeader.Header.Get("Content-Type")) {
-		return nil, fmt.Errorf("不支持的文件类型: %s", fileHeader.Header.Get("Content-Type"))
+	if !s.cfg.Image.IsAllowedType(fileHeader.Header.Get("Content-Id")) {
+		return nil, fmt.Errorf("不支持的文件类型: %s", fileHeader.Header.Get("Content-Id"))
 	}
 
 	// 2. 验证文件大小
@@ -187,10 +186,10 @@ func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHea
 	image := &model.Image{
 		OriginalName: fileHeader.Filename,
 		StoragePath:  finalPath,
-		StorageType:  s.storage.GetType(ctx),
+		StorageId:    s.storage.GetType(ctx),
 		FileSize:     fileHeader.Size,
 		FileHash:     fileHash,
-		MimeType:     fileHeader.Header.Get("Content-Type"),
+		MimeType:     fileHeader.Header.Get("Content-Id"),
 		Width:        width,
 		Height:       height,
 	}
@@ -376,42 +375,40 @@ func (s *imageService) Search(ctx context.Context, params *repository.SearchPara
 }
 
 // Download 下载图片
-func (s *imageService) Download(ctx context.Context, id int64) (io.ReadCloser, string, error) {
-	// 获取图片信息
-	image, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return nil, "", err
+func (s *imageService) Download(ctx context.Context, image *model.Image) (io.ReadCloser, error) {
+	if image == nil {
+		return nil, fmt.Errorf("请传入图片信息")
 	}
 
 	// 检查迁移状态
-	if image != nil && image.MigrationStatus != nil && *image.MigrationStatus != "" {
-		return nil, "", fmt.Errorf("图片正在迁移中，暂时不可下载")
+	if image.MigrationStatus != nil && *image.MigrationStatus != "" {
+		return nil, fmt.Errorf("图片正在迁移中，暂时不可下载")
 	}
 
 	// 从存储获取文件
 	reader, err := s.storage.Download(ctx, image.StoragePath)
 	if err != nil {
-		return nil, "", fmt.Errorf("下载文件失败: %w", err)
+		return nil, fmt.Errorf("下载文件失败: %w", err)
 	}
 
-	return reader, image.OriginalName, nil
+	return reader, nil
 }
 
 // ProxyFile 代理获取图片文件（用于阿里云盘等需要后端代理的存储）
 func (s *imageService) ProxyFile(ctx context.Context, id int64) (io.ReadCloser, string, error) {
 	// 获取图片信息
 	image, err := s.repo.FindByID(ctx, id)
-	if err != nil {
+	if err != nil || image == nil {
 		return nil, "", err
 	}
 
 	// 检查迁移状态
-	if image != nil && image.MigrationStatus != nil && *image.MigrationStatus != "" {
+	if image.MigrationStatus != nil && *image.MigrationStatus != "" {
 		return nil, "", fmt.Errorf("图片正在迁移中，暂时不可访问")
 	}
 
 	// 从对应的存储获取文件
-	reader, err := s.storage.Download(context.WithValue(ctx, storage.OverrideStorageType, image.StorageType), image.StoragePath)
+	reader, err := s.storage.Download(context.WithValue(ctx, storage.OverrideStorageType, image.StorageId), image.StoragePath)
 	if err != nil {
 		return nil, "", fmt.Errorf("获取文件失败: %w", err)
 	}
@@ -767,12 +764,12 @@ func (s *imageService) PermanentlyDelete(ctx context.Context, ids []int64) error
 	}
 
 	// 按存储类型分组原图路径
-	pathsByType := make(map[config.StorageType][]string)
+	pathsByType := make(map[model.StorageId][]string)
 	// 缩略图路径（始终是本地存储）
 	var thumbnailPaths []string
 
 	for _, image := range images {
-		pathsByType[image.StorageType] = append(pathsByType[image.StorageType], image.StoragePath)
+		pathsByType[image.StorageId] = append(pathsByType[image.StorageId], image.StoragePath)
 		if image.ThumbnailPath != "" {
 			thumbnailPaths = append(thumbnailPaths, image.ThumbnailPath)
 		}
@@ -863,13 +860,13 @@ func (s *imageService) ToVO(ctx context.Context, image *model.Image) (*model.Ima
 	var err error
 
 	// 阿里云盘存储使用后端代理URL
-	if image.StorageType == config.StorageTypeAliyunpan {
+	if strings.HasPrefix(string(image.StorageId), "aliyunpan") {
 		url = fmt.Sprintf("/api/images/%d/file", image.ID)
 	} else {
 		// 其他存储类型直接获取URL
-		url, err = s.storage.GetURL(context.WithValue(ctx, storage.OverrideStorageType, image.StorageType), image.StoragePath)
+		url, err = s.storage.GetURL(context.WithValue(ctx, storage.OverrideStorageType, image.StorageId), image.StoragePath)
 		if err != nil {
-			logger.Warn("获取图片URL失败", zap.Error(err), zap.String("path", image.StoragePath), zap.String("storage_type", string(image.StorageType)))
+			logger.Warn("获取图片URL失败", zap.Error(err), zap.String("path", image.StoragePath), zap.String("storage_type", string(image.StorageId)))
 			url = ""
 		}
 	}
@@ -912,7 +909,7 @@ func (s *imageService) ToVOList(ctx context.Context, images []*model.Image) ([]*
 
 	// 按存储类型分组原图路径，并建立 path -> validIndex 的映射
 	// 阿里云盘类型不需要批量获取URL，直接使用代理URL
-	pathsByType := make(map[config.StorageType][]string)
+	pathsByType := make(map[model.StorageId][]string)
 	pathToValidIndex := make(map[string]int) // storagePath -> validImages索引
 
 	// 收集缩略图路径（始终本地存储）
@@ -921,8 +918,8 @@ func (s *imageService) ToVOList(ctx context.Context, images []*model.Image) ([]*
 
 	for i, img := range validImages {
 		// 阿里云盘使用代理URL，不需要批量获取
-		if img.StorageType != config.StorageTypeAliyunpan {
-			pathsByType[img.StorageType] = append(pathsByType[img.StorageType], img.StoragePath)
+		if !strings.HasPrefix(string(img.StorageId), "aliyunpan") {
+			pathsByType[img.StorageId] = append(pathsByType[img.StorageId], img.StoragePath)
 			pathToValidIndex[img.StoragePath] = i
 		}
 		if img.ThumbnailPath != "" {
@@ -937,7 +934,7 @@ func (s *imageService) ToVOList(ctx context.Context, images []*model.Image) ([]*
 
 	// 对阿里云盘图片设置代理URL
 	for i, img := range validImages {
-		if img.StorageType == config.StorageTypeAliyunpan {
+		if strings.HasPrefix(string(img.StorageId), "aliyunpan") {
 			urls[i] = fmt.Sprintf("/api/images/%d/file", img.ID)
 		}
 	}

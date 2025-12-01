@@ -1,7 +1,6 @@
 package model
 
 import (
-	"gallary/server/config"
 	"time"
 
 	"gorm.io/gorm"
@@ -9,15 +8,15 @@ import (
 
 // Image 图片模型
 type Image struct {
-	ID           int64              `gorm:"primaryKey;autoIncrement" json:"id"`
-	OriginalName string             `gorm:"type:varchar(255);not null" json:"original_name"`
-	StoragePath  string             `gorm:"type:varchar(500);not null" json:"storage_path"`
-	StorageType  config.StorageType `gorm:"type:varchar(20);not null;default:local" json:"storage_type"`
-	FileSize     int64              `gorm:"not null" json:"file_size"`
-	FileHash     string             `gorm:"type:varchar(64);uniqueIndex;not null" json:"file_hash"`
-	MimeType     string             `gorm:"type:varchar(50);not null" json:"mime_type"`
-	Width        int                `gorm:"type:int;not null" json:"width,omitempty"`
-	Height       int                `gorm:"type:int;not null" json:"height,omitempty"`
+	ID           int64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	OriginalName string    `gorm:"type:varchar(255);not null" json:"original_name"`
+	StoragePath  string    `gorm:"type:varchar(500);not null" json:"storage_path"`
+	StorageId    StorageId `gorm:"type:varchar(20);not null;default:local" json:"storage_type"`
+	FileSize     int64     `gorm:"not null" json:"file_size"`
+	FileHash     string    `gorm:"type:varchar(64);uniqueIndex;not null" json:"file_hash"`
+	MimeType     string    `gorm:"type:varchar(50);not null" json:"mime_type"`
+	Width        int       `gorm:"type:int;not null" json:"width,omitempty"`
+	Height       int       `gorm:"type:int;not null" json:"height,omitempty"`
 
 	// 缩略图相关
 	ThumbnailPath   string `gorm:"type:varchar(500);not null" json:"thumbnail_path,omitempty"`

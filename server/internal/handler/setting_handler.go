@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"gallary/server/internal/model"
+
 	"github.com/gin-gonic/gin"
 
 	"gallary/server/internal/service"
@@ -15,25 +17,6 @@ type SettingHandler struct {
 // NewSettingHandler 创建设置处理器实例
 func NewSettingHandler(settingService service.SettingService) *SettingHandler {
 	return &SettingHandler{settingService: settingService}
-}
-
-// GetAll 获取所有设置
-//
-//	@Summary		获取所有设置
-//	@Description	获取系统所有设置项（不包含敏感信息）
-//	@Tags			设置
-//	@Produce		json
-//	@Success		200	{object}	utils.Response	"设置列表"
-//	@Failure		500	{object}	utils.Response	"服务器错误"
-//	@Router			/api/settings [get]
-func (h *SettingHandler) GetAll(c *gin.Context) {
-	settings, err := h.settingService.GetAllSettings(c.Request.Context())
-	if err != nil {
-		utils.InternalServerError(c, err.Error())
-		return
-	}
-
-	utils.Success(c, settings)
 }
 
 // GetByCategory 按分类获取设置
@@ -92,28 +75,36 @@ func (h *SettingHandler) UpdatePassword(c *gin.Context) {
 // UpdateStorage 更新存储配置
 //
 //	@Summary		更新存储配置
-//	@Description	更新系统存储配置
+//	@Description	更新系统存储配置，如果路径变化会自动触发迁移
 //	@Tags			设置
 //	@Accept			json
 //	@Produce		json
 //	@Param			request	body		service.StorageConfigDTO	true	"存储配置"
-//	@Success		200		{object}	utils.Response				"更新成功"
+//	@Success		200		{object}	utils.Response{data=service.StorageUpdateResult}	"更新结果"
 //	@Failure		400		{object}	utils.Response				"请求参数错误"
+//	@Failure		423		{object}	utils.Response				"迁移进行中，配置被锁定"
 //	@Failure		500		{object}	utils.Response				"服务器错误"
 //	@Router			/api/settings/storage [put]
 func (h *SettingHandler) UpdateStorage(c *gin.Context) {
-	var req service.StorageConfigDTO
+	var req model.StorageConfigDTO
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
 
-	if err := h.settingService.UpdateStorageConfig(c.Request.Context(), &req); err != nil {
+	// 检查是否有迁移正在进行
+	if h.settingService.IsMigrationRunning(c.Request.Context()) {
+		utils.Error(c, 423, "迁移正在进行中，请等待完成后再修改配置")
+		return
+	}
+
+	result, err := h.settingService.UpdateStorageConfig(c.Request.Context(), &req)
+	if err != nil {
 		utils.Error(c, 400, err.Error())
 		return
 	}
 
-	utils.Success(c, gin.H{"message": "存储配置更新成功"})
+	utils.Success(c, result)
 }
 
 // UpdateCleanup 更新清理配置

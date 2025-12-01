@@ -97,6 +97,11 @@ export const useImageStore = defineStore('image', () => {
 
       // 清除选中状态
       idsToDelete.forEach(id => selectedImages.value.delete(id))
+
+      // 更新 storageStore 中的总数（延迟导入避免循环依赖）
+      const { useStorageStore } = await import('@/stores/storage')
+      const storageStore = useStorageStore()
+      storageStore.updateTotalImages(-idsToDelete.length)
     } catch (err) {
       error.value = err instanceof Error ? err.message : '批量删除图片失败'
       throw err

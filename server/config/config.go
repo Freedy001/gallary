@@ -176,33 +176,6 @@ func (c *ImageConfig) IsAllowedType(mimeType string) bool {
 	return false
 }
 
-type StorageType string
-
-const (
-	StorageTypeLocal     StorageType = "local"
-	StorageTypeAliyunpan StorageType = "aliyunpan"
-)
-
-type StorageConfig struct {
-	Default   StorageType            `mapstructure:"default"`
-	Local     LocalStorageConfig     `mapstructure:"local"`
-	AliyunPan AliyunPanStorageConfig `mapstructure:"aliyunpan"`
-	//OSS       OSSStorageConfig       `mapstructure:"oss"`
-	//S3        S3StorageConfig        `mapstructure:"s3"`
-	//MinIO     MinIOStorageConfig     `mapstructure:"minio"`
-}
-
-type LocalStorageConfig struct {
-	BasePath  string `mapstructure:"base_path"`
-	URLPrefix string `mapstructure:"url_prefix"`
-}
-
-type AliyunPanStorageConfig struct {
-	RefreshToken string `mapstructure:"refresh_token"` // 刷新Token
-	BasePath     string `mapstructure:"base_path"`     // 云盘存储基础路径
-	DriveType    string `mapstructure:"drive_type"`    // 网盘类型: file/album/resource
-}
-
 //type OSSStorageConfig struct {
 //	Endpoint        string `mapstructure:"endpoint"`
 //	AccessKeyID     string `mapstructure:"access_key_id"`

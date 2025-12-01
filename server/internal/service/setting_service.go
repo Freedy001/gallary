@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -16,40 +17,18 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// StorageConfigDTO 存储配置 DTO
-type StorageConfigDTO struct {
-	DefaultType string `json:"default_type" binding:"required,oneof=local aliyunpan oss s3 minio"`
+// StorageUpdateResult 存储配置更新结果
+type StorageUpdateResult struct {
+	NeedsMigration bool   `json:"needs_migration"`   // 是否触发了迁移
+	TaskID         int64  `json:"task_id,omitempty"` // 迁移任务ID（如果触发了迁移）
+	Message        string `json:"message"`           // 结果消息
+}
 
-	// 本地存储
-	LocalBasePath  string `json:"local_base_path,omitempty"`
-	LocalURLPrefix string `json:"local_url_prefix,omitempty"`
-
-	// 阿里云盘
-	AliyunPanRefreshToken string `json:"aliyunpan_refresh_token,omitempty"`
-	AliyunPanBasePath     string `json:"aliyunpan_base_path,omitempty"`
-	AliyunPanDriveType    string `json:"aliyunpan_drive_type,omitempty"`
-
-	// OSS
-	OSSEndpoint        string `json:"oss_endpoint,omitempty"`
-	OSSAccessKeyID     string `json:"oss_access_key_id,omitempty"`
-	OSSAccessKeySecret string `json:"oss_access_key_secret,omitempty"`
-	OSSBucket          string `json:"oss_bucket,omitempty"`
-	OSSURLPrefix       string `json:"oss_url_prefix,omitempty"`
-
-	// S3
-	S3Region          string `json:"s3_region,omitempty"`
-	S3AccessKeyID     string `json:"s3_access_key_id,omitempty"`
-	S3SecretAccessKey string `json:"s3_secret_access_key,omitempty"`
-	S3Bucket          string `json:"s3_bucket,omitempty"`
-	S3URLPrefix       string `json:"s3_url_prefix,omitempty"`
-
-	// MinIO
-	MinIOEndpoint        string `json:"minio_endpoint,omitempty"`
-	MinIOAccessKeyID     string `json:"minio_access_key_id,omitempty"`
-	MinIOSecretAccessKey string `json:"minio_secret_access_key,omitempty"`
-	MinIOBucket          string `json:"minio_bucket,omitempty"`
-	MinIOUseSSL          bool   `json:"minio_use_ssl,omitempty"`
-	MinIOURLPrefix       string `json:"minio_url_prefix,omitempty"`
+// AliyunPanUserInfo 阿里云盘用户信息
+type AliyunPanUserInfo struct {
+	IsLoggedIn bool   `json:"is_logged_in"`
+	NickName   string `json:"nick_name,omitempty"`
+	Avatar     string `json:"avatar,omitempty"`
 }
 
 // CleanupConfigDTO 清理配置 DTO
@@ -65,14 +44,11 @@ type PasswordUpdateDTO struct {
 
 // SettingService 设置服务接口
 type SettingService interface {
-	// 获取设置
-	GetAllSettings(ctx context.Context) (map[string]interface{}, error)
 	GetSettingsByCategory(ctx context.Context, category string) (map[string]interface{}, error)
-	GetSettingValue(ctx context.Context, key string) (string, error)
 
 	// 更新设置
 	UpdatePassword(ctx context.Context, dto *PasswordUpdateDTO) error
-	UpdateStorageConfig(ctx context.Context, dto *StorageConfigDTO) error
+	UpdateStorageConfig(ctx context.Context, dto *model.StorageConfigDTO) (*StorageUpdateResult, error)
 	UpdateCleanupConfig(ctx context.Context, dto *CleanupConfigDTO) error
 
 	// 应用设置到运行时
@@ -86,12 +62,25 @@ type SettingService interface {
 
 	// 获取密码版本号
 	GetPasswordVersion(ctx context.Context) (int64, error)
+
+	// 获取阿里云盘用户信息
+	GetAliyunPanUserInfo(ctx context.Context) *AliyunPanUserInfo
+
+	// 设置存储管理器
+	SetStorageManager(manager *storage.StorageManager)
+
+	// 设置迁移服务
+	SetMigrationService(migrationSvc MigrationService)
+
+	// 检查是否有迁移正在进行
+	IsMigrationRunning(ctx context.Context) bool
 }
 
 type settingService struct {
-	repo           repository.SettingRepository
-	cfg            *config.Config
-	storageManager *storage.StorageManager
+	repo             repository.SettingRepository
+	cfg              *config.Config
+	storageManager   *storage.StorageManager
+	migrationService MigrationService
 }
 
 // NewSettingService 创建设置服务实例
@@ -134,6 +123,11 @@ func (s *settingService) GetSettingsByCategory(ctx context.Context, category str
 	result := make(map[string]interface{})
 	for _, setting := range settings {
 		result[setting.Key] = s.convertValue(setting.Value, setting.ValueType)
+	}
+
+	// 如果是 storage 分类，附带阿里云盘用户信息
+	if category == model.SettingCategoryStorage {
+		result["aliyunpan_user"] = s.GetAliyunPanUserInfo(ctx)
 	}
 
 	return result, nil
@@ -182,7 +176,7 @@ func (s *settingService) UpdatePassword(ctx context.Context, dto *PasswordUpdate
 	now := time.Now()
 
 	// 保存新密码和新版本号
-	settings := []model.Setting{
+	settings := []*model.Setting{
 		{
 			Category:  model.SettingCategoryAuth,
 			Key:       model.SettingKeyAdminPassword,
@@ -212,29 +206,119 @@ func (s *settingService) UpdatePassword(ctx context.Context, dto *PasswordUpdate
 }
 
 // UpdateStorageConfig 更新存储配置
-func (s *settingService) UpdateStorageConfig(ctx context.Context, dto *StorageConfigDTO) error {
-	now := time.Now()
-	settings := []model.Setting{
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyStorageDefaultType, Value: dto.DefaultType, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyLocalBasePath, Value: dto.LocalBasePath, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyLocalURLPrefix, Value: dto.LocalURLPrefix, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		// 阿里云盘配置
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanBasePath, Value: dto.AliyunPanBasePath, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanDriveType, Value: dto.AliyunPanDriveType, ValueType: model.SettingValueTypeString, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanRefreshToken, Value: dto.AliyunPanRefreshToken, ValueType: model.SettingValueTypeString, UpdatedAt: now},
+func (s *settingService) UpdateStorageConfig(ctx context.Context, dto *model.StorageConfigDTO) (*StorageUpdateResult, error) {
+	// 1. 检查是否有迁移正在进行
+	if s.IsMigrationRunning(ctx) {
+		return nil, fmt.Errorf("迁移正在进行中，请等待完成后再修改配置")
 	}
 
-	if err := s.repo.BatchUpsert(ctx, settings); err != nil {
-		return fmt.Errorf("保存存储配置失败: %w", err)
+	// 2. 获取当前配置
+	currentConfig, err := s.getCurrentStorageConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("获取当前配置失败: %w", err)
 	}
 
-	// 应用设置到运行时配置
+	// 3. 检测是否需要迁移
+	needsMigration, migrationType := s.detectMigrationNeeded(currentConfig, dto)
+
+	// 4. 如果需要迁移，启动异步迁移任务
+	if needsMigration && s.migrationService != nil {
+		var task *model.MigrationTask
+		var err error
+
+		//task, err = s.migrationService.StartSelfMigration(
+		//	ctx,
+		//	currentConfig.LocalBasePath,
+		//	dto.LocalBasePath,
+		//	migrationType,
+		//	func(err error) {
+		//		if err != nil {
+		//			return
+		//		}
+		//
+		//		if s.storageManager != nil {
+		//			newStorageCfg := &config.StorageConfig{
+		//				Default: config.StorageTypeLocal,
+		//				Local: config.LocalStorageConfig{
+		//					BasePath:  newBasePath,
+		//					URLPrefix: newURLPrefix,
+		//				},
+		//			}
+		//			if err := s.storageManager.SwitchStorage(newStorageCfg); err != nil {
+		//				logger.Warn("重新初始化存储管理器失败", zap.Error(err))
+		//			} else {
+		//				logger.Info("存储管理器已更新到新路径", zap.String("path", newBasePath))
+		//			}
+		//		}
+		//	},
+		//)
+
+		if err != nil {
+			return nil, fmt.Errorf("启动迁移失败: %w", err)
+		}
+
+		logger.Info("存储配置更新触发迁移",
+			zap.String("type", string(migrationType)),
+			zap.Int64("task_id", task.ID))
+
+		return &StorageUpdateResult{
+			NeedsMigration: true,
+			TaskID:         task.ID,
+			Message:        "配置变更需要迁移文件，迁移任务已启动",
+		}, nil
+	}
+
+	// 5. 无需迁移，直接保存配置
+	if err := s.repo.BatchUpsert(ctx, model.ToSettings(model.SettingCategoryStorage, dto)); err != nil {
+		return nil, fmt.Errorf("保存存储配置失败: %w", err)
+	}
+
+	// 6. 应用设置到运行时配置
 	if _, err := s.ResetStorage(ctx); err != nil {
 		logger.Warn("应用存储配置失败", zap.Error(err))
 	}
 
-	logger.Info("存储配置已更新", zap.String("type", dto.DefaultType))
-	return nil
+	logger.Info("存储配置已更新", zap.String("id", string(dto.DefaultId)))
+	return &StorageUpdateResult{
+		NeedsMigration: false,
+		Message:        "存储配置更新成功",
+	}, nil
+}
+
+// detectMigrationNeeded 检测是否需要迁移
+func (s *settingService) detectMigrationNeeded(current, new *model.StorageConfigDTO) (needsMigration bool, migrationType model.StorageId) {
+	// 检查本地存储路径变化
+	if current.LocalConfig != nil {
+		if current.LocalConfig.BasePath != new.LocalConfig.BasePath && current.LocalConfig.BasePath != "" && new.LocalConfig.BasePath != "" {
+			return true, model.StorageTypeLocal
+		}
+	}
+
+	// 检查阿里云盘路径变化
+	//if new.DefaultId == "aliyunpan" || current.DefaultId == "aliyunpan" {
+	//	if current.AliyunPanBasePath != new.AliyunPanBasePath && new.AliyunPanBasePath != "" && current.AliyunPanBasePath != "" {
+	//		return true, config.StorageTypeAliyunpan
+	//	}
+	//}
+
+	return false, ""
+}
+
+// SetMigrationService 设置迁移服务
+func (s *settingService) SetMigrationService(migrationSvc MigrationService) {
+	s.migrationService = migrationSvc
+}
+
+// IsMigrationRunning 检查是否有迁移正在进行
+func (s *settingService) IsMigrationRunning(ctx context.Context) bool {
+	if s.migrationService == nil {
+		return false
+	}
+	task, err := s.migrationService.GetActiveMigration(ctx)
+	if err != nil {
+		return false
+	}
+	return task != nil && task.IsActive()
 }
 
 // UpdateCleanupConfig 更新清理配置
@@ -303,43 +387,23 @@ func (s *settingService) InitializeDefaults(ctx context.Context) error {
 
 	logger.Info("初始化默认设置...")
 
-	now := time.Now()
-	// 使用代码默认值，不从 config.yaml 读取
-	// 这样界面上的设置不会受配置文件的影响
-	settings := []model.Setting{
-		// 认证设置 - 默认为空（不启用认证）
-		{Category: model.SettingCategoryAuth, Key: model.SettingKeyAdminPassword, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryAuth, Key: model.SettingKeyPasswordVersion, Value: "0", ValueType: model.SettingValueTypeInt, CreatedAt: now, UpdatedAt: now},
-
-		// 存储设置 - 使用代码默认值
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyStorageDefaultType, Value: "local", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyLocalBasePath, Value: "./storage/images", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyLocalURLPrefix, Value: "/static/images", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		// 阿里云盘默认设置
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanRefreshToken, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanBasePath, Value: "/gallery/images", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyAliyunPanDriveType, Value: "file", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		// OSS 默认设置
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSEndpoint, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSAccessKeyID, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSAccessKeySecret, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSBucket, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyOSSURLPrefix, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3Region, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3AccessKeyID, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3SecretAccessKey, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3Bucket, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyS3URLPrefix, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOEndpoint, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOAccessKeyID, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOSecretAccessKey, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOBucket, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOUseSSL, Value: "false", ValueType: model.SettingValueTypeBool, CreatedAt: now, UpdatedAt: now},
-		{Category: model.SettingCategoryStorage, Key: model.SettingKeyMinIOURLPrefix, Value: "", ValueType: model.SettingValueTypeString, CreatedAt: now, UpdatedAt: now},
-
-		// 清理设置 - 默认30天
-		{Category: model.SettingCategoryCleanup, Key: model.SettingKeyTrashAutoDeleteDays, Value: "30", ValueType: model.SettingValueTypeInt, CreatedAt: now, UpdatedAt: now},
-	}
+	settings := slices.Concat(
+		model.ToSettings(model.SettingCategoryAuth, model.AuthDTO{
+			Password:        "",
+			PasswordVersion: 0,
+		}),
+		model.ToSettings(model.SettingCategoryStorage, model.StorageConfigDTO{
+			DefaultId: model.StorageTypeLocal,
+			LocalConfig: &model.LocalStorageConfig{
+				Id:        model.StorageTypeLocal,
+				BasePath:  "./storage/images",
+				URLPrefix: "/static/images",
+			},
+		}),
+		model.ToSettings(model.SettingCategoryCleanup, model.CleanupDTO{
+			TrashAutoDeleteDays: 30,
+		}),
+	)
 
 	if err := s.repo.BatchUpsert(ctx, settings); err != nil {
 		return fmt.Errorf("初始化默认设置失败: %w", err)
@@ -390,83 +454,15 @@ func (s *settingService) convertValue(value string, valueType string) interface{
 	}
 }
 
-func (s *settingService) isSensitiveKey(key string) bool {
-	sensitiveKeys := []string{
-		model.SettingKeyAliyunPanRefreshToken,
-		model.SettingKeyOSSAccessKeySecret,
-		model.SettingKeyS3SecretAccessKey,
-		model.SettingKeyMinIOSecretAccessKey,
-	}
-	for _, k := range sensitiveKeys {
-		if k == key {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *settingService) ResetStorage(ctx context.Context) (*storage.StorageManager, error) {
-	// 重新加载存储相关设置到运行时配置
-	settings, err := s.repo.GetByCategory(ctx, model.SettingCategoryStorage)
+	cfg, err := s.getCurrentStorageConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg := config.StorageConfig{}
-	for _, setting := range settings {
-		switch setting.Key {
-		case model.SettingKeyStorageDefaultType:
-			cfg.Default = config.StorageType(setting.Value)
-		case model.SettingKeyLocalBasePath:
-			cfg.Local.BasePath = setting.Value
-		case model.SettingKeyLocalURLPrefix:
-			cfg.Local.URLPrefix = setting.Value
-		// 阿里云盘配置
-		case model.SettingKeyAliyunPanRefreshToken:
-			cfg.AliyunPan.RefreshToken = setting.Value
-		case model.SettingKeyAliyunPanBasePath:
-			cfg.AliyunPan.BasePath = setting.Value
-		case model.SettingKeyAliyunPanDriveType:
-			cfg.AliyunPan.DriveType = setting.Value
-			// OSS 配置
-			//case model.SettingKeyOSSEndpoint:
-			//	cfg.OSS.Endpoint = setting.Value
-			//case model.SettingKeyOSSAccessKeyID:
-			//	cfg.OSS.AccessKeyID = setting.Value
-			//case model.SettingKeyOSSAccessKeySecret:
-			//	cfg.OSS.AccessKeySecret = setting.Value
-			//case model.SettingKeyOSSBucket:
-			//	cfg.OSS.Bucket = setting.Value
-			//case model.SettingKeyOSSURLPrefix:
-			//	cfg.OSS.URLPrefix = setting.Value
-			//case model.SettingKeyS3Region:
-			//	cfg.S3.Region = setting.Value
-			//case model.SettingKeyS3AccessKeyID:
-			//	cfg.S3.AccessKeyID = setting.Value
-			//case model.SettingKeyS3SecretAccessKey:
-			//	cfg.S3.SecretAccessKey = setting.Value
-			//case model.SettingKeyS3Bucket:
-			//	cfg.S3.Bucket = setting.Value
-			//case model.SettingKeyS3URLPrefix:
-			//	cfg.S3.URLPrefix = setting.Value
-			//case model.SettingKeyMinIOEndpoint:
-			//	cfg.MinIO.Endpoint = setting.Value
-			//case model.SettingKeyMinIOAccessKeyID:
-			//	cfg.MinIO.AccessKeyID = setting.Value
-			//case model.SettingKeyMinIOSecretAccessKey:
-			//	cfg.MinIO.SecretAccessKey = setting.Value
-			//case model.SettingKeyMinIOBucket:
-			//	cfg.MinIO.Bucket = setting.Value
-			//case model.SettingKeyMinIOUseSSL:
-			//	cfg.MinIO.UseSSL = setting.Value == "true"
-			//case model.SettingKeyMinIOURLPrefix:
-			//	cfg.MinIO.URLPrefix = setting.Value
-		}
-	}
-
 	// 切换存储管理器
 	if s.storageManager == nil {
-		manager, err := storage.NewStorageManager(&cfg)
+		manager, err := storage.NewStorageManager(cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -474,10 +470,50 @@ func (s *settingService) ResetStorage(ctx context.Context) (*storage.StorageMana
 		return manager, nil
 	}
 
-	if err := s.storageManager.SwitchStorage(&cfg); err != nil {
+	if err := s.storageManager.SwitchStorage(cfg); err != nil {
 		logger.Error("切换存储失败", zap.Error(err))
 		return nil, fmt.Errorf("切换存储失败: %w", err)
 	}
 
 	return s.storageManager, nil
+}
+
+// GetAliyunPanUserInfo 获取阿里云盘用户信息
+func (s *settingService) GetAliyunPanUserInfo(ctx context.Context) *AliyunPanUserInfo {
+	if s.storageManager == nil {
+		return &AliyunPanUserInfo{IsLoggedIn: false}
+	}
+
+	aliyunPan := s.storageManager.GetAliyunPanStorage("")
+	if aliyunPan == nil {
+		return &AliyunPanUserInfo{IsLoggedIn: false}
+	}
+
+	userInfo := aliyunPan.GetUserInfo()
+	if userInfo == nil {
+		return &AliyunPanUserInfo{IsLoggedIn: false}
+	}
+
+	return &AliyunPanUserInfo{
+		IsLoggedIn: true,
+		NickName:   userInfo.UserName,
+		Avatar:     "", // UserInfo 不包含头像信息
+	}
+}
+
+// SetStorageManager 设置存储管理器
+func (s *settingService) SetStorageManager(manager *storage.StorageManager) {
+	s.storageManager = manager
+}
+
+// getCurrentStorageConfig 从数据库获取当前存储配置
+func (s *settingService) getCurrentStorageConfig(ctx context.Context) (*model.StorageConfigDTO, error) {
+	// 重新加载存储相关设置到运行时配置
+	settings, err := s.repo.GetByCategory(ctx, model.SettingCategoryStorage)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := model.ToSettingDTO[model.StorageConfigDTO](model.SettingCategoryStorage, settings)
+	return &cfg, nil
 }

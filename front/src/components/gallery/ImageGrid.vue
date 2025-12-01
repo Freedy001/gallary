@@ -348,12 +348,12 @@ const handleDelete = async () => {
   if (!confirmed) return
 
   try {
-    await imageApi.deleteBatch(contextMenuTargetIds.value)
+    await imageStore.deleteBatch()
     // Refresh or remove from store
     // Assuming store has a remove method or we just fetch again
     // imageStore.removeImages(contextMenuTargetIds.value) // If exists
     // Or fetch
-    await imageStore.fetchImages(1) // Simple reload for now
+    // await imageStore.fetchImages(1) // Simple reload for now
     imageStore.selectedImages.clear()
   } catch (e) {
     console.error('Delete failed', e)

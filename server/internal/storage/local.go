@@ -3,12 +3,11 @@ package storage
 import (
 	"context"
 	"fmt"
+	"gallary/server/internal/model"
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
-
-	"gallary/server/config"
+	"runtime"
 )
 
 // LocalStorage 本地存储实现
@@ -18,7 +17,7 @@ type LocalStorage struct {
 }
 
 // NewLocalStorage 创建本地存储实例
-func NewLocalStorage(cfg *config.LocalStorageConfig) (*LocalStorage, error) {
+func NewLocalStorage(cfg *model.LocalStorageConfig) (*LocalStorage, error) {
 	// 确保存储目录存在
 	if err := os.MkdirAll(cfg.BasePath, 0755); err != nil {
 		return nil, fmt.Errorf("创建存储目录失败: %w", err)
@@ -30,8 +29,8 @@ func NewLocalStorage(cfg *config.LocalStorageConfig) (*LocalStorage, error) {
 	}, nil
 }
 
-func (s *LocalStorage) GetType(ctx context.Context) config.StorageType {
-	return config.StorageTypeLocal
+func (s *LocalStorage) GetType(ctx context.Context) model.StorageId {
+	return model.StorageTypeLocal
 }
 
 // Upload 上传文件到本地
@@ -137,18 +136,50 @@ func (s *LocalStorage) Exists(ctx context.Context, path string) (bool, error) {
 
 // GetStats 获取存储统计信息
 func (s *LocalStorage) GetStats(ctx context.Context) (*StorageStats, error) {
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(s.basePath, &stat); err != nil {
-		return nil, fmt.Errorf("获取存储统计失败: %w", err)
+	switch runtime.GOOS {
+	case "windows":
+		return s.getStatsWindows()
+	default:
+		return s.getStatsUnix()
+	}
+}
+
+// Move 移动文件到新路径
+func (s *LocalStorage) Move(ctx context.Context, oldPath, newPath string) error {
+	srcPath := filepath.Join(s.basePath, oldPath)
+	dstPath := filepath.Join(s.basePath, newPath)
+
+	// 检查源文件是否存在
+	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
+		return fmt.Errorf("源文件不存在: %s", oldPath)
 	}
 
-	// 计算总容量和已用空间
-	total := stat.Blocks * uint64(stat.Bsize)
-	free := stat.Bfree * uint64(stat.Bsize)
-	used := total - free
+	// 确保目标目录存在
+	dstDir := filepath.Dir(dstPath)
+	if err := os.MkdirAll(dstDir, 0755); err != nil {
+		return fmt.Errorf("创建目标目录失败: %w", err)
+	}
 
-	return &StorageStats{
-		UsedBytes:  used,
-		TotalBytes: total,
-	}, nil
+	// 使用 os.Rename 进行原子移动
+	if err := os.Rename(srcPath, dstPath); err != nil {
+		return fmt.Errorf("移动文件失败: %w", err)
+	}
+
+	return nil
+}
+
+// MoveBatch 批量移动文件
+func (s *LocalStorage) MoveBatch(ctx context.Context, moves map[string]string) []MoveResult {
+	results := make([]MoveResult, 0, len(moves))
+
+	for oldPath, newPath := range moves {
+		err := s.Move(ctx, oldPath, newPath)
+		results = append(results, MoveResult{
+			OldPath: oldPath,
+			NewPath: newPath,
+			Error:   err,
+		})
+	}
+
+	return results
 }

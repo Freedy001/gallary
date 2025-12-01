@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"gallary/server/pkg/database"
+	"io"
 	"strconv"
 	"time"
 
@@ -184,22 +185,7 @@ func (h *ImageHandler) BatchDelete(c *gin.Context) {
 //	@Failure		404	{object}	utils.Response	"图片不存在"
 //	@Router			/api/images/{id}/download [get]
 func (h *ImageHandler) Download(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "无效的图片ID")
-		return
-	}
-
-	reader, filename, err := h.service.Download(c.Request.Context(), id)
-	if err != nil {
-		logger.Error("下载图片失败", zap.Error(err))
-		utils.NotFound(c, err.Error())
-		return
-	}
-	defer reader.Close()
-
-	c.Header("Content-Disposition", "attachment; filename="+filename)
-	c.DataFromReader(200, -1, "application/octet-stream", reader, nil)
+	h.doDownload(c, true)
 }
 
 // ProxyFile 代理获取图片文件（用于阿里云盘等需要后端代理的存储）
@@ -214,13 +200,32 @@ func (h *ImageHandler) Download(c *gin.Context) {
 //	@Failure		404	{object}	utils.Response	"图片不存在"
 //	@Router			/api/images/{id}/file [get]
 func (h *ImageHandler) ProxyFile(c *gin.Context) {
+	h.doDownload(c, false)
+}
+
+func (h *ImageHandler) doDownload(c *gin.Context, downloadFile bool) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		utils.BadRequest(c, "无效的图片ID")
 		return
 	}
 
-	reader, mimeType, err := h.service.ProxyFile(c.Request.Context(), id)
+	image, err := h.service.GetByID(c.Request.Context(), id)
+	if err != nil {
+		utils.NotFound(c, err.Error())
+		return
+	}
+
+	// 使用文件哈希作为 ETag
+	etag := fmt.Sprintf(`"%s"`, image.FileHash)
+
+	// 检查客户端缓存是否有效
+	if match := c.GetHeader("If-None-Match"); match == etag {
+		c.Status(304)
+		return
+	}
+
+	reader, err := h.service.Download(c.Request.Context(), &image.Image)
 	if err != nil {
 		logger.Error("代理获取图片失败", zap.Error(err))
 		utils.NotFound(c, err.Error())
@@ -228,9 +233,29 @@ func (h *ImageHandler) ProxyFile(c *gin.Context) {
 	}
 	defer reader.Close()
 
-	// 设置缓存头，图片可以缓存较长时间
-	c.Header("Cache-Control", "public, max-age=31536000")
-	c.DataFromReader(200, -1, mimeType, reader, nil)
+	// 设置完整的缓存头
+	c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	c.Header("ETag", etag)
+	c.Header("Content-Length", fmt.Sprintf("%d", image.FileSize))
+
+	if downloadFile {
+		c.Header("Content-Disposition", "attachment; filename="+image.OriginalName)
+		c.Header("Content-Id", "application/octet-stream")
+	} else {
+		c.Header("Content-Id", image.MimeType)
+	}
+
+	// 手动写入响应，确保流式传输正常工作
+	c.Status(200)
+
+	// 使用 io.Copy 手动流式写入
+	written, err := io.Copy(c.Writer, reader)
+	if err != nil {
+		logger.Error("流式写入响应失败",
+			zap.Error(err),
+			zap.Int64("written", written),
+			zap.Int64("expected", image.FileSize))
+	}
 }
 
 // BatchDownload 批量下载图片
@@ -281,7 +306,7 @@ func (h *ImageHandler) BatchDownload(c *gin.Context) {
 	filename := fmt.Sprintf("images_%s.zip", time.Now().Format("20060102_150405"))
 
 	// 设置响应头，开始流式传输
-	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Id", "application/zip")
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 	c.Header("Transfer-Encoding", "chunked")
 

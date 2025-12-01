@@ -1,71 +1,110 @@
 <template>
-  <div class="space-y-2">
+  <div class="space-y-3">
     <!-- 展开状态 -->
     <template v-if="!collapsed">
-      <div class="flex items-center justify-between text-xs text-gray-500 font-mono tracking-wider">
-        <span>存储空间</span>
-        <span v-if="stats" class="text-gray-400">
-          {{ formatBytes(stats.used_bytes) }} / {{ formatBytes(stats.total_bytes) }}
-        </span>
-        <span v-else class="text-gray-600">--</span>
-      </div>
-      <!-- 进度条 -->
-      <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
+      <div class="text-xs text-gray-500 font-mono tracking-wider mb-2">存储空间</div>
+
+      <!-- 多提供者列表 -->
+      <template v-if="storageStore.stats && storageStore.stats.providers.length > 0">
         <div
-            class="h-full rounded-full transition-all duration-500 ease-out"
-            :class="progressBarClass"
-            :style="{ width: `${usagePercent}%` }"
-        ></div>
-      </div>
+            v-for="provider in storageStore.stats.providers"
+            :key="provider.type"
+            class="space-y-1.5"
+        >
+          <div class="flex items-center justify-between text-xs">
+            <span class="flex items-center gap-1.5">
+              <span
+                  class="w-1.5 h-1.5 rounded-full"
+                  :class="provider.is_active ? 'bg-green-500' : 'bg-gray-600'"
+              ></span>
+              <span :class="provider.is_active ? 'text-gray-300' : 'text-gray-500'">
+                {{ getProviderLabel(provider.type) }}
+              </span>
+            </span>
+            <span class="text-gray-400 tabular-nums">
+              {{ formatBytes(provider.used_bytes) }} / {{ formatBytes(provider.total_bytes) }}
+            </span>
+          </div>
+          <!-- 进度条 -->
+          <div class="h-1 bg-white/5 rounded-full overflow-hidden">
+            <div
+                class="h-full rounded-full transition-all duration-500 ease-out"
+                :class="getProgressBarClass(getUsagePercent(provider))"
+                :style="{ width: `${getUsagePercent(provider)}%` }"
+            ></div>
+          </div>
+        </div>
+      </template>
+
+      <!-- 无数据 -->
+      <div v-else class="text-xs text-gray-600">暂无存储信息</div>
     </template>
 
-    <!-- 收起状态 -->
+    <!-- 收起状态 - 显示汇总信息 -->
     <template v-else>
       <div class="flex flex-col items-center gap-1">
-        <div class="w-10 h-1 bg-white/5 rounded-full overflow-hidden">
-          <div
-              class="h-full rounded-full transition-all duration-500 ease-out"
-              :class="progressBarClass"
-              :style="{ width: `${usagePercent}%` }"
-          ></div>
+        <!-- 多个小进度条 -->
+        <div class="flex flex-col gap-1 w-10">
+          <template v-if="storageStore.stats && storageStore.stats.providers.length > 0">
+            <div
+                v-for="provider in storageStore.stats.providers"
+                :key="provider.type"
+                class="h-1 bg-white/5 rounded-full overflow-hidden"
+                :title="getProviderLabel(provider.type)"
+            >
+              <div
+                  class="h-full rounded-full transition-all duration-500 ease-out"
+                  :class="getProgressBarClass(getUsagePercent(provider))"
+                  :style="{ width: `${getUsagePercent(provider)}%` }"
+              ></div>
+            </div>
+          </template>
+          <div v-else class="h-1 bg-white/5 rounded-full"></div>
         </div>
-        <span class="text-[10px] text-gray-500">{{ usagePercent }}%</span>
+        <span class="text-[10px] text-gray-500">{{ storageStore.stats?.providers.length || 0 }}</span>
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import {ref, computed, onMounted} from 'vue'
-import {storageApi} from "@/api/storage.ts";
-
-interface StorageStats {
-  used_bytes: number
-  total_bytes: number
-}
+import { onMounted } from 'vue'
+import { useStorageStore } from '@/stores/storage'
+import type { ProviderStats } from '@/api/storage'
 
 defineProps<{
   collapsed: boolean
 }>()
 
-const stats = ref<StorageStats | null>(null)
+const storageStore = useStorageStore()
 
-// 使用率百分比
-const usagePercent = computed(() => {
-  if (!stats.value || stats.value.total_bytes === 0) return 0
-  return Math.round((stats.value.used_bytes / stats.value.total_bytes) * 100)
-})
+// 获取提供者显示名称
+function getProviderLabel(type: string): string {
+  const labels: Record<string, string> = {
+    local: '本地存储',
+    aliyunpan: '阿里云盘',
+    oss: '阿里云 OSS',
+    s3: 'AWS S3',
+    minio: 'MinIO',
+  }
+  return labels[type] || type
+}
+
+// 计算使用率百分比
+function getUsagePercent(provider: ProviderStats): number {
+  if (!provider || provider.total_bytes === 0) return 0
+  return Math.round((provider.used_bytes / provider.total_bytes) * 100)
+}
 
 // 进度条样式（根据使用率变化颜色）
-const progressBarClass = computed(() => {
-  const percent = usagePercent.value
+function getProgressBarClass(percent: number): string {
   if (percent >= 90) {
     return 'bg-gradient-to-r from-red-500 to-red-600 shadow-[0_0_10px_rgba(239,68,68,0.4)]'
   } else if (percent >= 70) {
     return 'bg-gradient-to-r from-yellow-500 to-orange-500 shadow-[0_0_10px_rgba(234,179,8,0.3)]'
   }
   return 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-[0_0_10px_rgba(139,92,246,0.3)]'
-})
+}
 
 // 格式化字节数
 function formatBytes(bytes: number): string {
@@ -76,16 +115,8 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-// 获取存储统计
-async function fetchStats() {
-  try {
-    stats.value = (await storageApi.getStorageStats()).data
-  } catch (error) {
-    console.error('获取存储统计失败:', error)
-  }
-}
-
 onMounted(() => {
-  fetchStats()
+  // 使用 store 的带缓存请求，不会重复请求
+  storageStore.fetchStats()
 })
 </script>

@@ -67,17 +67,8 @@
       </div>
 
       <!-- 操作按钮 -->
-      <div class="flex gap-3 pt-2">
+      <div v-if="isFinished" class="flex gap-3 pt-2">
         <button
-          v-if="activeMigration.status === 'running' || activeMigration.status === 'pending'"
-          @click="handleCancel"
-          :disabled="cancelling"
-          class="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 ring-1 ring-red-500/30 transition-all duration-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {{ cancelling ? '取消中...' : '取消迁移' }}
-        </button>
-        <button
-          v-if="isFinished"
           @click="dismiss"
           class="px-4 py-2 rounded-lg bg-white/5 text-gray-400 hover:bg-white/10 ring-1 ring-white/10 transition-all duration-300 text-sm"
         >
@@ -89,9 +80,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { migrationApi, type MigrationTask, type MigrationStatus } from '@/api/migration'
-import { useDialogStore } from '@/stores/dialog'
 import {
   ArrowPathIcon,
   CheckCircleIcon,
@@ -100,12 +90,19 @@ import {
   ClockIcon,
 } from '@heroicons/vue/24/outline'
 
-const dialogStore = useDialogStore()
+const emit = defineEmits<{
+  (e: 'migration-completed'): void
+}>()
 
 const activeMigration = ref<MigrationTask | null>(null)
 const showCompleted = ref(false)
-const cancelling = ref(false)
 let pollingTimer: ReturnType<typeof setInterval> | null = null
+
+// 是否正在迁移中
+const isMigrating = computed(() => {
+  if (!activeMigration.value) return false
+  return ['pending', 'running'].includes(activeMigration.value.status)
+})
 
 // 进度百分比
 const progressPercent = computed(() => {
@@ -239,47 +236,23 @@ function stopPolling() {
   }
 }
 
-// 取消迁移
-async function handleCancel() {
-  if (!activeMigration.value) return
-
-  const confirmed = await dialogStore.confirm({
-    title: '取消迁移',
-    message: '确定要取消迁移吗？已复制的文件将被删除，原文件保持不变。',
-    type: 'warning'
-  })
-
-  if (!confirmed) return
-
-  cancelling.value = true
-  try {
-    await migrationApi.cancel(activeMigration.value.id)
-    await fetchActiveMigration()
-    await dialogStore.alert({
-      title: '已取消',
-      message: '迁移任务已取消',
-      type: 'info'
-    })
-  } catch (error: any) {
-    await dialogStore.alert({
-      title: '错误',
-      message: error.message || '取消迁移失败',
-      type: 'error'
-    })
-  } finally {
-    cancelling.value = false
-  }
-}
-
 // 关闭完成提示
 function dismiss() {
   showCompleted.value = false
   activeMigration.value = null
 }
 
-// 暴露刷新方法给父组件
+// 暴露刷新方法和迁移状态给父组件
 defineExpose({
   refresh: fetchActiveMigration,
+  isMigrating,
+})
+
+// 监听迁移完成
+watch(isFinished, (finished, wasFinished) => {
+  if (finished && !wasFinished) {
+    emit('migration-completed')
+  }
 })
 
 onMounted(() => {

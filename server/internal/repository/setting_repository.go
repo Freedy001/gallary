@@ -13,10 +13,10 @@ import (
 // SettingRepository 设置仓库接口
 type SettingRepository interface {
 	GetByKey(ctx context.Context, key string) (*model.Setting, error)
-	GetByCategory(ctx context.Context, category string) ([]model.Setting, error)
+	GetByCategory(ctx context.Context, category string) ([]*model.Setting, error)
 	GetAll(ctx context.Context) ([]model.Setting, error)
 	Upsert(ctx context.Context, setting *model.Setting) error
-	BatchUpsert(ctx context.Context, settings []model.Setting) error
+	BatchUpsert(ctx context.Context, settings []*model.Setting) error
 	Delete(ctx context.Context, key string) error
 	Count(ctx context.Context) (int64, error)
 }
@@ -47,8 +47,8 @@ func (r *settingRepository) GetByKey(ctx context.Context, key string) (*model.Se
 }
 
 // GetByCategory 根据分类获取设置列表
-func (r *settingRepository) GetByCategory(ctx context.Context, category string) ([]model.Setting, error) {
-	var settings []model.Setting
+func (r *settingRepository) GetByCategory(ctx context.Context, category string) ([]*model.Setting, error) {
+	var settings []*model.Setting
 	err := database.GetDB(ctx).WithContext(ctx).
 		Where("category = ?", category).
 		Order("\"key\" ASC").
@@ -86,7 +86,7 @@ func (r *settingRepository) Upsert(ctx context.Context, setting *model.Setting) 
 }
 
 // BatchUpsert 批量创建或更新设置
-func (r *settingRepository) BatchUpsert(ctx context.Context, settings []model.Setting) error {
+func (r *settingRepository) BatchUpsert(ctx context.Context, settings []*model.Setting) error {
 	if len(settings) == 0 {
 		return nil
 	}

@@ -58,16 +58,66 @@
 
           <!-- 图片内容 -->
           <Transition v-else :name="slideDirection">
-            <div :key="currentImage.id" class="absolute inset-0 flex items-center justify-center">
+            <div :key="currentImage.id" class="absolute inset-0 flex items-center justify-center w-full h-full">
+              <!-- 占位层：缩略图 + Loading (在大图加载完成前显示) -->
+              <div v-if="!isImageLoaded" class="absolute inset-0 flex items-center justify-center z-0 pointer-events-none overflow-hidden">
+                <!-- 呼吸背景：模糊缩略图 -->
+                <img
+                    v-if="currentImage.thumbnail_url"
+                    :src="currentImage.thumbnail_url"
+                    class="w-full h-full object-contain animate-breathe opacity-80 will-change-transform"
+                    alt="thumbnail"
+                />
+
+                <!-- 下载进度指示器 -->
+                <div class="absolute z-10 flex flex-col items-center justify-center">
+                   <!-- 圆形进度条 -->
+                   <div class="relative flex items-center justify-center">
+                      <!-- 背景圆环 -->
+                      <svg class="w-16 h-16 transform -rotate-90">
+                        <circle
+                          cx="32" cy="32" r="28"
+                          stroke="rgba(255,255,255,0.2)"
+                          stroke-width="4"
+                          fill="none"
+                        />
+                        <!-- 进度圆环 -->
+                        <circle
+                          cx="32" cy="32" r="28"
+                          stroke="rgba(255,255,255,0.9)"
+                          stroke-width="4"
+                          fill="none"
+                          stroke-linecap="round"
+                          :stroke-dasharray="175.93"
+                          :stroke-dashoffset="175.93 * (1 - downloadProgress / 100)"
+                          class="transition-all duration-300 ease-out"
+                        />
+                      </svg>
+                      <!-- 进度文字 -->
+                      <span class="absolute text-white text-sm font-medium">{{ downloadProgress }}%</span>
+                   </div>
+                   <span class="mt-3 text-white/70 text-xs tracking-wide">{{ formatFileSize(currentImage.file_size) }}</span>
+                </div>
+              </div>
+
+              <!-- 原图 -->
               <img
+                  v-if="displayImageUrl"
                   ref="mainImageRef"
-                  :src="imageUrl"
+                  :src="displayImageUrl"
+                  @load="onImageLoad"
+                  @error="onImageError"
                   :alt="currentImage.original_name"
-                  class="max-h-full max-w-full object-contain transition-transform duration-200 shadow-2xl"
-                  :class="{ 'cursor-grab': !originScale() && !isDragging, 'cursor-grabbing': isDragging }"
+                  class="max-h-full max-w-full object-contain transition-all duration-300 shadow-2xl z-10 relative"
+                  :class="{
+                    'cursor-grab': !originScale() && !isDragging,
+                    'cursor-grabbing': isDragging,
+                    'opacity-0': !isImageLoaded,
+                    'opacity-100': isImageLoaded
+                  }"
                   :style="{
                   transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
-                  transition: (isDragging || isSwiping) ? 'none' : 'transform 200ms',
+                  transition: (isDragging || isSwiping) ? 'none' : 'transform 200ms, opacity 300ms',
                   '-webkit-touch-callout': isWeChat ? 'default' : 'none'
                 }"
                   style="user-select: none; -webkit-user-select: none;"
@@ -287,6 +337,10 @@ const touchStart = ref({x: 0, y: 0})
 const initialTouchDistance = ref(0)
 const initialTouchScale = ref(1)
 const isSwiping = ref(false) // 标记是否正在滑动切换图片
+const isImageLoaded = ref(false) // 标记大图是否加载完成
+const downloadProgress = ref(0) // 下载进度 0-100
+const blobUrl = ref<string>('') // 用于存储下载后的 blob URL
+const abortController = ref<AbortController | null>(null) // 用于取消下载
 
 const slideDirection = ref<'slide-left' | 'slide-right'>('slide-left')
 const showDetails = ref(true)
@@ -296,6 +350,109 @@ const isWeChat = ref(false)
 
 const currentImage = computed(() => {
   return imageStore.images[imageStore.viewerIndex] || null
+})
+
+// 监听当前图片变化，重置加载状态并开始下载
+watch(() => currentImage.value?.id, async (newId, oldId) => {
+  if (newId === oldId) return
+
+  // 取消之前的下载
+  if (abortController.value) {
+    abortController.value.abort()
+  }
+
+  // 清理之前的 blob URL
+  if (blobUrl.value) {
+    URL.revokeObjectURL(blobUrl.value)
+    blobUrl.value = ''
+  }
+
+  isImageLoaded.value = false
+  downloadProgress.value = 0
+
+  if (currentImage.value?.url) {
+    await downloadImageWithProgress(currentImage.value.url, currentImage.value.file_size)
+  }
+})
+
+// 使用 fetch 下载图片并跟踪进度
+async function downloadImageWithProgress(url: string, expectedSize?: number) {
+  abortController.value = new AbortController()
+
+  try {
+    const response = await fetch(url, {
+      signal: abortController.value.signal
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const contentLength = response.headers.get('Content-Length')
+    const totalSize = contentLength ? parseInt(contentLength, 10) : (expectedSize || 0)
+
+    if (!response.body) {
+      // 如果没有 body stream，直接加载
+      const blob = await response.blob()
+      blobUrl.value = URL.createObjectURL(blob)
+      downloadProgress.value = 100
+      return
+    }
+
+    const reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let receivedLength = 0
+
+    while (true) {
+      const {done, value} = await reader.read()
+
+      if (done) break
+
+      chunks.push(value)
+      receivedLength += value.length
+
+      if (totalSize > 0) {
+        downloadProgress.value = Math.min(Math.round((receivedLength / totalSize) * 100), 99)
+      } else {
+        // 如果不知道总大小，显示已下载的 MB
+        downloadProgress.value = Math.min(Math.round(receivedLength / 1024 / 1024 * 10), 99)
+      }
+    }
+
+    // 合并所有块
+    const blob = new Blob(chunks)
+    blobUrl.value = URL.createObjectURL(blob)
+    downloadProgress.value = 100
+
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') {
+      // 下载被取消，忽略
+      return
+    }
+    console.error('图片下载失败:', error)
+    // 下载失败时回退到直接使用 URL
+    blobUrl.value = url
+    downloadProgress.value = 100
+  }
+}
+
+function onImageLoad(event: Event) {
+  const img = event.target as HTMLImageElement
+  // 只有在图片真正加载成功时才设置为已加载
+  if (img && img.complete && img.naturalWidth > 0) {
+    isImageLoaded.value = true
+  }
+}
+
+function onImageError() {
+  // 加载失败时也显示图片（可能显示破损图标）
+  isImageLoaded.value = true
+  console.error('图片加载失败:', displayImageUrl.value)
+}
+
+// 显示用的图片 URL（优先使用 blob URL）
+const displayImageUrl = computed(() => {
+  return blobUrl.value || ''
 })
 
 const imageUrl = computed(() => {
@@ -588,13 +745,27 @@ onMounted(() => {
   // Check WeChat
   const ua = navigator.userAgent.toLowerCase()
   isWeChat.value = ua.includes('micromessenger')
+
+  // 首次加载时触发下载
+  if (currentImage.value?.url) {
+    downloadImageWithProgress(currentImage.value.url, currentImage.value.file_size)
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+
+  // 清理资源
+  if (abortController.value) {
+    abortController.value.abort()
+  }
+  if (blobUrl.value) {
+    URL.revokeObjectURL(blobUrl.value)
+  }
 })
 </script>
 
+<!--suppress CssUnusedSymbol -->
 <style scoped>
 /* 基础动画 */
 .slide-left-enter-active,
@@ -689,5 +860,21 @@ onUnmounted(() => {
   max-height: 0;
   margin-top: 0;
   opacity: 0;
+}
+
+/* 呼吸动画 */
+@keyframes breathe {
+  0%, 100% {
+    filter: brightness(0.8) blur(8px);
+    transform: scale(1.02);
+  }
+  50% {
+    filter: brightness(1.1) blur(12px);
+    transform: scale(1.03);
+  }
+}
+
+.animate-breathe {
+  animation: breathe 2s ease-in-out infinite;
 }
 </style>

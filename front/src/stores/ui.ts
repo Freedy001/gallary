@@ -3,8 +3,10 @@ import {ref, computed} from 'vue'
 import {createThumbnail} from "@/utils/image.ts";
 import {imageApi} from "@/api/image.ts";
 import {useImageStore} from "@/stores/image.ts";
+import {useStorageStore} from "@/stores/storage.ts";
 
 const imageStore = useImageStore()
+const storageStore = useStorageStore()
 
 export interface UploadTask {
   id: string
@@ -162,9 +164,10 @@ export const useUIStore = defineStore('ui', () => {
       if (results.some(r => r)) hasSuccess = true
     }
 
-    // 只在有成功上传时刷新图片列表
+    // 只在有成功上传时刷新图片列表和总数
     if (hasSuccess) {
       await imageStore.refreshImages()
+      await storageStore.refreshTotalImages()
     }
   }
 

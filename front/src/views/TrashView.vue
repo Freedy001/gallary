@@ -84,6 +84,7 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import { useImageStore } from '@/stores/image'
 import { useUIStore } from '@/stores/ui'
 import { useDialogStore } from '@/stores/dialog'
+import { useStorageStore } from '@/stores/storage'
 import { imageApi } from '@/api/image'
 import type { Image, Pageable } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -98,6 +99,7 @@ import {
 const imageStore = useImageStore()
 const uiStore = useUIStore()
 const dialogStore = useDialogStore()
+const storageStore = useStorageStore()
 
 // 计算有效的（已加载的）图片数量
 const validImagesCount = computed(() => {
@@ -138,6 +140,9 @@ async function handleBatchRestore() {
     imageStore.images = imageStore.images.filter(img => img === null || !imageStore.selectedImages.has(img.id))
     imageStore.total -= ids.length
     imageStore.clearSelection()
+
+    // 恢复后更新侧边栏显示的总数（增加）
+    storageStore.updateTotalImages(ids.length)
 
     // 如果没有图片了，退出选择模式
     if (imageStore.total === 0) {

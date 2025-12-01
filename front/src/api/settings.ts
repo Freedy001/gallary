@@ -1,5 +1,12 @@
 import http from './http'
 
+// 阿里云盘用户信息
+export interface AliyunPanUserInfo {
+  is_logged_in: boolean
+  nick_name?: string
+  avatar?: string
+}
+
 // 存储配置类型
 export interface StorageConfig {
   storage_default_type: 'local' | 'aliyunpan' | 'oss' | 's3' | 'minio'
@@ -12,6 +19,11 @@ export interface StorageConfig {
   aliyunpan_refresh_token?: string
   aliyunpan_base_path?: string
   aliyunpan_drive_type?: 'file' | 'album' | 'resource'
+  aliyunpan_download_chunk_size?: number   // 下载分片大小(KB)
+  aliyunpan_download_concurrency?: number  // 下载并发数
+
+  // 阿里云盘用户信息（只读，由后端返回）
+  aliyunpan_user?: AliyunPanUserInfo
 
   // OSS
   oss_endpoint?: string
@@ -47,6 +59,13 @@ export interface PasswordUpdateDTO {
   new_password: string
 }
 
+// 存储配置更新结果
+export interface StorageUpdateResult {
+  needs_migration: boolean
+  task_id?: number
+  message: string
+}
+
 // 设置 API
 export const settingsApi = {
   // 获取所有设置
@@ -66,7 +85,7 @@ export const settingsApi = {
 
   // 更新存储配置
   updateStorage: (config: StorageConfig) =>
-    http.put<{ message: string }>('/api/settings/storage', config),
+    http.put<StorageUpdateResult>('/api/settings/storage', config),
 
   // 更新清理配置
   updateCleanup: (config: CleanupConfig) =>

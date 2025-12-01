@@ -86,7 +86,6 @@ func SetupRouter(
 		// 设置路由（无需认证）
 		settings := api.Group("/settings")
 		{
-			settings.GET("", settingHandler.GetAll)
 			settings.GET("/:category", settingHandler.GetByCategory)
 			settings.GET("/password/status", settingHandler.GetPasswordStatus)
 			settings.PUT("/password", settingHandler.UpdatePassword)
@@ -105,15 +104,14 @@ func SetupRouter(
 			{
 				aliyunpan.POST("/qrcode", storageHandler.GenerateAliyunPanQRCode)
 				aliyunpan.GET("/qrcode/status", storageHandler.CheckAliyunPanQRCodeStatus)
+				aliyunpan.POST("/logout", storageHandler.LogoutAliyunPan)
 			}
 
 			// 迁移相关路由
 			migration := storageGroup.Group("/migration")
 			{
-				migration.POST("", migrationHandler.Start)
 				migration.GET("/active", migrationHandler.GetActive)
 				migration.GET("/:id", migrationHandler.GetByID)
-				migration.POST("/:id/cancel", migrationHandler.Cancel)
 			}
 		}
 	}

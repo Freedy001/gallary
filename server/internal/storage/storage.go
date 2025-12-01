@@ -2,7 +2,7 @@ package storage
 
 import (
 	"context"
-	"gallary/server/config"
+	"gallary/server/internal/model"
 	"io"
 )
 
@@ -10,6 +10,20 @@ import (
 type StorageStats struct {
 	UsedBytes  uint64 `json:"used_bytes"`  // 已使用空间（字节）
 	TotalBytes uint64 `json:"total_bytes"` // 总容量（字节）
+}
+
+// ProviderStats 单个存储提供者的统计信息
+type ProviderStats struct {
+	Id         model.StorageId `json:"id"`          // 存储类型: local, aliyunpan, oss...
+	Name       string          `json:"name"`        // 显示名称
+	UsedBytes  uint64          `json:"used_bytes"`  // 已使用空间（字节）
+	TotalBytes uint64          `json:"total_bytes"` // 总容量（字节）
+	IsActive   bool            `json:"is_active"`   // 是否为当前激活的存储
+}
+
+// MultiStorageStats 多存储提供者统计信息
+type MultiStorageStats struct {
+	Providers []ProviderStats `json:"providers"` // 各提供者统计
 }
 
 // URLResult 批量获取 URL 的结果
@@ -25,9 +39,16 @@ type DeleteResult struct {
 	Error error  // 错误信息
 }
 
+// MoveResult 移动文件的结果
+type MoveResult struct {
+	OldPath string // 原文件路径
+	NewPath string // 新文件路径
+	Error   error  // 错误信息
+}
+
 // Storage 存储接口
 type Storage interface {
-	GetType(ctx context.Context) config.StorageType
+	GetType(ctx context.Context) model.StorageId
 
 	// Upload 上传文件
 	// path: 存储路径
@@ -66,4 +87,15 @@ type Storage interface {
 	// GetStats 获取存储统计信息
 	// 返回: 存储统计信息, 错误
 	GetStats(ctx context.Context) (*StorageStats, error)
+
+	// Move 移动文件到新路径（用于迁移）
+	// oldPath: 原文件路径（相对路径）
+	// newPath: 目标文件路径（相对路径）
+	// 返回: 错误
+	Move(ctx context.Context, oldPath, newPath string) error
+
+	// MoveBatch 批量移动文件
+	// moves: 路径映射 map[oldPath]newPath
+	// 返回: 每个文件的移动结果
+	MoveBatch(ctx context.Context, moves map[string]string) []MoveResult
 }
