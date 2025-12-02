@@ -25,6 +25,7 @@ type StorageUpdateResult struct {
 // AliyunPanUserInfo 阿里云盘用户信息
 type AliyunPanUserInfo struct {
 	IsLoggedIn bool   `json:"is_logged_in"`
+	UserId     string `json:"user_id"`
 	NickName   string `json:"nick_name,omitempty"`
 	Avatar     string `json:"avatar,omitempty"`
 }
@@ -393,6 +394,7 @@ func (s *settingService) GetAliyunPanUserInfo(_ context.Context) []*AliyunPanUse
 
 		userInfos = append(userInfos, &AliyunPanUserInfo{
 			IsLoggedIn: true,
+			UserId:     userInfo.UserId,
 			NickName:   userInfo.UserName,
 			Avatar:     "", // UserInfo 不包含头像信息
 		})

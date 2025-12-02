@@ -23,7 +23,7 @@ type MigrationTask struct {
 	// 状态
 	Status MigrationStatus `gorm:"type:varchar(20);not null;default:pending" json:"status"`
 
-	OldStorageType StorageId `gorm:"type:varchar(20);not null" json:"old_storage_type"`
+	OldStorageType StorageId `gorm:"type:varchar(64);not null" json:"old_storage_type"`
 
 	// 旧配置
 	OldBasePath string `gorm:"type:varchar(500);not null" json:"old_base_path"`

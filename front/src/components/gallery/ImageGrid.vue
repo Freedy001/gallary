@@ -96,7 +96,7 @@
       <SelectionBox :style="selectionBoxStyle"/>
 
       <!-- 瀑布流布局 -->
-      <div v-if="isWaterfall" class="flex gap-4">
+      <div v-show="isWaterfall" class="flex gap-4">
         <div
             v-for="(col, colIndex) in waterfallImages"
             :key="colIndex"
@@ -104,9 +104,9 @@
         >
           <div
               v-for="item in col"
-              :key="item.index"
+              :key="item.image?.id ?? `placeholder-${item.index}`"
               class="relative group"
-              :ref="(el) => setItemRef(el, item.index)"
+              :ref="(el) => isWaterfall && setItemRef(el, item.index)"
               :data-index="item.index"
           >
             <template v-if="item.image">
@@ -156,7 +156,7 @@
 
       <!-- 网格布局 -->
       <div
-          v-else
+          v-show="!isWaterfall"
           :class="[
           'grid gap-2',
           gridClass,
@@ -164,9 +164,9 @@
       >
         <div
             v-for="(image, index) in imageStore.images"
-            :key="index"
+            :key="image?.id ?? `placeholder-${index}`"
             class="relative group aspect-square"
-            :ref="(el) => setItemRef(el, index)"
+            :ref="(el) => !isWaterfall && setItemRef(el, index)"
             :data-index="index"
         >
           <template v-if="image">

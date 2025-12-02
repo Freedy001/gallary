@@ -1,6 +1,9 @@
 package main
 
 import (
+	_ "net/http/pprof"
+)
+import (
 	"context"
 	"gallary/server/internal"
 	"gallary/server/internal/model"
@@ -154,14 +157,14 @@ func initService(platformConfig *internal.PlatformConfig, cfg *config.Config) (s
 	return settingService, migrationService, imageService, shareService
 }
 
-func initPlatformConfig(middlewareConfig *internal.PlatformConfig, settingService service.SettingService) {
+func initPlatformConfig(platformConfig *internal.PlatformConfig, settingService service.SettingService) {
 	var err error
 	// 8.1 初始化动态静态文件配置
-	middlewareConfig.AdminConfig.Password, err = settingService.GetPassword(context.Background())
+	platformConfig.AdminConfig.Password, err = settingService.GetPassword(context.Background())
 	if err != nil {
 		logger.Fatal("获取账户信息失败", zap.Error(err))
 	}
-	middlewareConfig.AdminConfig.PasswordVersion, err = settingService.GetPasswordVersion(context.Background())
+	platformConfig.AdminConfig.PasswordVersion, err = settingService.GetPasswordVersion(context.Background())
 	if err != nil {
 		logger.Fatal("获取账户信息失败", zap.Error(err))
 	}
@@ -171,7 +174,16 @@ func initPlatformConfig(middlewareConfig *internal.PlatformConfig, settingServic
 		logger.Fatal("获取账户信息失败", zap.Error(err))
 	}
 	po := settings.(model.CleanupPO)
-	middlewareConfig.CleanupPO = &po
+	platformConfig.CleanupPO = &po
+
+	storage, err := settingService.GetSettingsByCategory(context.Background(), model.SettingCategoryStorage)
+	if err != nil {
+		logger.Fatal("获取存储设置失败", zap.Error(err))
+	}
+
+	localConfig := storage.(service.StorageConfigDTO).LocalConfig
+	platformConfig.DynamicStaticConfig.Update(localConfig.URLPrefix, localConfig.BasePath)
+	platformConfig.Enable()
 }
 
 // startTrashCleanupTask 启动回收站自动清理任务

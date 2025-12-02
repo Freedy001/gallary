@@ -240,9 +240,9 @@ func (h *ImageHandler) doDownload(c *gin.Context, downloadFile bool) {
 
 	if downloadFile {
 		c.Header("Content-Disposition", "attachment; filename="+image.OriginalName)
-		c.Header("Content-Id", "application/octet-stream")
+		c.Header("Content-Type", "application/octet-stream")
 	} else {
-		c.Header("Content-Id", image.MimeType)
+		c.Header("Content-Type", image.MimeType)
 	}
 
 	// 手动写入响应，确保流式传输正常工作
@@ -306,7 +306,7 @@ func (h *ImageHandler) BatchDownload(c *gin.Context) {
 	filename := fmt.Sprintf("images_%s.zip", time.Now().Format("20060102_150405"))
 
 	// 设置响应头，开始流式传输
-	c.Header("Content-Id", "application/zip")
+	c.Header("Content-Type", "application/zip")
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 	c.Header("Transfer-Encoding", "chunked")
 

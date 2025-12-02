@@ -6,14 +6,12 @@
     @contextmenu.prevent="$emit('contextmenu', $event)"
   >
     <!-- 图片 -->
-    <img
+    <CachedImage
       v-if="imageUrl"
       :src="imageUrl"
       :alt="image.original_name"
-      class="w-full object-cover transition-transform duration-500"
-      :class="{ 'h-full': square }"
-      loading="lazy"
-      draggable="false"
+      :img-class="['w-full object-cover transition-transform duration-500', { 'h-full': square }]"
+      :draggable="false"
       @error="handleImageError"
     />
 
@@ -40,6 +38,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { PhotoIcon } from '@heroicons/vue/24/outline'
+import CachedImage from '@/components/common/CachedImage.vue'
 import type { Image } from '@/types'
 
 interface Props {

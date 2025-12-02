@@ -29,16 +29,14 @@
       <!-- 默认存储方式选择 -->
       <div>
         <label class="block text-sm font-medium text-gray-300 mb-2">默认存储方式</label>
-        <select
-            v-model="form.storageId"
-            @change="handleDefaultStorageChange"
-            class="w-full md:w-64 px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors"
-        >
-          <option value="local">本地存储</option>
-          <option v-for="account in form.aliyunpanConfig" :key="account.id" :value="account.id">
-            阿里云盘 - {{ getAliyunPanAccountName(account.id) }}
-          </option>
-        </select>
+        <div class="w-full md:w-64">
+          <BaseSelect
+              v-model="form.storageId"
+              :options="storageOptions"
+              @update:modelValue="handleDefaultStorageChange"
+              placeholder="选择默认存储"
+          />
+        </div>
         <p class="mt-1.5 text-xs text-gray-500">新上传的图片将使用此存储方式</p>
       </div>
 
@@ -128,6 +126,7 @@ import { useDialogStore } from '@/stores/dialog'
 import LocalStorageConfig from './storage/LocalStorageConfig.vue'
 import AliyunPanConfig from './storage/AliyunPanConfig.vue'
 import MigrationProgress from './MigrationProgress.vue'
+import BaseSelect from '@/components/common/BaseSelect.vue'
 
 const dialogStore = useDialogStore()
 
@@ -185,6 +184,23 @@ function getAliyunPanAccountName(id: StorageId): string {
   const userInfo = form.aliyunpan_user?.find(u => u.user_id === accountId)
   return userInfo?.nick_name || accountId || '未知账号'
 }
+
+const storageOptions = computed(() => {
+  const options = [
+    { label: '本地存储', value: 'local' }
+  ]
+
+  if (form.aliyunpanConfig && form.aliyunpanConfig.length > 0) {
+    form.aliyunpanConfig.forEach(account => {
+      options.push({
+        label: `阿里云盘 - ${getAliyunPanAccountName(account.id)}`,
+        value: account.id
+      })
+    })
+  }
+
+  return options
+})
 
 async function loadSettings() {
   loading.value = true

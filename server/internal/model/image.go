@@ -11,7 +11,7 @@ type Image struct {
 	ID           int64     `gorm:"primaryKey;autoIncrement" json:"id"`
 	OriginalName string    `gorm:"type:varchar(255);not null" json:"original_name"`
 	StoragePath  string    `gorm:"type:varchar(500);not null" json:"storage_path"`
-	StorageId    StorageId `gorm:"type:varchar(20);not null;default:local" json:"storage_type"`
+	StorageId    StorageId `gorm:"type:varchar(64);not null;default:local" json:"storage_type"`
 	FileSize     int64     `gorm:"not null" json:"file_size"`
 	FileHash     string    `gorm:"type:varchar(64);uniqueIndex;not null" json:"file_hash"`
 	MimeType     string    `gorm:"type:varchar(50);not null" json:"mime_type"`

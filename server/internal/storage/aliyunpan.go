@@ -3,11 +3,14 @@ package storage
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"crypto/sha1"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"gallary/server/internal/model"
 	"io"
+	"math/big"
 	"net/http"
 	"path"
 	"strings"
@@ -183,6 +186,35 @@ func (s *AliyunPanStorage) GetType(ctx context.Context) model.StorageId {
 	return model.AliyunpanStorageId(s.userInfo.UserId)
 }
 
+// calculateProofCode 计算秒传验证码
+// 算法：使用 access_token 的 MD5 前 16 位作为大整数，对文件大小取模得到偏移量，
+// 从该偏移量读取 8 字节并 Base64 编码
+func (s *AliyunPanStorage) calculateProofCode(fileData []byte, fileSize int64) string {
+	if fileSize == 0 {
+		return ""
+	}
+
+	// 1. 获取 access_token 的 MD5 前 16 位
+	accessToken := s.webToken.AccessToken
+	hash := md5.Sum([]byte(accessToken))
+	hexStr := hex.EncodeToString(hash[:])[:16]
+
+	// 2. 转为大整数并计算偏移量
+	md5Int := new(big.Int)
+	md5Int.SetString(hexStr, 16)
+	offset := md5Int.Mod(md5Int, big.NewInt(fileSize)).Int64()
+
+	// 3. 从偏移量位置读取最多 8 字节
+	endPos := offset + 8
+	if endPos > fileSize {
+		endPos = fileSize
+	}
+	proofBytes := fileData[offset:endPos]
+
+	// 4. Base64 编码
+	return base64.StdEncoding.EncodeToString(proofBytes)
+}
+
 // Upload 上传文件到阿里云盘
 func (s *AliyunPanStorage) Upload(ctx context.Context, file io.Reader, filePath string) (string, error) {
 	if err := s.ensureValidToken(); err != nil {
@@ -213,7 +245,7 @@ func (s *AliyunPanStorage) Upload(ctx context.Context, file io.Reader, filePath 
 	fileSize := int64(len(fileData))
 
 	// 计算 SHA1 哈希
-	contentHash := ""
+	var contentHash string
 	if fileSize > 0 {
 		hash := sha1.New()
 		hash.Write(fileData)
@@ -222,10 +254,13 @@ func (s *AliyunPanStorage) Upload(ctx context.Context, file io.Reader, filePath 
 		contentHash = aliyunpan.DefaultZeroSizeFileContentHash
 	}
 
+	// 计算 proof_code（秒传验证码）
+	proofCode := s.calculateProofCode(fileData, fileSize)
+
 	// 尝试创建上传任务
 	var createResult *aliyunpan.CreateFileUploadResult
 
-	// 首先尝试正常上传
+	// 首先尝试正常上传（带 proof_code 支持秒传）
 	createParam := &aliyunpan.CreateFileUploadParam{
 		Name:            fileName,
 		DriveId:         s.driveId,
@@ -235,21 +270,35 @@ func (s *AliyunPanStorage) Upload(ctx context.Context, file io.Reader, filePath 
 		ContentHashName: "sha1",
 		CheckNameMode:   "auto_rename",
 		BlockSize:       aliyunpan.DefaultChunkSize,
+		ProofCode:       proofCode,
+		ProofVersion:    "v1",
 	}
 
 	createResult, apiErr = s.client.CreateUploadFile(createParam)
 
-	// 如果遇到 Rapid proof 错误，尝试使用不同的哈希或强制完整上传
+	// 如果遇到 Rapid proof 错误，重新计算 proof_code 重试
 	if apiErr != nil && strings.Contains(apiErr.Error(), "Rapid proof needed") {
-		logger.Warn("遇到 Rapid proof 错误，尝试强制完整上传", zap.String("file", fileName))
+		logger.Warn("遇到 Rapid proof 错误，重新计算 proof_code 重试", zap.String("file", fileName))
 
-		// 尝试使用空哈希强制完整上传
-		createParam.ContentHash = ""
-		createParam.ContentHashName = ""
+		// Token 可能已刷新，重新计算 proof_code
+		if err := s.ensureValidToken(); err != nil {
+			return "", err
+		}
+		createParam.ProofCode = s.calculateProofCode(fileData, fileSize)
 
 		createResult, apiErr = s.client.CreateUploadFile(createParam)
 		if apiErr != nil {
-			return "", fmt.Errorf("重新创建上传任务失败: %s", apiErr.Error())
+			// 如果还是失败，尝试强制完整上传（放弃秒传）
+			logger.Warn("proof_code 重试失败，强制完整上传", zap.String("file", fileName), zap.Error(apiErr))
+			createParam.ContentHash = ""
+			createParam.ContentHashName = ""
+			createParam.ProofCode = ""
+			createParam.ProofVersion = ""
+
+			createResult, apiErr = s.client.CreateUploadFile(createParam)
+			if apiErr != nil {
+				return "", fmt.Errorf("创建上传任务失败: %s", apiErr.Error())
+			}
 		}
 	} else if apiErr != nil {
 		return "", fmt.Errorf("创建上传任务失败: %s", apiErr.Error())
@@ -257,6 +306,7 @@ func (s *AliyunPanStorage) Upload(ctx context.Context, file io.Reader, filePath 
 
 	// 检查是否秒传成功
 	if createResult.RapidUpload {
+		logger.Info("阿里云盘秒传成功", zap.String("file", fileName), zap.Int64("size", fileSize))
 		return filePath, nil
 	}
 

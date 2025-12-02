@@ -5,7 +5,7 @@
         Change: Changed base container to handle the liquid glass context
         Instead of simple bg-black, we'll use our custom glass style classes
       -->
-      <div v-if="imageStore.viewerIndex!=-1"
+      <div v-if="isVisible"
            class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 liquid-glass-container">
         <!-- Layer 1: Glass Distortion Background (The overlay itself acts as the glass) -->
         <div class="absolute inset-0 liquid-glass-backdrop"></div>
@@ -283,11 +283,10 @@
                         :class="index === imageStore.viewerIndex ? 'border-blue-500 opacity-100 ring-2 ring-blue-500/50' : 'border-transparent opacity-60 hover:opacity-80'"
                         @click="changeIndex(index)"
                     >
-                      <img
+                      <CachedImage
                           v-if="img"
                           :src="img.thumbnail_url || img.url"
-                          class="h-full w-full object-cover"
-                          loading="lazy"
+                          img-class="h-full w-full object-cover"
                           :alt="img.original_name"
                       />
                       <div v-else class="h-full w-full flex items-center justify-center text-xs text-gray-500">
@@ -308,6 +307,7 @@
 <script setup lang="ts">
 import {computed, ref, onMounted, onUnmounted, watch} from 'vue'
 import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
+import CachedImage from '@/components/common/CachedImage.vue'
 import {
   XMarkIcon,
   ChevronLeftIcon,
@@ -347,6 +347,8 @@ const showDetails = ref(true)
 const showThumbnails = ref(true)
 const thumbnailsRef = ref<HTMLElement>()
 const isWeChat = ref(false)
+
+const isVisible = computed(() => imageStore.viewerIndex !== -1)
 
 const currentImage = computed(() => {
   return imageStore.images[imageStore.viewerIndex] || null
@@ -686,6 +688,9 @@ function formatFileSize(bytes: number): string {
 
 // 键盘快捷键
 function handleKeydown(event: KeyboardEvent) {
+  // 只在查看器可见时响应键盘事件
+  if (!isVisible.value) return
+
   switch (event.key) {
     case 'Escape':
       close()

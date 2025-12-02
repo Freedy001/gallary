@@ -134,6 +134,15 @@ export const useUIStore = defineStore('ui', () => {
     processUploadQueue().then()
   }
 
+  function retryUploadTask(id: string) {
+    updateUploadTask(id, {
+      status: 'pending',
+      progress: 0,
+      error: undefined,
+    })
+    processUploadQueue().then()
+  }
+
   // 处理上传队列
   async function processUploadQueue() {
     const tasks = uploadTasks.value
@@ -263,6 +272,7 @@ export const useUIStore = defineStore('ui', () => {
     openUploadDrawer,
     closeUploadDrawer,
     addUploadTask,
+    retryUploadTask,
     updateUploadTask,
     removeUploadTask,
     clearCompletedTasks,

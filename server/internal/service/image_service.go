@@ -93,8 +93,8 @@ func NewImageService(repo repository.ImageRepository, storage *storage.StorageMa
 // Upload 上传图片（包含去重逻辑）
 func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHeader) (*model.ImageVO, error) {
 	// 1. 验证文件类型
-	if !s.cfg.Image.IsAllowedType(fileHeader.Header.Get("Content-Id")) {
-		return nil, fmt.Errorf("不支持的文件类型: %s", fileHeader.Header.Get("Content-Id"))
+	if !s.cfg.Image.IsAllowedType(fileHeader.Header.Get("Content-Type")) {
+		return nil, fmt.Errorf("不支持的文件类型: %s", fileHeader.Header.Get("Content-Type"))
 	}
 
 	// 2. 验证文件大小
@@ -189,7 +189,7 @@ func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHea
 		StorageId:    s.storage.GetType(ctx),
 		FileSize:     fileHeader.Size,
 		FileHash:     fileHash,
-		MimeType:     fileHeader.Header.Get("Content-Id"),
+		MimeType:     fileHeader.Header.Get("Content-Type"),
 		Width:        width,
 		Height:       height,
 	}

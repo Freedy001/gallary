@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -46,6 +47,16 @@ func DynamicStaticMiddleware(config *DynamicStaticConfig) gin.HandlerFunc {
 
 		// 构建完整文件路径
 		filePath := filepath.Join(basePath, relativePath)
+
+		// 检查文件是否存在
+		info, err := os.Stat(filePath)
+		if err != nil || info.IsDir() {
+			c.Next()
+			return
+		}
+
+		// 设置缓存头 - 图片文件使用长期缓存
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
 
 		// 使用 http.ServeFile 提供文件
 		http.ServeFile(c.Writer, c.Request, filePath)

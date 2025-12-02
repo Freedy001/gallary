@@ -67,15 +67,12 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-300 mb-2">网盘类型</label>
-                <select
+                <BaseSelect
                     v-model="account.drive_type"
-                    @change="handleAccountChange(index)"
-                    class="w-full rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors"
-                >
-                  <option value="file">备份盘</option>
-                  <option value="album">相册</option>
-                  <option value="resource">资源库</option>
-                </select>
+                    :options="driveTypeOptions"
+                    @update:modelValue="handleAccountChange(index)"
+                    placeholder="选择网盘类型"
+                />
               </div>
               <div>
                 <label class="block text-sm font-medium text-gray-300 mb-2">存储路径</label>
@@ -202,6 +199,7 @@ import type { StorageId } from '@/api/storage'
 import type { AliyunPanStorageConfig, AliyunPanGlobalConfig, AliyunPanUserInfo } from '@/api/settings'
 import { useDialogStore } from '@/stores/dialog'
 import { UserIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import BaseSelect from '@/components/common/BaseSelect.vue'
 
 const props = defineProps<{
   accounts: AliyunPanStorageConfig[]
@@ -222,6 +220,12 @@ const dialogStore = useDialogStore()
 
 // 编辑状态
 const editingIndex = ref<number | null>(null)
+
+const driveTypeOptions = [
+  { label: '备份盘', value: 'file' },
+  { label: '相册', value: 'album' },
+  { label: '资源库', value: 'resource' },
+]
 
 // 添加账号状态
 const showAddAccount = ref(false)

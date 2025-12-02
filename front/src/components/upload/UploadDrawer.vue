@@ -228,11 +228,7 @@ function toggleDrawer() {
 }
 
 async function retryUpload(task: UploadTask) {
-  uiStore.updateUploadTask(task.id, {
-    status: 'pending',
-    progress: 0,
-    error: undefined,
-  })
+  uiStore.retryUploadTask(task.id)
 }
 
 function removeTask(taskId: string) {
