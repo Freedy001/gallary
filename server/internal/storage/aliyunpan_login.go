@@ -50,6 +50,7 @@ type QRCodeLoginResult struct {
 	RefreshToken string       // 刷新令牌（登录成功后）
 	ExpiresIn    int64        // 过期时间（秒）
 	TokenType    string       // 令牌类型
+	UserId       string       // 用户ID（用于构建 StorageId）
 	UserName     string       // 用户名
 	NickName     string       // 昵称
 	Avatar       string       // 头像URL
@@ -327,6 +328,7 @@ func (l *AliyunPanLogin) parseLoginResult(bizExtBase64 string, result *QRCodeLog
 		result.TokenType = fullToken.TokenType
 	}
 
+	result.UserId = pds.UserId
 	result.UserName = pds.UserName
 	result.NickName = pds.NickName
 	result.Avatar = pds.Avatar

@@ -1,20 +1,17 @@
 package middleware
 
 import (
+	"gallary/server/internal/utils"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-
-	"gallary/server/config"
-	"gallary/server/internal/utils"
 )
 
-// AuthMiddleware JWT认证中间件
-func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
+func AuthMiddleware(cfg *AdminConfig) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		// 如果没有设置管理员密码，则不需要认证
-		if !cfg.Admin.IsAuthEnabled() {
+		if !cfg.IsAuthEnabled() {
 			c.Next()
 			return
 		}
@@ -48,7 +45,7 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 
 		// 验证token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			return []byte(cfg.JWT.Secret), nil
+			return []byte(cfg.Secret), nil
 		})
 
 		if err != nil || !token.Valid {
@@ -71,7 +68,7 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 			}
 
 			// 比较密码版本号，如果token的版本号小于当前版本号，则token已失效
-			if tokenPV < cfg.Admin.PasswordVersion {
+			if tokenPV < cfg.PasswordVersion {
 				utils.Unauthorized(c, "密码已更改，请重新登录")
 				c.Abort()
 				return

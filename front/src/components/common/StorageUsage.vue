@@ -8,7 +8,7 @@
       <template v-if="storageStore.stats && storageStore.stats.providers.length > 0">
         <div
             v-for="provider in storageStore.stats.providers"
-            :key="provider.type"
+            :key="provider.id"
             class="space-y-1.5"
         >
           <div class="flex items-center justify-between text-xs">
@@ -18,7 +18,7 @@
                   :class="provider.is_active ? 'bg-green-500' : 'bg-gray-600'"
               ></span>
               <span :class="provider.is_active ? 'text-gray-300' : 'text-gray-500'">
-                {{ getProviderLabel(provider.type) }}
+                {{ getProviderLabel(provider.id) }}
               </span>
             </span>
             <span class="text-gray-400 tabular-nums">
@@ -48,9 +48,9 @@
           <template v-if="storageStore.stats && storageStore.stats.providers.length > 0">
             <div
                 v-for="provider in storageStore.stats.providers"
-                :key="provider.type"
+                :key="provider.id"
                 class="h-1 bg-white/5 rounded-full overflow-hidden"
-                :title="getProviderLabel(provider.type)"
+                :title="getProviderLabel(provider.id)"
             >
               <div
                   class="h-full rounded-full transition-all duration-500 ease-out"
@@ -70,7 +70,8 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useStorageStore } from '@/stores/storage'
-import type { ProviderStats } from '@/api/storage'
+import type { ProviderStats, StorageId } from '@/api/storage'
+import { getStorageDriverName } from '@/api/storage'
 
 defineProps<{
   collapsed: boolean
@@ -79,15 +80,8 @@ defineProps<{
 const storageStore = useStorageStore()
 
 // 获取提供者显示名称
-function getProviderLabel(type: string): string {
-  const labels: Record<string, string> = {
-    local: '本地存储',
-    aliyunpan: '阿里云盘',
-    oss: '阿里云 OSS',
-    s3: 'AWS S3',
-    minio: 'MinIO',
-  }
-  return labels[type] || type
+function getProviderLabel(id: StorageId): string {
+  return getStorageDriverName(id)
 }
 
 // 计算使用率百分比

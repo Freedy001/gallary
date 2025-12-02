@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"gallary/server/internal"
 	"strings"
 	"time"
 
@@ -8,17 +9,16 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
-	"gallary/server/config"
 	"gallary/server/internal/utils"
 )
 
 // AuthHandler 认证处理器
 type AuthHandler struct {
-	cfg *config.Config
+	cfg *internal.PlatformConfig
 }
 
 // NewAuthHandler 创建认证处理器实例
-func NewAuthHandler(cfg *config.Config) *AuthHandler {
+func NewAuthHandler(cfg *internal.PlatformConfig) *AuthHandler {
 	return &AuthHandler{cfg: cfg}
 }
 
@@ -53,7 +53,7 @@ type AuthCheckResponse struct {
 //	@Router			/api/auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	// 如果未设置密码，则不需要认证
-	if !h.cfg.Admin.IsAuthEnabled() {
+	if !h.cfg.IsAuthEnabled() {
 		utils.Error(c, 400, "系统未启用认证")
 		return
 	}
@@ -65,19 +65,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// 验证密码
-	if err := bcrypt.CompareHashAndPassword([]byte(h.cfg.Admin.Password), []byte(req.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(h.cfg.Password), []byte(req.Password)); err != nil {
 		utils.Unauthorized(c, "密码错误")
 		return
 	}
 
 	// 生成JWT token，包含密码版本号
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"exp": time.Now().Add(h.cfg.JWT.GetExpireDuration()).Unix(),
+		"exp": time.Now().Add(h.cfg.GetExpireDuration()).Unix(),
 		"iat": time.Now().Unix(),
-		"pv":  h.cfg.Admin.PasswordVersion, // 密码版本号
+		"pv":  h.cfg.PasswordVersion, // 密码版本号
 	})
 
-	tokenString, err := token.SignedString([]byte(h.cfg.JWT.Secret))
+	tokenString, err := token.SignedString([]byte(h.cfg.Secret))
 	if err != nil {
 		utils.InternalServerError(c, "生成token失败")
 		return
@@ -85,7 +85,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	utils.Success(c, gin.H{
 		"token":      tokenString,
-		"expires_in": int(h.cfg.JWT.GetExpireDuration().Seconds()),
+		"expires_in": int(h.cfg.GetExpireDuration().Seconds()),
 	})
 }
 
@@ -105,7 +105,7 @@ func (h *AuthHandler) Check(c *gin.Context) {
 
 func (h *AuthHandler) hasAuth(c *gin.Context) bool {
 	// 如果没有设置管理员密码，则不需要认证
-	if !h.cfg.Admin.IsAuthEnabled() {
+	if !h.cfg.IsAuthEnabled() {
 		return true
 	}
 
@@ -123,7 +123,7 @@ func (h *AuthHandler) hasAuth(c *gin.Context) bool {
 
 	// 验证token
 	token, err := jwt.Parse(parts[1], func(token *jwt.Token) (interface{}, error) {
-		return []byte(h.cfg.JWT.Secret), nil
+		return []byte(h.cfg.Secret), nil
 	})
 
 	if err != nil || !token.Valid {

@@ -201,7 +201,7 @@ func (s *migrationService) executeMigration(taskID int64, oldBasePath, newBasePa
 	//	newStorageCfg := &config.StorageConfig{
 	//		Default: config.StorageTypeLocal,
 	//		Local: config.LocalStorageConfig{
-	//			BasePath:  newBasePath,
+	//			Path:  newBasePath,
 	//			URLPrefix: newURLPrefix,
 	//		},
 	//	}
@@ -274,6 +274,7 @@ func (s *migrationService) executeSelfMigration(taskID int64, oldBasePath, newBa
 	task.UpdatedAt = completedAt
 	err = s.migrationRepo.Update(ctx, task)
 	if err != nil {
+		logger.Error("更新任务状态失败", zap.Int64("task_id", taskID), zap.Error(err))
 		onFinish(err)
 		return
 	}
@@ -385,7 +386,7 @@ func (s *migrationService) handleMigrationFailure(ctx context.Context, taskID in
 		task.Status = model.MigrationStatusFailed
 		task.ErrorMessage = &errorMsg
 		task.UpdatedAt = time.Now()
-		s.migrationRepo.Update(ctx, task)
+		_ = s.migrationRepo.Update(ctx, task)
 	}
 }
 

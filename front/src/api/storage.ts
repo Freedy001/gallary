@@ -1,8 +1,11 @@
 import http from './http'
 
+// 存储ID类型 - "local" | "aliyunpan:{userId}"
+export type StorageId = string
+
 // 单个存储提供者的统计信息
 export interface ProviderStats {
-  type: 'local' | 'aliyunpan' | 'oss' | 's3' | 'minio'
+  id: StorageId           // 存储ID，如 "local", "aliyunpan:123456"
   name: string
   used_bytes: number
   total_bytes: number
@@ -26,9 +29,38 @@ export interface AliyunPanLoginResponse {
   status: 'NEW' | 'SCANED' | 'CONFIRMED' | 'EXPIRED'
   message: string
   refresh_token?: string
+  user_id?: string        // 用户ID（用于构建 StorageId）
   user_name?: string
   nick_name?: string
   avatar?: string
+}
+
+// 解析存储ID
+export function parseStorageId(id: StorageId): { driver: string; accountId?: string } {
+  const parts = id.split(':')
+  return {
+    driver: parts[0],
+    accountId: parts[1],
+  }
+}
+
+// 获取存储驱动名称
+export function getStorageDriverName(id: StorageId): string {
+  const { driver } = parseStorageId(id)
+  switch (driver) {
+    case 'local':
+      return '本地存储'
+    case 'aliyunpan':
+      return '阿里云盘'
+    case 'oss':
+      return '阿里云OSS'
+    case 's3':
+      return 'Amazon S3'
+    case 'minio':
+      return 'MinIO'
+    default:
+      return driver
+  }
 }
 
 export const storageApi = {

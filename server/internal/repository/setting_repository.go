@@ -12,7 +12,7 @@ import (
 
 // SettingRepository 设置仓库接口
 type SettingRepository interface {
-	GetByKey(ctx context.Context, key string) (*model.Setting, error)
+	GetByCategoryKey(ctx context.Context, category string, key string) (*model.Setting, error)
 	GetByCategory(ctx context.Context, category string) ([]*model.Setting, error)
 	GetAll(ctx context.Context) ([]model.Setting, error)
 	Upsert(ctx context.Context, setting *model.Setting) error
@@ -30,10 +30,10 @@ func NewSettingRepository() SettingRepository {
 }
 
 // GetByKey 根据键名获取设置
-func (r *settingRepository) GetByKey(ctx context.Context, key string) (*model.Setting, error) {
+func (r *settingRepository) GetByCategoryKey(ctx context.Context, category string, key string) (*model.Setting, error) {
 	var setting model.Setting
 	err := database.GetDB(ctx).WithContext(ctx).
-		Where("\"key\" = ?", key).
+		Where("category = ? and \"key\" = ? ", category, key).
 		First(&setting).Error
 
 	if err != nil {

@@ -22,6 +22,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var _ Storage = (*AliyunPanStorage)(nil)
+
 // AliyunPanStorage 阿里云盘存储实现
 type AliyunPanStorage struct {
 	client     *aliyunpan_web.WebPanClient
@@ -42,7 +44,9 @@ type AliyunPanStorage struct {
 }
 
 // NewAliyunPanStorage 创建阿里云盘存储实例
-func NewAliyunPanStorage(cfg *model.AliyunPanStorageConfig) (*AliyunPanStorage, error) {
+// cfg: 单个账号配置
+// globalCfg: 全局配置（下载分片大小、并发数等，可为 nil 使用默认值）
+func NewAliyunPanStorage(cfg *model.AliyunPanStorageConfig, globalCfg *model.AliyunPanGlobalConfig) (*AliyunPanStorage, error) {
 	if cfg.RefreshToken == "" {
 		return nil, fmt.Errorf("阿里云盘 refresh_token 不能为空")
 	}
@@ -106,7 +110,7 @@ func NewAliyunPanStorage(cfg *model.AliyunPanStorageConfig) (*AliyunPanStorage, 
 	}
 
 	// 8. 确保基础目录存在
-	basePath := cfg.BasePath
+	basePath := cfg.Path()
 	if basePath == "" {
 		basePath = "/gallery/images"
 	}
@@ -129,12 +133,12 @@ func NewAliyunPanStorage(cfg *model.AliyunPanStorageConfig) (*AliyunPanStorage, 
 
 	// 处理下载配置，使用默认值
 	downloadChunkSize := int64(512 * 1024) // 默认 512KB
-	if cfg.DownloadChunkSize > 0 {
-		downloadChunkSize = int64(cfg.DownloadChunkSize) * 1024 // 配置以 KB 为单位
+	if globalCfg != nil && globalCfg.DownloadChunkSize > 0 {
+		downloadChunkSize = globalCfg.DownloadChunkSize * 1024 // 配置以 KB 为单位
 	}
 	downloadConcurrency := 8 // 默认 8
-	if cfg.DownloadConcurrency > 0 {
-		downloadConcurrency = cfg.DownloadConcurrency
+	if globalCfg != nil && globalCfg.DownloadConcurrency > 0 {
+		downloadConcurrency = globalCfg.DownloadConcurrency
 	}
 
 	storage := &AliyunPanStorage{

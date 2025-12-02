@@ -4,14 +4,13 @@
 package storage
 
 import (
-	"context"
 	"fmt"
-	"gallary/server/internal/model"
+
 	"golang.org/x/sys/unix"
 )
 
-// getStatsUnix 获取 Unix/Linux 平台的存储统计信息
-func (s *LocalStorage) getStatsUnix() (*StorageStats, error) {
+// getStats 获取 Unix/Linux 平台的存储统计信息
+func (s *LocalStorage) getStats() (*StorageStats, error) {
 	var stat unix.Statfs_t
 	if err := unix.Statfs(s.basePath, &stat); err != nil {
 		return nil, fmt.Errorf("获取存储统计失败: %w", err)

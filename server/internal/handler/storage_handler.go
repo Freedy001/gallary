@@ -14,7 +14,6 @@ import (
 
 // StorageHandler 存储处理器
 type StorageHandler struct {
-	storage        storage.Storage
 	storageManager *storage.StorageManager
 	settingService service.SettingService
 
@@ -24,18 +23,8 @@ type StorageHandler struct {
 }
 
 // NewStorageHandler 创建存储处理器实例
-func NewStorageHandler(storage storage.Storage) *StorageHandler {
-	return &StorageHandler{storage: storage}
-}
-
-// SetStorageManager 设置存储管理器
-func (h *StorageHandler) SetStorageManager(manager *storage.StorageManager) {
-	h.storageManager = manager
-}
-
-// SetSettingService 设置配置服务
-func (h *StorageHandler) SetSettingService(settingService service.SettingService) {
-	h.settingService = settingService
+func NewStorageHandler(storage *storage.StorageManager, service service.SettingService) *StorageHandler {
+	return &StorageHandler{storageManager: storage, settingService: service}
 }
 
 // GetStats 获取存储统计信息
@@ -48,21 +37,9 @@ func (h *StorageHandler) SetSettingService(settingService service.SettingService
 //	@Failure		500	{object}	utils.Response								"获取失败"
 //	@Router			/api/storage/stats [get]
 func (h *StorageHandler) GetStats(c *gin.Context) {
-	if h.storageManager != nil {
-		stats := h.storageManager.GetMultiStorageStats(c.Request.Context())
-		utils.Success(c, stats)
-		return
-	}
-
-	// 回退到单个存储的统计
-	stats, err := h.storage.GetStats(c.Request.Context())
-	if err != nil {
-		logger.Error("获取存储统计失败", zap.Error(err))
-		utils.Error(c, 500, err.Error())
-		return
-	}
-
+	stats := h.storageManager.GetMultiStorageStats(c.Request.Context())
 	utils.Success(c, stats)
+	return
 }
 
 // AliyunPanQRCodeResponse 阿里云盘二维码响应
@@ -77,6 +54,7 @@ type AliyunPanLoginResponse struct {
 	Status       string `json:"status"`        // 状态
 	Message      string `json:"message"`       // 消息
 	RefreshToken string `json:"refresh_token"` // 刷新令牌（登录成功后）
+	UserId       string `json:"user_id"`       // 用户ID（用于构建 StorageId）
 	UserName     string `json:"user_name"`     // 用户名
 	NickName     string `json:"nick_name"`     // 昵称
 	Avatar       string `json:"avatar"`        // 头像URL
@@ -155,6 +133,7 @@ func (h *StorageHandler) CheckAliyunPanQRCodeStatus(c *gin.Context) {
 	// 如果登录成功，返回 refresh_token
 	if result.Status == storage.QRCodeStatusConfirmed {
 		resp.RefreshToken = result.RefreshToken
+		resp.UserId = result.UserId
 		resp.UserName = result.UserName
 		resp.NickName = result.NickName
 		resp.Avatar = result.Avatar
@@ -163,6 +142,7 @@ func (h *StorageHandler) CheckAliyunPanQRCodeStatus(c *gin.Context) {
 		h.aliyunPanLogin = nil
 
 		logger.Info("阿里云盘登录成功",
+			zap.String("user_id", result.UserId),
 			zap.String("user_name", result.UserName),
 			zap.String("nick_name", result.NickName))
 	}

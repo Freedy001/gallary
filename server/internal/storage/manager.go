@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"gallary/server/internal/model"
 	"io"
-	"strings"
 	"sync"
 
 	"gallary/server/pkg/logger"
+
+	"go.uber.org/zap"
 )
 
 type storageTypeCtx string
@@ -25,19 +26,19 @@ type StorageManager struct {
 
 // NewStorageManager 创建存储管理器
 // 注意：初始化时只传入 cfg，实际的存储配置应该在 ApplySettings 之后通过 SwitchStorage 切换
-func NewStorageManager(cfg *model.StorageConfigDTO) (*StorageManager, error) {
+func NewStorageManager(cfg *model.StorageConfigPO) *StorageManager {
 	manager := &StorageManager{storages: make(map[model.StorageId]Storage)}
 
 	// 初始化默认存储，使用 cfg 中已应用的配置
-	if err := manager.initStorage(cfg); err != nil {
-		return nil, fmt.Errorf("初始化存储失败: %w", err)
+	if err := manager.InitStorage(cfg); err != nil {
+		logger.Error("存在失败的存储管理器", zap.Error(err))
 	}
 
-	return manager, nil
+	return manager
 }
 
-// initStorage 根据类型和配置初始化存储
-func (m *StorageManager) initStorage(cfg *model.StorageConfigDTO) error {
+// InitStorage 根据类型和配置初始化存储
+func (m *StorageManager) InitStorage(cfg *model.StorageConfigPO) error {
 	var storages = m.storages
 	var storage Storage
 	var err error
@@ -50,7 +51,7 @@ func (m *StorageManager) initStorage(cfg *model.StorageConfigDTO) error {
 	}
 
 	for _, alConfig := range cfg.AliyunpanConfig {
-		storage, err := NewAliyunPanStorage(alConfig)
+		storage, err := NewAliyunPanStorage(alConfig, cfg.AliyunpanGlobal)
 		if err != nil {
 			err = errors.Join(err, fmt.Errorf("初始化阿里云盘存储失败: %w", err))
 		} else {
@@ -61,15 +62,6 @@ func (m *StorageManager) initStorage(cfg *model.StorageConfigDTO) error {
 	logger.Info(string("使用" + cfg.DefaultId + "存储"))
 	m.defaultId = cfg.DefaultId
 	return err
-}
-
-// SwitchStorage 切换存储类型
-// 调用此方法前，应该先更新 cfg 中对应存储类型的配置
-func (m *StorageManager) SwitchStorage(cfg *model.StorageConfigDTO) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return nil
 }
 
 func (m *StorageManager) getStorage(ctx context.Context) Storage {
@@ -217,15 +209,19 @@ func (m *StorageManager) GetLocalStorage() Storage {
 }
 
 // GetAliyunPanStorage 获取阿里云盘存储实例
-func (m *StorageManager) GetAliyunPanStorage(accountId string) *AliyunPanStorage {
+func (m *StorageManager) GetAliyunPanStorage() []*AliyunPanStorage {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if storage, ok := m.storages[model.AliyunpanStorageId(accountId)]; ok {
-		if aliyunPan, ok := storage.(*AliyunPanStorage); ok {
-			return aliyunPan
+
+	var ret []*AliyunPanStorage
+
+	for _, val := range m.storages {
+		storage, ok := val.(*AliyunPanStorage)
+		if ok {
+			ret = append(ret, storage)
 		}
 	}
-	return nil
+	return ret
 }
 
 // GetMultiStorageStats 获取所有存储提供者的统计信息
@@ -241,13 +237,8 @@ func (m *StorageManager) GetMultiStorageStats(ctx context.Context) *MultiStorage
 	for storageType, storage := range m.storages {
 		providerStats := ProviderStats{
 			Id:       storageType,
+			Name:     storageType.DriverName(),
 			IsActive: storageType == m.defaultId,
-		}
-
-		if storageType == model.StorageTypeLocal {
-			providerStats.Name = "本地存储"
-		} else if strings.HasPrefix(string(storageType), "aliyunpan") {
-			providerStats.Name = "阿里云盘"
 		}
 
 		// 获取统计信息

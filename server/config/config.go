@@ -9,7 +9,6 @@ import (
 
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
-	Admin    AdminConfig    `mapstructure:"admin"`
 	Database DatabaseConfig `mapstructure:"database"`
 	Image    ImageConfig    `mapstructure:"image"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
@@ -23,11 +22,6 @@ type ServerConfig struct {
 	Host string `mapstructure:"host"`
 	Port int    `mapstructure:"port"`
 	Mode string `mapstructure:"mode"`
-}
-
-type AdminConfig struct {
-	Password        string `mapstructure:"password"`
-	PasswordVersion int64  `mapstructure:"-"` // 运行时使用，不从配置文件读取
 }
 
 type DatabaseConfig struct {
@@ -156,11 +150,6 @@ func (c *DatabaseConfig) GetDSN() string {
 		c.Host, c.Port, c.Username, c.Password, c.Database, c.SSLMode, c.Timezone)
 }
 
-// IsAuthEnabled 检查是否启用认证
-func (c *AdminConfig) IsAuthEnabled() bool {
-	return c.Password != ""
-}
-
 // GetExpireDuration 获取 JWT 过期时间
 func (c *JWTConfig) GetExpireDuration() time.Duration {
 	return time.Duration(c.ExpireHours) * time.Hour
@@ -175,29 +164,3 @@ func (c *ImageConfig) IsAllowedType(mimeType string) bool {
 	}
 	return false
 }
-
-//type OSSStorageConfig struct {
-//	Endpoint        string `mapstructure:"endpoint"`
-//	AccessKeyID     string `mapstructure:"access_key_id"`
-//	AccessKeySecret string `mapstructure:"access_key_secret"`
-//	Bucket          string `mapstructure:"bucket"`
-//	URLPrefix       string `mapstructure:"url_prefix"`
-//}
-//
-//type S3StorageConfig struct {
-//	Region          string `mapstructure:"region"`
-//	AccessKeyID     string `mapstructure:"access_key_id"`
-//	SecretAccessKey string `mapstructure:"secret_access_key"`
-//	Bucket          string `mapstructure:"bucket"`
-//	URLPrefix       string `mapstructure:"url_prefix"`
-//}
-//
-//type MinIOStorageConfig struct {
-//	Endpoint        string `mapstructure:"endpoint"`
-//	AccessKeyID     string `mapstructure:"access_key_id"`
-//	SecretAccessKey string `mapstructure:"secret_access_key"`
-//	Bucket          string `mapstructure:"bucket"`
-//	UseSSL          bool   `mapstructure:"use_ssl"`
-//	URLPrefix       string `mapstructure:"url_prefix"`
-//}
-//

@@ -13,7 +13,7 @@ const docTemplate = `{
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
-    "basePath": "{{.BasePath}}",
+    "basePath": "{{.Path}}",
     "paths": {
         "/api/auth/check": {
             "get": {

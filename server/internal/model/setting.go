@@ -11,7 +11,7 @@ import (
 // Setting 系统设置模型
 type Setting struct {
 	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	Category  string    `gorm:"type:varchar(50);not null;index" json:"category"`   // auth, storage, cleanup
+	Category  string    `gorm:"type:varchar(50);not null;index" json:"Category"`   // auth, storage, cleanup
 	Key       string    `gorm:"type:varchar(100);not null;uniqueIndex" json:"key"` // 设置键名
 	Value     string    `gorm:"type:text" json:"value"`                            // 设置值
 	ValueType string    `gorm:"type:varchar(20);default:string" json:"value_type"` // string, int, bool, json
@@ -31,15 +31,6 @@ const (
 	SettingCategoryCleanup = "cleanup"
 )
 
-// 设置键名常量
-const (
-	// 认证相关
-	SettingKeyAdminPassword   = "admin_password"
-	SettingKeyPasswordVersion = "password_version" // 密码版本号，用于使旧token失效
-	// 清理相关
-	SettingKeyTrashAutoDeleteDays = "trash_auto_delete_days"
-)
-
 // 值类型常量
 const (
 	SettingValueTypeString = "string"
@@ -48,22 +39,43 @@ const (
 	SettingValueTypeJSON   = "json"
 )
 
-// AuthDTO 存储配置 DTO
-type AuthDTO struct {
-	Password        string `json:"password"`
-	PasswordVersion int    `json:"passwordVersion"`
+type SettingPO interface {
+	Category() string
+	ToSettings() []*Setting
 }
 
-// CleanupDTO 存储配置 DTO
-type CleanupDTO struct {
+// AuthPO 存储配置 DTO
+type AuthPO struct {
+	Password        string `json:"password"`
+	PasswordVersion int64  `json:"passwordVersion"`
+}
+
+func (a AuthPO) Category() string {
+	return SettingCategoryAuth
+}
+
+func (a AuthPO) ToSettings() []*Setting {
+	return toSetting(a)
+}
+
+// CleanupPO 存储配置 DTO
+type CleanupPO struct {
 	TrashAutoDeleteDays int `json:"trash_auto_delete_days"`
+}
+
+func (a CleanupPO) Category() string {
+	return SettingCategoryCleanup
+}
+
+func (a CleanupPO) ToSettings() []*Setting {
+	return toSetting(a)
 }
 
 type StorageId string
 
 const StorageTypeLocal StorageId = "local"
 
-func (t StorageId) info() (string, string) {
+func (t StorageId) Info() (string, string) {
 	split := strings.Split(string(t), ",")
 	if len(split) > 1 {
 		return split[0], split[1]
@@ -72,12 +84,12 @@ func (t StorageId) info() (string, string) {
 }
 
 func (t StorageId) DriverName() string {
-	e, _ := t.info()
+	e, _ := t.Info()
 	switch e {
 	case "local":
-		return "local"
-	case "":
-		return ""
+		return "本地存储"
+	case "aliyunpan":
+		return "阿里云盘"
 	default:
 		return ""
 	}
@@ -87,12 +99,41 @@ func AliyunpanStorageId(accountId string) StorageId {
 	return StorageId("aliyunpan:" + accountId)
 }
 
-// StorageConfigDTO 存储配置 DTO
-type StorageConfigDTO struct {
+type StorageItem interface {
+	StorageId() StorageId
+	Path() string
+	ToSettings() []*Setting
+}
+
+// StorageConfigPO 存储配置 DTO
+type StorageConfigPO struct {
 	DefaultId StorageId `json:"storageId"`
 
 	LocalConfig     *LocalStorageConfig       `json:"localConfig,omitempty"`
 	AliyunpanConfig []*AliyunPanStorageConfig `json:"aliyunpanConfig,omitempty"`
+	AliyunpanGlobal *AliyunPanGlobalConfig    `json:"aliyunpanGlobal,omitempty"` // 阿里云盘全局配置
+}
+
+func (a StorageConfigPO) Category() string {
+	return SettingCategoryStorage
+}
+
+func (a StorageConfigPO) ToSettings() []*Setting {
+	return toSetting(a)
+}
+
+func (a StorageConfigPO) GetStorageConfigById(id StorageId) StorageItem {
+	if id == StorageTypeLocal {
+		return a.LocalConfig
+	}
+
+	for _, config := range a.AliyunpanConfig {
+		if config.StorageId() == id {
+			return config
+		}
+	}
+
+	return nil
 }
 
 type LocalStorageConfig struct {
@@ -101,17 +142,68 @@ type LocalStorageConfig struct {
 	URLPrefix string    `json:"url_prefix"`
 }
 
-type AliyunPanStorageConfig struct {
-	Id                  StorageId `json:"id"`
-	RefreshToken        string    `json:"refresh_token,omitempty"`        // 刷新Token
-	BasePath            string    `json:"base_path,omitempty"`            // 云盘存储基础路径
-	DriveType           string    `json:"drive_type,omitempty"`           // 网盘类型: file/album/resource
-	DownloadChunkSize   int       `json:"download_chunk_size,omitempty"`  // 下载分片大小 (KB), 默认 512
-	DownloadConcurrency int       `json:"download_concurrency,omitempty"` // 下载并发数, 默认 8
+func (l *LocalStorageConfig) Path() string {
+	return l.BasePath
 }
 
-func ToSettings(category string, t any) []*Setting {
+func (l *LocalStorageConfig) StorageId() StorageId {
+	return l.Id
+}
+
+func (l *LocalStorageConfig) ToSettings() []*Setting {
+	return StorageConfigPO{LocalConfig: l}.ToSettings()
+}
+
+type AliyunPanStorageConfig struct {
+	Id           StorageId `json:"id"`
+	RefreshToken string    `json:"refresh_token,omitempty"` // 刷新Token
+	BasePath     string    `json:"base_path,omitempty"`     // 云盘存储基础路径
+	DriveType    string    `json:"drive_type,omitempty"`    // 网盘类型: file/album/resource
+}
+
+// AliyunPanGlobalConfig 阿里云盘全局配置（所有账号共享）
+type AliyunPanGlobalConfig struct {
+	DownloadChunkSize   int64 `json:"download_chunk_size"`   // 下载分片大小 (KB), 默认 512
+	DownloadConcurrency int   `json:"download_concurrency"` // 下载并发数, 默认 8
+}
+
+func (l *AliyunPanStorageConfig) Path() string {
+	return l.BasePath
+}
+
+func (l *AliyunPanStorageConfig) StorageId() StorageId {
+	return l.Id
+}
+
+func (l *AliyunPanStorageConfig) ToSettings() []*Setting {
+	return StorageConfigPO{AliyunpanConfig: []*AliyunPanStorageConfig{l}}.ToSettings()
+}
+
+func CreateStorageItemById(id StorageId) StorageItem {
+	if id == StorageTypeLocal {
+		return &LocalStorageConfig{Id: id}
+	}
+
+	if strings.HasPrefix(string(id), "aliyunpan") {
+		return &AliyunPanStorageConfig{Id: id}
+	}
+
+	return nil
+}
+
+func toSetting(t SettingPO) []*Setting {
+	if t.Category() == "" {
+		panic("请实现 category 方法返回设置分类")
+	}
+
 	r := reflect.TypeOf(t)
+	val := reflect.ValueOf(t)
+
+	if r.Kind() == reflect.Ptr {
+		r = r.Elem()
+		val = val.Elem()
+	}
+
 	var settings []*Setting
 
 	for i := range r.NumField() {
@@ -121,28 +213,45 @@ func ToSettings(category string, t any) []*Setting {
 			continue
 		}
 
+		fieldVal := val.Field(i)
+		kind := field.Type.Kind()
+
+		if (kind == reflect.Pointer ||
+			kind == reflect.Slice ||
+			kind == reflect.Map ||
+			kind == reflect.Interface ||
+			kind == reflect.Func ||
+			kind == reflect.Chan) && fieldVal.IsNil() {
+			continue
+		}
+
+		if kind == reflect.Ptr {
+			fieldVal = fieldVal.Elem()
+			kind = fieldVal.Kind()
+		}
+
 		var valueType string
 		var value string
-		switch field.Type.Kind() {
+		switch kind {
 		case reflect.String:
 			valueType = SettingValueTypeString
-			value = reflect.ValueOf(t).Field(i).String()
+			value = fieldVal.String()
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			valueType = SettingValueTypeInt
-			value = strconv.FormatInt(reflect.ValueOf(t).Field(i).Int(), 10)
+			value = strconv.FormatInt(fieldVal.Int(), 10)
 		case reflect.Bool:
 			valueType = SettingValueTypeBool
-			value = strconv.FormatBool(reflect.ValueOf(t).Field(i).Bool())
+			value = strconv.FormatBool(fieldVal.Bool())
 		case reflect.Struct, reflect.Slice, reflect.Map:
 			valueType = SettingValueTypeJSON
-			marshal, _ := json.Marshal(reflect.ValueOf(t).Field(i).Interface())
+			marshal, _ := json.Marshal(fieldVal.Interface())
 			value = string(marshal)
 		default:
 			continue
 		}
 
 		settings = append(settings, &Setting{
-			Category:  category,
+			Category:  t.Category(),
 			Key:       jsonTag,
 			Value:     value,
 			ValueType: valueType,
@@ -152,7 +261,7 @@ func ToSettings(category string, t any) []*Setting {
 	return settings
 }
 
-func ToSettingDTO[T any](category string, settings []*Setting) T {
+func ToSettingPO[T SettingPO](settings []*Setting) T {
 	var target T
 	// 获取 target 指针指向的元素值 (这样才能进行 Set 操作)
 	v := reflect.ValueOf(&target).Elem()
@@ -162,10 +271,7 @@ func ToSettingDTO[T any](category string, settings []*Setting) T {
 	// Key 为 json tag 名, Value 为数据库存的字符串值
 	settingMap := make(map[string]string)
 	for _, s := range settings {
-		// 只有匹配分类的才处理 (虽然通常入参已经筛选过，多做一次校验更安全)
-		if s.Category == category {
-			settingMap[s.Key] = s.Value
-		}
+		settingMap[s.Key] = s.Value
 	}
 
 	// 2. 遍历结构体 T 的所有字段
@@ -198,37 +304,53 @@ func ToSettingDTO[T any](category string, settings []*Setting) T {
 			continue
 		}
 
-		switch fieldVal.Kind() {
-		case reflect.String:
-			// 包含 string 以及 type StorageId string 这种别名类型
-			fieldVal.SetString(valStr)
-		case reflect.Bool:
-			if b, err := strconv.ParseBool(valStr); err == nil {
-				fieldVal.SetBool(b)
-			}
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			if n, err := strconv.ParseInt(valStr, 10, 64); err == nil {
-				fieldVal.SetInt(n)
-			}
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			if n, err := strconv.ParseUint(valStr, 10, 64); err == nil {
-				fieldVal.SetUint(n)
-			}
-		case reflect.Float32, reflect.Float64:
-			if f, err := strconv.ParseFloat(valStr, 64); err == nil {
-				fieldVal.SetFloat(f)
-			}
-		case reflect.Struct, reflect.Slice, reflect.Map:
-			// 复杂类型（结构体、切片、Map）数据库中存的是 JSON 字符串
-			// 直接反序列化到字段的地址上
-			if valStr != "" {
-				// fieldVal.Addr().Interface() 获取字段的指针指针 interface{}
-				_ = json.Unmarshal([]byte(valStr), fieldVal.Addr().Interface())
-			}
-		default:
-			panic("unhandled default case")
-		}
+		setFieldValue(fieldVal, valStr)
 	}
 
 	return target
+}
+
+func setFieldValue(fieldVal reflect.Value, valStr string) {
+	if fieldVal.Kind() == reflect.Ptr {
+		if fieldVal.IsNil() {
+			elemType := fieldVal.Type().Elem()
+			newVal := reflect.New(elemType)
+			setFieldValue(newVal.Elem(), valStr)
+			fieldVal.Set(newVal)
+		} else {
+			setFieldValue(fieldVal.Elem(), valStr)
+		}
+		return
+	}
+
+	switch fieldVal.Kind() {
+	case reflect.String:
+		// 包含 string 以及 type StorageId string 这种别名类型
+		fieldVal.SetString(valStr)
+	case reflect.Bool:
+		if b, err := strconv.ParseBool(valStr); err == nil {
+			fieldVal.SetBool(b)
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if n, err := strconv.ParseInt(valStr, 10, 64); err == nil {
+			fieldVal.SetInt(n)
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if n, err := strconv.ParseUint(valStr, 10, 64); err == nil {
+			fieldVal.SetUint(n)
+		}
+	case reflect.Float32, reflect.Float64:
+		if f, err := strconv.ParseFloat(valStr, 64); err == nil {
+			fieldVal.SetFloat(f)
+		}
+	case reflect.Struct, reflect.Slice, reflect.Map:
+		// 复杂类型（结构体、切片、Map）数据库中存的是 JSON 字符串
+		// 直接反序列化到字段的地址上
+		if valStr != "" {
+			// fieldVal.Addr().Interface() 获取字段的指针指针 interface{}
+			_ = json.Unmarshal([]byte(valStr), fieldVal.Addr().Interface())
+		}
+	default:
+		panic("unhandled default case")
+	}
 }

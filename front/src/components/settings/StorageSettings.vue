@@ -30,11 +30,13 @@
       <div>
         <label class="block text-sm font-medium text-gray-300 mb-2">默认存储方式</label>
         <select
-            v-model="form.storage_default_type"
+            v-model="form.storageId"
+            @change="handleDefaultStorageChange"
             class="w-full md:w-64 px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors"
         >
-          <option v-for="type in storageTypes" :key="type.value" :value="type.value">
-            {{ type.label }}
+          <option value="local">本地存储</option>
+          <option v-for="account in form.aliyunpanConfig" :key="account.id" :value="account.id">
+            阿里云盘 - {{ getAliyunPanAccountName(account.id) }}
           </option>
         </select>
         <p class="mt-1.5 text-xs text-gray-500">新上传的图片将使用此存储方式</p>
@@ -47,7 +49,7 @@
           <button
               v-for="type in storageTypes"
               :key="type.value"
-              @click="editingType = type.value as StorageConfig['storage_default_type']"
+              @click="editingType = type.value"
               :class="[
               'p-4 rounded-xl border text-center transition-all duration-300 relative',
               editingType === type.value
@@ -57,7 +59,7 @@
           >
             <!-- 默认标识 -->
             <span
-                v-if="form.storage_default_type === type.value"
+                v-if="isDefaultStorage(type.value)"
                 class="absolute -top-2 -right-2 px-2 py-0.5 text-[10px] font-medium rounded-full bg-green-500/20 text-green-400 border border-green-500/30"
             >
               默认
@@ -70,54 +72,39 @@
 
       <!-- 本地存储配置 -->
       <LocalStorageConfig
-          v-if="editingType === 'local'"
-          v-model:base-path="form.local_base_path"
-          v-model:url-prefix="form.local_url_prefix"
+          v-if="editingType === 'local' && form.localConfig"
+          v-model:base-path="form.localConfig.base_path"
+          v-model:url-prefix="form.localConfig.url_prefix"
       />
 
-      <!-- 阿里云盘配置 -->
+      <!-- 阿里云盘配置 (多账号) -->
       <AliyunPanConfig
           v-if="editingType === 'aliyunpan'"
-          v-model:refresh-token="form.aliyunpan_refresh_token"
-          v-model:base-path="form.aliyunpan_base_path"
-          v-model:drive-type="form.aliyunpan_drive_type"
-          v-model:download-chunk-size="form.aliyunpan_download_chunk_size"
-          v-model:download-concurrency="form.aliyunpan_download_concurrency"
-          :user-info="form.aliyunpan_user"
-          @logout="handleAliyunPanLogout"
+          :accounts="form.aliyunpanConfig || []"
+          :global-config="form.aliyunpanGlobal"
+          :user-infos="form.aliyunpan_user || []"
+          :default-storage-id="form.storageId"
+          @update:accounts="form.aliyunpanConfig = $event"
+          @update:global-config="form.aliyunpanGlobal = $event"
+          @account-added="handleAccountAdded"
+          @account-removed="handleAccountRemoved"
+          @set-default="handleSetDefault"
       />
 
-      <!-- OSS 配置 -->
-      <OSSConfig
-          v-if="editingType === 'oss'"
-          v-model:endpoint="form.oss_endpoint"
-          v-model:bucket="form.oss_bucket"
-          v-model:access-key-id="form.oss_access_key_id"
-          v-model:access-key-secret="form.oss_access_key_secret"
-          v-model:url-prefix="form.oss_url_prefix"
-      />
+      <!-- OSS 配置 (占位) -->
+      <div v-if="editingType === 'oss'" class="p-4 text-center text-gray-500">
+        阿里云 OSS 配置暂未实现
+      </div>
 
-      <!-- S3 配置 -->
-      <S3Config
-          v-if="editingType === 's3'"
-          v-model:region="form.s3_region"
-          v-model:bucket="form.s3_bucket"
-          v-model:access-key-id="form.s3_access_key_id"
-          v-model:secret-access-key="form.s3_secret_access_key"
-          v-model:url-prefix="form.s3_url_prefix"
-      />
+      <!-- S3 配置 (占位) -->
+      <div v-if="editingType === 's3'" class="p-4 text-center text-gray-500">
+        AWS S3 配置暂未实现
+      </div>
 
-      <!-- MinIO 配置 -->
-      <MinIOConfig
-          v-if="editingType === 'minio'"
-          v-model:endpoint="form.minio_endpoint"
-          v-model:bucket="form.minio_bucket"
-          v-model:access-key-id="form.minio_access_key_id"
-          v-model:secret-access-key="form.minio_secret_access_key"
-          :use-ssl="form.minio_use_ssl ?? false"
-          @update:use-ssl="form.minio_use_ssl = $event"
-          v-model:url-prefix="form.minio_url_prefix"
-      />
+      <!-- MinIO 配置 (占位) -->
+      <div v-if="editingType === 'minio'" class="p-4 text-center text-gray-500">
+        MinIO 配置暂未实现
+      </div>
 
       <div class="pt-4">
         <button
@@ -133,24 +120,23 @@
 </template>
 
 <script setup lang="ts">
-import {ref, reactive, onMounted, computed} from 'vue'
-import {settingsApi, type StorageConfig} from '@/api/settings'
-import {useDialogStore} from '@/stores/dialog'
+import { ref, reactive, onMounted, computed } from 'vue'
+import { settingsApi, type StorageConfigPO, type AliyunPanStorageConfig, type AliyunPanGlobalConfig } from '@/api/settings'
+import type { StorageId } from '@/api/storage'
+import { parseStorageId } from '@/api/storage'
+import { useDialogStore } from '@/stores/dialog'
 import LocalStorageConfig from './storage/LocalStorageConfig.vue'
 import AliyunPanConfig from './storage/AliyunPanConfig.vue'
-import OSSConfig from './storage/OSSConfig.vue'
-import S3Config from './storage/S3Config.vue'
-import MinIOConfig from './storage/MinIOConfig.vue'
 import MigrationProgress from './MigrationProgress.vue'
 
 const dialogStore = useDialogStore()
 
 const storageTypes = [
-  {value: 'local', label: '本地存储', desc: '文件系统'},
-  {value: 'aliyunpan', label: '阿里云盘', desc: '网盘存储'},
-  // {value: 'oss', label: '阿里云 OSS', desc: '对象存储'},
-  // {value: 's3', label: 'AWS S3', desc: '云存储'},
-  // {value: 'minio', label: 'MinIO', desc: '自托管'},
+  { value: 'local', label: '本地存储', desc: '文件系统' },
+  { value: 'aliyunpan', label: '阿里云盘', desc: '网盘存储' },
+  // { value: 'oss', label: '阿里云 OSS', desc: '对象存储' },
+  // { value: 's3', label: 'AWS S3', desc: '云存储' },
+  // { value: 'minio', label: 'MinIO', desc: '自托管' },
 ]
 
 const loading = ref(true)
@@ -164,45 +150,59 @@ const isMigrating = computed(() => {
   return migrationProgressRef.value?.isMigrating ?? false
 })
 
-// 当前正在编辑的存储类型（与默认类型分开）
-const editingType = ref<StorageConfig['storage_default_type']>('local')
+// 当前正在编辑的存储类型
+const editingType = ref<string>('local')
 
-const form = reactive<StorageConfig>({
-  storage_default_type: 'local',
-  local_base_path: '',
-  local_url_prefix: '',
-  aliyunpan_refresh_token: '',
-  aliyunpan_base_path: '/gallery/images',
-  aliyunpan_drive_type: 'file',
-  aliyunpan_download_chunk_size: 512,
-  aliyunpan_download_concurrency: 8,
-  oss_endpoint: '',
-  oss_access_key_id: '',
-  oss_access_key_secret: '',
-  oss_bucket: '',
-  oss_url_prefix: '',
-  s3_region: '',
-  s3_access_key_id: '',
-  s3_secret_access_key: '',
-  s3_bucket: '',
-  s3_url_prefix: '',
-  minio_endpoint: '',
-  minio_access_key_id: '',
-  minio_secret_access_key: '',
-  minio_bucket: '',
-  minio_use_ssl: false,
-  minio_url_prefix: '',
+const form = reactive<StorageConfigPO>({
+  storageId: 'local',
+  localConfig: {
+    id: 'local',
+    base_path: '',
+    url_prefix: '',
+  },
+  aliyunpanConfig: [],
+  aliyunpanGlobal: {
+    download_chunk_size: 512,
+    download_concurrency: 8,
+  },
+  aliyunpan_user: [],
 })
+
+// 判断是否是默认存储
+function isDefaultStorage(type: string): boolean {
+  if (type === 'local') {
+    return form.storageId === 'local'
+  }
+  if (type === 'aliyunpan') {
+    return form.storageId.startsWith('aliyunpan:')
+  }
+  return false
+}
+
+// 获取阿里云盘账号名称
+function getAliyunPanAccountName(id: StorageId): string {
+  const { accountId } = parseStorageId(id)
+  const userInfo = form.aliyunpan_user?.find(u => u.user_id === accountId)
+  return userInfo?.nick_name || accountId || '未知账号'
+}
 
 async function loadSettings() {
   loading.value = true
   try {
     const resp = await settingsApi.getByCategory('storage')
-    const data = resp.data
+    const data = resp.data as StorageConfigPO
 
-    Object.assign(form, data)
+    Object.assign(form, {
+      storageId: data.storageId || 'local',
+      localConfig: data.localConfig || { id: 'local', base_path: '', url_prefix: '' },
+      aliyunpanConfig: data.aliyunpanConfig || [],
+      aliyunpanGlobal: data.aliyunpanGlobal || { download_chunk_size: 512, download_concurrency: 8 },
+      aliyunpan_user: data.aliyunpan_user || [],
+    })
+
     // 初始化时，编辑类型默认为当前默认存储类型
-    editingType.value = form.storage_default_type
+    const { driver } = parseStorageId(form.storageId)
+    editingType.value = driver
   } catch (error) {
     console.error('Failed to load storage settings:', error)
   } finally {
@@ -211,43 +211,106 @@ async function loadSettings() {
 }
 
 function handleMigrationCompleted() {
-  // 迁移完成后重新加载设置
   loadSettings()
 }
 
-async function handleAliyunPanLogout() {
-  // 清除用户信息并保存配置
-  form.aliyunpan_user = undefined
-  await handleSave()
-  // 重新加载设置以获取最新状态
-  await loadSettings()
+async function handleDefaultStorageChange() {
+  try {
+    await settingsApi.setDefaultStorage(form.storageId)
+    await dialogStore.alert({
+      title: '成功',
+      message: '默认存储已更新',
+      type: 'success'
+    })
+  } catch (error: any) {
+    await dialogStore.alert({
+      title: '错误',
+      message: error.message || '设置默认存储失败',
+      type: 'error'
+    })
+    // 重新加载以恢复正确状态
+    await loadSettings()
+  }
+}
+
+async function handleAccountAdded(account: AliyunPanStorageConfig) {
+  try {
+    await settingsApi.addStorage({
+      type: 'aliyunpan',
+      config: account,
+    })
+    await loadSettings()
+    await dialogStore.alert({
+      title: '成功',
+      message: '阿里云盘账号添加成功',
+      type: 'success'
+    })
+  } catch (error: any) {
+    await dialogStore.alert({
+      title: '错误',
+      message: error.message || '添加账号失败',
+      type: 'error'
+    })
+  }
+}
+
+async function handleAccountRemoved(id: StorageId) {
+  try {
+    await settingsApi.deleteStorage(id)
+    await loadSettings()
+    await dialogStore.alert({
+      title: '成功',
+      message: '阿里云盘账号已删除',
+      type: 'success'
+    })
+  } catch (error: any) {
+    await dialogStore.alert({
+      title: '错误',
+      message: error.message || '删除账号失败',
+      type: 'error'
+    })
+  }
+}
+
+async function handleSetDefault(id: StorageId) {
+  form.storageId = id
+  await handleDefaultStorageChange()
 }
 
 async function handleSave() {
   saving.value = true
   try {
-    const resp = await settingsApi.updateStorage(form)
-    const result = resp.data
+    // 根据当前编辑的类型保存配置
+    if (editingType.value === 'local' && form.localConfig) {
+      const resp = await settingsApi.updateStorage('local', form.localConfig)
+      const result = resp.data
 
-    if (result.needs_migration) {
-      // 触发了迁移，开始轮询进度
-      if (migrationProgressRef.value) {
-        migrationProgressRef.value.refresh()
+      if (result.needs_migration) {
+        if (migrationProgressRef.value) {
+          migrationProgressRef.value.refresh()
+        }
+        await dialogStore.alert({
+          title: '迁移已启动',
+          message: '存储路径已变更，正在迁移文件...',
+          type: 'info'
+        })
+      } else {
+        await dialogStore.alert({
+          title: '成功',
+          message: result.message || '存储配置更新成功',
+          type: 'success'
+        })
       }
-      await dialogStore.alert({
-        title: '迁移已启动',
-        message: '存储路径已变更，正在迁移文件...',
-        type: 'info'
-      })
-    } else {
+    } else if (editingType.value === 'aliyunpan' && form.aliyunpanGlobal) {
+      // 保存全局配置
+      await settingsApi.updateGlobalConfig(form.aliyunpanGlobal)
       await dialogStore.alert({
         title: '成功',
-        message: result.message || '存储配置更新成功',
+        message: '阿里云盘全局配置更新成功',
         type: 'success'
       })
     }
   } catch (error: any) {
-    // 检查是否是迁移锁定错误
     if (error.response?.status === 423) {
       await dialogStore.alert({
         title: '配置被锁定',

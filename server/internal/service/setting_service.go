@@ -3,15 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
-	"slices"
-	"strconv"
-	"time"
-
-	"gallary/server/config"
+	"gallary/server/internal"
 	"gallary/server/internal/model"
 	"gallary/server/internal/repository"
 	"gallary/server/internal/storage"
 	"gallary/server/pkg/logger"
+	"slices"
+	"strconv"
 
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
@@ -31,11 +29,6 @@ type AliyunPanUserInfo struct {
 	Avatar     string `json:"avatar,omitempty"`
 }
 
-// CleanupConfigDTO 清理配置 DTO
-type CleanupConfigDTO struct {
-	TrashAutoDeleteDays int `json:"trash_auto_delete_days" binding:"min=0,max=365"`
-}
-
 // PasswordUpdateDTO 密码更新 DTO
 type PasswordUpdateDTO struct {
 	OldPassword string `json:"old_password"`
@@ -44,30 +37,33 @@ type PasswordUpdateDTO struct {
 
 // SettingService 设置服务接口
 type SettingService interface {
-	GetSettingsByCategory(ctx context.Context, category string) (map[string]interface{}, error)
+	GetSettingsByCategory(ctx context.Context, category string) (model.SettingPO, error)
 
 	// 更新设置
 	UpdatePassword(ctx context.Context, dto *PasswordUpdateDTO) error
-	UpdateStorageConfig(ctx context.Context, dto *model.StorageConfigDTO) (*StorageUpdateResult, error)
-	UpdateCleanupConfig(ctx context.Context, dto *CleanupConfigDTO) error
+	UpdateStorageConfig(ctx context.Context, dto model.StorageItem) (*StorageUpdateResult, error)
+	UpdateCleanupConfig(ctx context.Context, dto *model.CleanupPO) error
+
+	// 存储配置 CRUD
+	AddStorageConfig(ctx context.Context, storageItem model.StorageItem) (*StorageUpdateResult, error)
+	DeleteStorageConfig(ctx context.Context, storageId model.StorageId) error
+	SetDefaultStorage(ctx context.Context, storageId model.StorageId) error
+	UpdateGlobalConfig(ctx context.Context, globalConfig *model.AliyunPanGlobalConfig) error
 
 	// 应用设置到运行时
 	ResetStorage(ctx context.Context) (*storage.StorageManager, error)
+
+	GetStorageManager() *storage.StorageManager
 
 	// 初始化默认设置（从 config.yaml 迁移）
 	InitializeDefaults(ctx context.Context) error
 
 	// 检查密码是否已设置
-	IsPasswordSet(ctx context.Context) (bool, error)
-
-	// 获取密码版本号
+	GetPassword(ctx context.Context) (string, error)
 	GetPasswordVersion(ctx context.Context) (int64, error)
 
 	// 获取阿里云盘用户信息
-	GetAliyunPanUserInfo(ctx context.Context) *AliyunPanUserInfo
-
-	// 设置存储管理器
-	SetStorageManager(manager *storage.StorageManager)
+	GetAliyunPanUserInfo(ctx context.Context) []*AliyunPanUserInfo
 
 	// 设置迁移服务
 	SetMigrationService(migrationSvc MigrationService)
@@ -78,40 +74,30 @@ type SettingService interface {
 
 type settingService struct {
 	repo             repository.SettingRepository
-	cfg              *config.Config
+	cfg              *internal.PlatformConfig
 	storageManager   *storage.StorageManager
 	migrationService MigrationService
 }
 
 // NewSettingService 创建设置服务实例
-func NewSettingService(repo repository.SettingRepository, cfg *config.Config) SettingService {
+func NewSettingService(repo repository.SettingRepository, cfg *internal.PlatformConfig) SettingService {
 	return &settingService{
 		repo: repo,
 		cfg:  cfg,
 	}
 }
 
-// GetAllSettings 获取所有设置
-func (s *settingService) GetAllSettings(ctx context.Context) (map[string]interface{}, error) {
-	settings, err := s.repo.GetAll(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("获取设置失败: %w", err)
-	}
+func (s *settingService) GetStorageManager() *storage.StorageManager {
+	return s.storageManager
+}
 
-	result := make(map[string]interface{})
-	for _, setting := range settings {
-		// 不返回密码
-		if setting.Key == model.SettingKeyAdminPassword {
-			continue
-		}
-		result[setting.Key] = s.convertValue(setting.Value, setting.ValueType)
-	}
-
-	return result, nil
+type StorageConfigDTO struct {
+	model.StorageConfigPO
+	AliyunpanUser []*AliyunPanUserInfo `json:"aliyunpan_user"`
 }
 
 // GetSettingsByCategory 按分类获取设置
-func (s *settingService) GetSettingsByCategory(ctx context.Context, category string) (map[string]interface{}, error) {
+func (s *settingService) GetSettingsByCategory(ctx context.Context, category string) (model.SettingPO, error) {
 	if category == "auth" {
 		return nil, fmt.Errorf("禁止获取认证类设置")
 	}
@@ -120,45 +106,34 @@ func (s *settingService) GetSettingsByCategory(ctx context.Context, category str
 		return nil, fmt.Errorf("获取设置失败: %w", err)
 	}
 
-	result := make(map[string]interface{})
-	for _, setting := range settings {
-		result[setting.Key] = s.convertValue(setting.Value, setting.ValueType)
+	switch category {
+	case model.SettingCategoryStorage:
+		return StorageConfigDTO{
+			StorageConfigPO: model.ToSettingPO[model.StorageConfigPO](settings),
+			AliyunpanUser:   s.GetAliyunPanUserInfo(ctx),
+		}, nil
+	case model.SettingCategoryCleanup:
+		return model.ToSettingPO[model.CleanupPO](settings), nil
+	default:
+		return nil, fmt.Errorf("未知的设置分类: %s", category)
 	}
-
-	// 如果是 storage 分类，附带阿里云盘用户信息
-	if category == model.SettingCategoryStorage {
-		result["aliyunpan_user"] = s.GetAliyunPanUserInfo(ctx)
-	}
-
-	return result, nil
-}
-
-// GetSettingValue 获取单个设置值
-func (s *settingService) GetSettingValue(ctx context.Context, key string) (string, error) {
-	setting, err := s.repo.GetByKey(ctx, key)
-	if err != nil {
-		return "", err
-	}
-	if setting == nil {
-		return "", nil
-	}
-	return setting.Value, nil
 }
 
 // UpdatePassword 更新密码
 func (s *settingService) UpdatePassword(ctx context.Context, dto *PasswordUpdateDTO) error {
 	// 检查当前是否有密码
-	currentSetting, err := s.repo.GetByKey(ctx, model.SettingKeyAdminPassword)
+	settings, err := s.repo.GetByCategory(ctx, model.SettingCategoryAuth)
 	if err != nil {
 		return fmt.Errorf("获取当前密码失败: %w", err)
 	}
+	po := model.ToSettingPO[model.AuthPO](settings)
 
 	// 如果当前有密码，需要验证旧密码
-	if currentSetting != nil && currentSetting.Value != "" {
+	if po.Password != "" {
 		if dto.OldPassword == "" {
 			return fmt.Errorf("请输入当前密码")
 		}
-		if err := bcrypt.CompareHashAndPassword([]byte(currentSetting.Value), []byte(dto.OldPassword)); err != nil {
+		if err := bcrypt.CompareHashAndPassword([]byte(po.Password), []byte(dto.OldPassword)); err != nil {
 			return fmt.Errorf("当前密码错误")
 		}
 	}
@@ -173,92 +148,81 @@ func (s *settingService) UpdatePassword(ctx context.Context, dto *PasswordUpdate
 	currentVersion, _ := s.GetPasswordVersion(ctx)
 	newVersion := currentVersion + 1
 
-	now := time.Now()
+	po.Password = string(hashedPassword)
+	po.PasswordVersion = currentVersion + 1
 
-	// 保存新密码和新版本号
-	settings := []*model.Setting{
-		{
-			Category:  model.SettingCategoryAuth,
-			Key:       model.SettingKeyAdminPassword,
-			Value:     string(hashedPassword),
-			ValueType: model.SettingValueTypeString,
-			UpdatedAt: now,
-		},
-		{
-			Category:  model.SettingCategoryAuth,
-			Key:       model.SettingKeyPasswordVersion,
-			Value:     strconv.FormatInt(newVersion, 10),
-			ValueType: model.SettingValueTypeInt,
-			UpdatedAt: now,
-		},
-	}
-
-	if err := s.repo.BatchUpsert(ctx, settings); err != nil {
+	if err := s.repo.BatchUpsert(ctx, po.ToSettings()); err != nil {
 		return fmt.Errorf("保存密码失败: %w", err)
 	}
 
 	// 更新运行时配置
-	s.cfg.Admin.Password = string(hashedPassword)
-	s.cfg.Admin.PasswordVersion = newVersion
+	s.cfg.Password = string(hashedPassword)
+	s.cfg.PasswordVersion = newVersion
 
 	logger.Info("密码已更新", zap.Int64("password_version", newVersion))
 	return nil
 }
 
 // UpdateStorageConfig 更新存储配置
-func (s *settingService) UpdateStorageConfig(ctx context.Context, dto *model.StorageConfigDTO) (*StorageUpdateResult, error) {
+func (s *settingService) UpdateStorageConfig(ctx context.Context, storageItem model.StorageItem) (*StorageUpdateResult, error) {
 	// 1. 检查是否有迁移正在进行
 	if s.IsMigrationRunning(ctx) {
 		return nil, fmt.Errorf("迁移正在进行中，请等待完成后再修改配置")
 	}
 
 	// 2. 获取当前配置
-	currentConfig, err := s.getCurrentStorageConfig(ctx)
+	storageConfig, err := s.getCurrentStorageConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取当前配置失败: %w", err)
 	}
 
+	oldStorageItem := storageConfig.GetStorageConfigById(storageItem.StorageId())
+
+	var oldPath, newPath, oldUrl, newUrl = oldStorageItem.Path(), storageItem.Path(), "", ""
+
+	if newConfig, ok := storageItem.(*model.LocalStorageConfig); ok {
+		if oldConfig, ok := oldStorageItem.(*model.LocalStorageConfig); ok {
+			oldUrl = oldConfig.URLPrefix
+			newUrl = newConfig.URLPrefix
+		}
+	}
+
 	// 3. 检测是否需要迁移
-	needsMigration, migrationType := s.detectMigrationNeeded(currentConfig, dto)
+	if oldPath != newPath {
+		logger.Info("检测到存储路径变更，准备进行迁移",
+			zap.String("old_path", oldPath),
+			zap.String("new_path", newPath))
 
-	// 4. 如果需要迁移，启动异步迁移任务
-	if needsMigration && s.migrationService != nil {
-		var task *model.MigrationTask
-		var err error
+		task, err := s.migrationService.StartSelfMigration(
+			ctx,
+			oldPath,
+			newPath,
+			storageItem.StorageId(),
+			func(err error) {
+				if err != nil {
+					return
+				}
 
-		//task, err = s.migrationService.StartSelfMigration(
-		//	ctx,
-		//	currentConfig.LocalBasePath,
-		//	dto.LocalBasePath,
-		//	migrationType,
-		//	func(err error) {
-		//		if err != nil {
-		//			return
-		//		}
-		//
-		//		if s.storageManager != nil {
-		//			newStorageCfg := &config.StorageConfig{
-		//				Default: config.StorageTypeLocal,
-		//				Local: config.LocalStorageConfig{
-		//					BasePath:  newBasePath,
-		//					URLPrefix: newURLPrefix,
-		//				},
-		//			}
-		//			if err := s.storageManager.SwitchStorage(newStorageCfg); err != nil {
-		//				logger.Warn("重新初始化存储管理器失败", zap.Error(err))
-		//			} else {
-		//				logger.Info("存储管理器已更新到新路径", zap.String("path", newBasePath))
-		//			}
-		//		}
-		//	},
-		//)
+				s.cfg.DynamicStaticConfig.Update(newUrl, newPath)
+
+				if err = s.repo.BatchUpsert(ctx, storageItem.ToSettings()); err != nil {
+					logger.Error("保存设置结果失败", zap.Error(err))
+					return
+				}
+
+				if _, err = s.ResetStorage(ctx); err != nil {
+					logger.Error("重置存储后端失败", zap.Error(err))
+					return
+				}
+			},
+		)
 
 		if err != nil {
 			return nil, fmt.Errorf("启动迁移失败: %w", err)
 		}
 
 		logger.Info("存储配置更新触发迁移",
-			zap.String("type", string(migrationType)),
+			zap.String("type", string(model.StorageTypeLocal)),
 			zap.Int64("task_id", task.ID))
 
 		return &StorageUpdateResult{
@@ -266,42 +230,28 @@ func (s *settingService) UpdateStorageConfig(ctx context.Context, dto *model.Sto
 			TaskID:         task.ID,
 			Message:        "配置变更需要迁移文件，迁移任务已启动",
 		}, nil
+	} else {
+		if newUrl != oldUrl {
+			s.cfg.DynamicStaticConfig.Update(newUrl, newPath)
+		}
+
+		// 5. 无需迁移，直接保存配置
+		if err := s.repo.BatchUpsert(ctx, storageItem.ToSettings()); err != nil {
+			return nil, fmt.Errorf("保存存储配置失败: %w", err)
+		}
+
+		// 6. 应用设置到运行时配置
+		if _, err := s.ResetStorage(ctx); err != nil {
+			logger.Warn("应用存储配置失败", zap.Error(err))
+		}
+
+		logger.Info("存储配置已更新")
 	}
 
-	// 5. 无需迁移，直接保存配置
-	if err := s.repo.BatchUpsert(ctx, model.ToSettings(model.SettingCategoryStorage, dto)); err != nil {
-		return nil, fmt.Errorf("保存存储配置失败: %w", err)
-	}
-
-	// 6. 应用设置到运行时配置
-	if _, err := s.ResetStorage(ctx); err != nil {
-		logger.Warn("应用存储配置失败", zap.Error(err))
-	}
-
-	logger.Info("存储配置已更新", zap.String("id", string(dto.DefaultId)))
 	return &StorageUpdateResult{
 		NeedsMigration: false,
 		Message:        "存储配置更新成功",
 	}, nil
-}
-
-// detectMigrationNeeded 检测是否需要迁移
-func (s *settingService) detectMigrationNeeded(current, new *model.StorageConfigDTO) (needsMigration bool, migrationType model.StorageId) {
-	// 检查本地存储路径变化
-	if current.LocalConfig != nil {
-		if current.LocalConfig.BasePath != new.LocalConfig.BasePath && current.LocalConfig.BasePath != "" && new.LocalConfig.BasePath != "" {
-			return true, model.StorageTypeLocal
-		}
-	}
-
-	// 检查阿里云盘路径变化
-	//if new.DefaultId == "aliyunpan" || current.DefaultId == "aliyunpan" {
-	//	if current.AliyunPanBasePath != new.AliyunPanBasePath && new.AliyunPanBasePath != "" && current.AliyunPanBasePath != "" {
-	//		return true, config.StorageTypeAliyunpan
-	//	}
-	//}
-
-	return false, ""
 }
 
 // SetMigrationService 设置迁移服务
@@ -322,52 +272,14 @@ func (s *settingService) IsMigrationRunning(ctx context.Context) bool {
 }
 
 // UpdateCleanupConfig 更新清理配置
-func (s *settingService) UpdateCleanupConfig(ctx context.Context, dto *CleanupConfigDTO) error {
-	setting := &model.Setting{
-		Category:  model.SettingCategoryCleanup,
-		Key:       model.SettingKeyTrashAutoDeleteDays,
-		Value:     strconv.Itoa(dto.TrashAutoDeleteDays),
-		ValueType: model.SettingValueTypeInt,
-		UpdatedAt: time.Now(),
-	}
-
-	if err := s.repo.Upsert(ctx, setting); err != nil {
+func (s *settingService) UpdateCleanupConfig(ctx context.Context, dto *model.CleanupPO) error {
+	if err := s.repo.BatchUpsert(ctx, dto.ToSettings()); err != nil {
 		return fmt.Errorf("保存清理配置失败: %w", err)
 	}
 
 	// 更新运行时配置
-	s.cfg.Trash.AutoDeleteDays = dto.TrashAutoDeleteDays
-
+	s.cfg.TrashAutoDeleteDays = dto.TrashAutoDeleteDays
 	logger.Info("清理配置已更新", zap.Int("trash_auto_delete_days", dto.TrashAutoDeleteDays))
-	return nil
-}
-
-// ApplySettings 从数据库加载设置并应用到运行时
-// 注意：数据库中的设置会完全覆盖配置文件中的值
-func (s *settingService) ApplySettings(ctx context.Context) error {
-	settings, err := s.repo.GetAll(ctx)
-	if err != nil {
-		return fmt.Errorf("获取设置失败: %w", err)
-	}
-
-	// 如果数据库中有设置，则完全使用数据库的值覆盖配置文件的值
-	// 这确保界面上的设置不会受配置文件影响
-	for _, setting := range settings {
-		switch setting.Key {
-		case model.SettingKeyAdminPassword:
-			s.cfg.Admin.Password = setting.Value
-		case model.SettingKeyPasswordVersion:
-			if version, err := strconv.ParseInt(setting.Value, 10, 64); err == nil {
-				s.cfg.Admin.PasswordVersion = version
-			}
-		case model.SettingKeyTrashAutoDeleteDays:
-			if days, err := strconv.Atoi(setting.Value); err == nil {
-				s.cfg.Trash.AutoDeleteDays = days
-			}
-		}
-	}
-
-	logger.Info("设置已应用到运行时配置")
 	return nil
 }
 
@@ -388,21 +300,21 @@ func (s *settingService) InitializeDefaults(ctx context.Context) error {
 	logger.Info("初始化默认设置...")
 
 	settings := slices.Concat(
-		model.ToSettings(model.SettingCategoryAuth, model.AuthDTO{
+		model.AuthPO{
 			Password:        "",
 			PasswordVersion: 0,
-		}),
-		model.ToSettings(model.SettingCategoryStorage, model.StorageConfigDTO{
+		}.ToSettings(),
+		model.StorageConfigPO{
 			DefaultId: model.StorageTypeLocal,
 			LocalConfig: &model.LocalStorageConfig{
 				Id:        model.StorageTypeLocal,
 				BasePath:  "./storage/images",
 				URLPrefix: "/static/images",
 			},
-		}),
-		model.ToSettings(model.SettingCategoryCleanup, model.CleanupDTO{
+		}.ToSettings(),
+		model.CleanupPO{
 			TrashAutoDeleteDays: 30,
-		}),
+		}.ToSettings(),
 	)
 
 	if err := s.repo.BatchUpsert(ctx, settings); err != nil {
@@ -414,17 +326,17 @@ func (s *settingService) InitializeDefaults(ctx context.Context) error {
 }
 
 // IsPasswordSet 检查密码是否已设置
-func (s *settingService) IsPasswordSet(ctx context.Context) (bool, error) {
-	setting, err := s.repo.GetByKey(ctx, model.SettingKeyAdminPassword)
+func (s *settingService) GetPassword(ctx context.Context) (string, error) {
+	setting, err := s.repo.GetByCategoryKey(ctx, model.SettingCategoryAuth, "password")
 	if err != nil {
-		return false, err
+		return "false", err
 	}
-	return setting != nil && setting.Value != "", nil
+	return setting.Value, nil
 }
 
 // GetPasswordVersion 获取密码版本号
 func (s *settingService) GetPasswordVersion(ctx context.Context) (int64, error) {
-	setting, err := s.repo.GetByKey(ctx, model.SettingKeyPasswordVersion)
+	setting, err := s.repo.GetByCategoryKey(ctx, model.SettingCategoryAuth, "passwordVersion")
 	if err != nil {
 		return 0, err
 	}
@@ -438,22 +350,6 @@ func (s *settingService) GetPasswordVersion(ctx context.Context) (int64, error) 
 	return version, nil
 }
 
-// 辅助方法
-
-func (s *settingService) convertValue(value string, valueType string) interface{} {
-	switch valueType {
-	case model.SettingValueTypeInt:
-		if i, err := strconv.Atoi(value); err == nil {
-			return i
-		}
-		return 0
-	case model.SettingValueTypeBool:
-		return value == "true"
-	default:
-		return value
-	}
-}
-
 func (s *settingService) ResetStorage(ctx context.Context) (*storage.StorageManager, error) {
 	cfg, err := s.getCurrentStorageConfig(ctx)
 	if err != nil {
@@ -462,15 +358,12 @@ func (s *settingService) ResetStorage(ctx context.Context) (*storage.StorageMana
 
 	// 切换存储管理器
 	if s.storageManager == nil {
-		manager, err := storage.NewStorageManager(cfg)
-		if err != nil {
-			return nil, err
-		}
+		manager := storage.NewStorageManager(cfg)
 		s.storageManager = manager
 		return manager, nil
 	}
 
-	if err := s.storageManager.SwitchStorage(cfg); err != nil {
+	if err := s.storageManager.InitStorage(cfg); err != nil {
 		logger.Error("切换存储失败", zap.Error(err))
 		return nil, fmt.Errorf("切换存储失败: %w", err)
 	}
@@ -479,41 +372,189 @@ func (s *settingService) ResetStorage(ctx context.Context) (*storage.StorageMana
 }
 
 // GetAliyunPanUserInfo 获取阿里云盘用户信息
-func (s *settingService) GetAliyunPanUserInfo(ctx context.Context) *AliyunPanUserInfo {
+func (s *settingService) GetAliyunPanUserInfo(_ context.Context) []*AliyunPanUserInfo {
 	if s.storageManager == nil {
-		return &AliyunPanUserInfo{IsLoggedIn: false}
+		return []*AliyunPanUserInfo{}
 	}
 
-	aliyunPan := s.storageManager.GetAliyunPanStorage("")
+	aliyunPan := s.storageManager.GetAliyunPanStorage()
 	if aliyunPan == nil {
-		return &AliyunPanUserInfo{IsLoggedIn: false}
+		return []*AliyunPanUserInfo{}
 	}
 
-	userInfo := aliyunPan.GetUserInfo()
-	if userInfo == nil {
-		return &AliyunPanUserInfo{IsLoggedIn: false}
+	var userInfos []*AliyunPanUserInfo
+
+	for _, a := range aliyunPan {
+		userInfo := a.GetUserInfo()
+		if userInfo == nil {
+			userInfos = append(userInfos, &AliyunPanUserInfo{IsLoggedIn: false})
+			continue
+		}
+
+		userInfos = append(userInfos, &AliyunPanUserInfo{
+			IsLoggedIn: true,
+			NickName:   userInfo.UserName,
+			Avatar:     "", // UserInfo 不包含头像信息
+		})
 	}
 
-	return &AliyunPanUserInfo{
-		IsLoggedIn: true,
-		NickName:   userInfo.UserName,
-		Avatar:     "", // UserInfo 不包含头像信息
-	}
-}
-
-// SetStorageManager 设置存储管理器
-func (s *settingService) SetStorageManager(manager *storage.StorageManager) {
-	s.storageManager = manager
+	return userInfos
 }
 
 // getCurrentStorageConfig 从数据库获取当前存储配置
-func (s *settingService) getCurrentStorageConfig(ctx context.Context) (*model.StorageConfigDTO, error) {
+func (s *settingService) getCurrentStorageConfig(ctx context.Context) (*model.StorageConfigPO, error) {
 	// 重新加载存储相关设置到运行时配置
 	settings, err := s.repo.GetByCategory(ctx, model.SettingCategoryStorage)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg := model.ToSettingDTO[model.StorageConfigDTO](model.SettingCategoryStorage, settings)
+	cfg := model.ToSettingPO[model.StorageConfigPO](settings)
 	return &cfg, nil
+}
+
+// AddStorageConfig 添加存储配置
+func (s *settingService) AddStorageConfig(ctx context.Context, storageItem model.StorageItem) (*StorageUpdateResult, error) {
+	// 1. 获取当前配置
+	storageConfig, err := s.getCurrentStorageConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("获取当前配置失败: %w", err)
+	}
+
+	// 2. 检查是否已存在
+	existing := storageConfig.GetStorageConfigById(storageItem.StorageId())
+	if existing != nil {
+		return nil, fmt.Errorf("存储配置已存在: %s", storageItem.StorageId())
+	}
+
+	// 3. 添加新配置到数组
+	switch item := storageItem.(type) {
+	case *model.AliyunPanStorageConfig:
+		storageConfig.AliyunpanConfig = append(storageConfig.AliyunpanConfig, item)
+	default:
+		return nil, fmt.Errorf("不支持添加此类型的存储配置")
+	}
+
+	// 4. 保存配置
+	if err := s.repo.BatchUpsert(ctx, storageConfig.ToSettings()); err != nil {
+		return nil, fmt.Errorf("保存存储配置失败: %w", err)
+	}
+
+	// 5. 重新加载存储
+	if _, err := s.ResetStorage(ctx); err != nil {
+		logger.Warn("重新加载存储失败", zap.Error(err))
+	}
+
+	logger.Info("存储配置已添加", zap.String("storageId", string(storageItem.StorageId())))
+	return &StorageUpdateResult{
+		NeedsMigration: false,
+		Message:        "存储配置添加成功",
+	}, nil
+}
+
+// DeleteStorageConfig 删除存储配置
+func (s *settingService) DeleteStorageConfig(ctx context.Context, storageId model.StorageId) error {
+	// 1. 禁止删除本地存储
+	if storageId == model.StorageTypeLocal {
+		return fmt.Errorf("不能删除本地存储配置")
+	}
+
+	// 2. 获取当前配置
+	storageConfig, err := s.getCurrentStorageConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("获取当前配置失败: %w", err)
+	}
+
+	// 3. 检查是否是默认存储
+	if storageConfig.DefaultId == storageId {
+		return fmt.Errorf("不能删除当前默认存储，请先切换到其他存储")
+	}
+
+	// 4. 从配置中移除
+	found := false
+	newAliyunpanConfig := make([]*model.AliyunPanStorageConfig, 0)
+	for _, cfg := range storageConfig.AliyunpanConfig {
+		if cfg.StorageId() == storageId {
+			found = true
+			continue
+		}
+		newAliyunpanConfig = append(newAliyunpanConfig, cfg)
+	}
+
+	if !found {
+		return fmt.Errorf("存储配置不存在: %s", storageId)
+	}
+
+	storageConfig.AliyunpanConfig = newAliyunpanConfig
+
+	// 5. 保存配置
+	if err := s.repo.BatchUpsert(ctx, storageConfig.ToSettings()); err != nil {
+		return fmt.Errorf("保存存储配置失败: %w", err)
+	}
+
+	// 6. 重新加载存储
+	if _, err := s.ResetStorage(ctx); err != nil {
+		logger.Warn("重新加载存储失败", zap.Error(err))
+	}
+
+	logger.Info("存储配置已删除", zap.String("storageId", string(storageId)))
+	return nil
+}
+
+// SetDefaultStorage 设置默认存储
+func (s *settingService) SetDefaultStorage(ctx context.Context, storageId model.StorageId) error {
+	// 1. 获取当前配置
+	storageConfig, err := s.getCurrentStorageConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("获取当前配置失败: %w", err)
+	}
+
+	// 2. 验证存储配置存在
+	existing := storageConfig.GetStorageConfigById(storageId)
+	if existing == nil {
+		return fmt.Errorf("存储配置不存在: %s", storageId)
+	}
+
+	// 3. 更新默认存储
+	storageConfig.DefaultId = storageId
+
+	// 4. 保存配置
+	if err := s.repo.BatchUpsert(ctx, storageConfig.ToSettings()); err != nil {
+		return fmt.Errorf("保存存储配置失败: %w", err)
+	}
+
+	// 5. 重新加载存储
+	if _, err := s.ResetStorage(ctx); err != nil {
+		logger.Warn("重新加载存储失败", zap.Error(err))
+	}
+
+	logger.Info("默认存储已设置", zap.String("storageId", string(storageId)))
+	return nil
+}
+
+// UpdateGlobalConfig 更新阿里云盘全局配置
+func (s *settingService) UpdateGlobalConfig(ctx context.Context, globalConfig *model.AliyunPanGlobalConfig) error {
+	// 1. 获取当前配置
+	storageConfig, err := s.getCurrentStorageConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("获取当前配置失败: %w", err)
+	}
+
+	// 2. 更新全局配置
+	storageConfig.AliyunpanGlobal = globalConfig
+
+	// 3. 保存配置
+	if err := s.repo.BatchUpsert(ctx, storageConfig.ToSettings()); err != nil {
+		return fmt.Errorf("保存存储配置失败: %w", err)
+	}
+
+	// 4. 重新加载存储（让新的全局配置生效）
+	if _, err := s.ResetStorage(ctx); err != nil {
+		logger.Warn("重新加载存储失败", zap.Error(err))
+	}
+
+	logger.Info("阿里云盘全局配置已更新",
+		zap.Int64("download_chunk_size", globalConfig.DownloadChunkSize),
+		zap.Int("download_concurrency", globalConfig.DownloadConcurrency))
+	return nil
 }

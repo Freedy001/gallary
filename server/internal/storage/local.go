@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 )
 
 // LocalStorage 本地存储实现
@@ -136,12 +135,7 @@ func (s *LocalStorage) Exists(ctx context.Context, path string) (bool, error) {
 
 // GetStats 获取存储统计信息
 func (s *LocalStorage) GetStats(ctx context.Context) (*StorageStats, error) {
-	switch runtime.GOOS {
-	case "windows":
-		return s.getStatsWindows()
-	default:
-		return s.getStatsUnix()
-	}
+	return s.getStats()
 }
 
 // Move 移动文件到新路径

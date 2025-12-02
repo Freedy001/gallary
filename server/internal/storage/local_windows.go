@@ -5,11 +5,12 @@ package storage
 
 import (
 	"fmt"
+
 	"golang.org/x/sys/windows"
 )
 
-// getStatsWindows 获取 Windows 平台的存储统计信息
-func (s *LocalStorage) getStatsWindows() (*StorageStats, error) {
+// getStats 获取 Windows 平台的存储统计信息
+func (s *LocalStorage) getStats() (*StorageStats, error) {
 	// 获取磁盘的可用空间和总容量
 	var freeBytesAvailable uint64
 	var totalBytes uint64
