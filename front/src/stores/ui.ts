@@ -4,9 +4,11 @@ import {createThumbnail} from "@/utils/image.ts";
 import {imageApi} from "@/api/image.ts";
 import {useImageStore} from "@/stores/image.ts";
 import {useStorageStore} from "@/stores/storage.ts";
+import {useAlbumStore} from "@/stores/album.ts";
 
 const imageStore = useImageStore()
 const storageStore = useStorageStore()
+const albumStore = useAlbumStore()
 
 export interface UploadTask {
   id: string
@@ -15,11 +17,13 @@ export interface UploadTask {
   status: 'pending' | 'uploading' | 'success' | 'error'
   error?: string
   imageUrl?: string
+  albumId?: number  // 上传成功后添加到的相册ID
+  uploadedImageId?: number  // 上传成功后的图片ID
 }
 
 export const useUIStore = defineStore('ui', () => {
   // image layout State
-  const gridDensity = ref(6) // 1-10, 1=最密集(9列), 10=最稀疏(1列)
+  const gridDensity = ref(Number(localStorage.getItem("gridDensity") ?? 6)) // 1-10, 1=最密集(9列), 10=最稀疏(1列)
   // Sidebar state
   const sidebarCollapsed = ref(false)
   // Command palette state
@@ -74,15 +78,15 @@ export const useUIStore = defineStore('ui', () => {
   })
 
   const uploadingCount = computed(() =>
-      uploadTasks.value.filter(t => t.status === 'uploading').length
+    uploadTasks.value.filter(t => t.status === 'uploading').length
   )
 
   const completedCount = computed(() =>
-      uploadTasks.value.filter(t => t.status === 'success').length
+    uploadTasks.value.filter(t => t.status === 'success').length
   )
 
   const failedCount = computed(() =>
-      uploadTasks.value.filter(t => t.status === 'error').length
+    uploadTasks.value.filter(t => t.status === 'error').length
   )
 
   const totalProgress = computed(() => {
@@ -92,12 +96,13 @@ export const useUIStore = defineStore('ui', () => {
   })
 
   const hasActiveUploads = computed(() =>
-      uploadTasks.value.some(t => t.status === 'uploading' || t.status === 'pending')
+    uploadTasks.value.some(t => t.status === 'uploading' || t.status === 'pending')
   )
 
   // Actions
   function setGridDensity(density: number) {
     gridDensity.value = Math.max(1, Math.min(10, density))
+    localStorage.setItem("gridDensity", gridDensity.value + '')
   }
 
   function toggleSidebar() {
@@ -124,12 +129,13 @@ export const useUIStore = defineStore('ui', () => {
     uploadDrawerOpen.value = false
   }
 
-  function addUploadTask(files: File[]) {
+  function addUploadTask(files: File[], albumId?: number) {
     files.forEach(file => uploadTasks.value.unshift({
       id: `${Date.now()}-${Math.random()}`,
       file,
       progress: 0,
       status: 'pending',
+      albumId,
     }))
     processUploadQueue().then()
   }
@@ -166,8 +172,8 @@ export const useUIStore = defineStore('ui', () => {
 
     for (let i = 0; i < turn; i++) {
       const tasksToStart = pendingTasks.slice(
-          i * 5,
-          (i + 1) * 5
+        i * 5,
+        (i + 1) * 5
       )
       const results = await doUploadFile(tasksToStart)
       if (results.some(r => r)) hasSuccess = true
@@ -188,14 +194,23 @@ export const useUIStore = defineStore('ui', () => {
           status: 'uploading',
         })
 
-        await imageApi.upload(task.file, (progress) => {
+        // 直接在上传时传递 albumId，后端原子操作处理
+        const response = await imageApi.upload(task.file, task.albumId, (progress) => {
           updateUploadTask(task.id, {progress})
         });
+
+        const uploadedImageId = response.data.id
+
+        // 如果指定了相册ID，更新当前相册的图片数量
+        if (task.albumId && albumStore.currentAlbum?.id === task.albumId) {
+          albumStore.currentAlbum.image_count += 1
+        }
 
         // 上传成功
         updateUploadTask(task.id, {
           status: 'success',
           progress: 100,
+          uploadedImageId,
         })
         return true
       } catch (error) {
@@ -225,7 +240,7 @@ export const useUIStore = defineStore('ui', () => {
 
   function clearCompletedTasks() {
     uploadTasks.value = uploadTasks.value.filter(
-        t => t.status !== 'success' && t.status !== 'error'
+      t => t.status !== 'success' && t.status !== 'error'
     )
   }
 

@@ -1,31 +1,76 @@
 package model
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"time"
 )
 
+// TagType 标签类型
+type TagType string
+
+const (
+	TagTypeNormal TagType = "normal" // 普通标签
+	TagTypeAlbum  TagType = "album"  // 相册
+)
+
+// AlbumMetadata 相册元数据
+type AlbumMetadata struct {
+	CoverImageID *int64  `json:"cover_image_id,omitempty"` // 封面图片ID
+	Description  *string `json:"description,omitempty"`    // 相册描述
+	SortOrder    int     `json:"sort_order"`               // 排序顺序
+}
+
+// Scan 实现 sql.Scanner 接口
+func (m *AlbumMetadata) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return nil
+	}
+	return json.Unmarshal(bytes, m)
+}
+
+// Value 实现 driver.Valuer 接口
+func (m AlbumMetadata) Value() (driver.Value, error) {
+	if m.CoverImageID == nil && m.Description == nil && m.SortOrder == 0 {
+		return nil, nil
+	}
+	return json.Marshal(m)
+}
+
 // Tag 标签模型
 type Tag struct {
-	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name      string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"name"`
-	Color     *string   `gorm:"type:varchar(7)" json:"color,omitempty"`
-	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	ID        int64          `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name      string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"name"`
+	Color     *string        `gorm:"type:varchar(7)" json:"color,omitempty"`
+	Type      TagType        `gorm:"type:varchar(20);not null;default:normal;index" json:"type"`
+	Metadata  *AlbumMetadata `gorm:"type:jsonb" json:"metadata,omitempty"`
+	CreatedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
 
 	// 关联
 	Images []Image `gorm:"many2many:image_tags" json:"-"`
 }
 
 // TableName 指定表名
-func (Tag) TableName() string {
+func (*Tag) TableName() string {
 	return "tags"
+}
+
+// IsAlbum 判断是否是相册
+func (t *Tag) IsAlbum() bool {
+	return t.Type == TagTypeAlbum
 }
 
 // ImageTag 图片标签关联模型
 type ImageTag struct {
 	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	ImageID   int64     `gorm:"not null;index" json:"image_id"`
-	TagID     int64     `gorm:"not null;index" json:"tag_id"`
+	ImageID   int64     `gorm:"not null;index;uniqueIndex:idx_image_tag" json:"image_id"`
+	TagID     int64     `gorm:"not null;index;uniqueIndex:idx_image_tag" json:"tag_id"`
+	SortOrder int       `gorm:"default:0" json:"sort_order"` // 相册内图片排序
 	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
 }
 

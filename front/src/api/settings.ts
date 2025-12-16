@@ -13,7 +13,6 @@ export interface AliyunPanUserInfo {
 export interface LocalStorageConfig {
   id: StorageId
   base_path: string
-  url_prefix: string
 }
 
 // 阿里云盘存储配置（单个账号）

@@ -77,25 +77,25 @@
           </button>
         </router-link>
 
-        <!-- 地点 -->
+        <!-- 相册 -->
         <router-link
-          to="/gallery/location"
-          v-slot="{ isActive }"
-          custom
+            to="/gallery/albums"
+            v-slot="{ isActive }"
+            custom
         >
           <button
-            @click="navigateTo('/gallery/location')"
-            :class="[
+              @click="navigateTo('/gallery/albums')"
+              :class="[
               'group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300 relative overflow-hidden',
-              isActive
+              isActive || route.path.startsWith('/gallery/albums')
                 ? 'text-white bg-white/10 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]'
                 : 'text-gray-400 hover:text-gray-100 hover:bg-white/5',
                uiStore.sidebarCollapsed ? 'justify-center' : ''
             ]"
           >
-            <div v-if="isActive" class="absolute left-0 top-0 bottom-0 w-1 bg-primary-500 shadow-[0_0_10px_rgba(139,92,246,0.6)]"></div>
-            <MapPinIcon :class="['h-5 w-5 flex-shrink-0 transition-transform duration-300', isActive ? 'text-primary-400 scale-110' : 'group-hover:scale-110']" />
-            <span v-if="!uiStore.sidebarCollapsed" class="tracking-wide">地点足迹</span>
+            <div v-if="isActive || route.path.startsWith('/gallery/albums')" class="absolute left-0 top-0 bottom-0 w-1 bg-primary-500 shadow-[0_0_10px_rgba(139,92,246,0.6)]"></div>
+            <RectangleStackIcon :class="['h-5 w-5 flex-shrink-0 transition-transform duration-300', (isActive || route.path.startsWith('/gallery/albums')) ? 'text-primary-400 scale-110' : 'group-hover:scale-110']" />
+            <span v-if="!uiStore.sidebarCollapsed" class="tracking-wide">相册</span>
           </button>
         </router-link>
 
@@ -118,6 +118,29 @@
             <div v-if="isActive" class="absolute left-0 top-0 bottom-0 w-1 bg-primary-500 shadow-[0_0_10px_rgba(139,92,246,0.6)]"></div>
             <ShareIcon :class="['h-5 w-5 flex-shrink-0 transition-transform duration-300', isActive ? 'text-primary-400 scale-110' : 'group-hover:scale-110']" />
             <span v-if="!uiStore.sidebarCollapsed" class="tracking-wide">分享管理</span>
+          </button>
+        </router-link>
+
+
+        <!-- 地点 -->
+        <router-link
+            to="/gallery/location"
+            v-slot="{ isActive }"
+            custom
+        >
+          <button
+              @click="navigateTo('/gallery/location')"
+              :class="[
+              'group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300 relative overflow-hidden',
+              isActive
+                ? 'text-white bg-white/10 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]'
+                : 'text-gray-400 hover:text-gray-100 hover:bg-white/5',
+               uiStore.sidebarCollapsed ? 'justify-center' : ''
+            ]"
+          >
+            <div v-if="isActive" class="absolute left-0 top-0 bottom-0 w-1 bg-primary-500 shadow-[0_0_10px_rgba(139,92,246,0.6)]"></div>
+            <MapPinIcon :class="['h-5 w-5 flex-shrink-0 transition-transform duration-300', isActive ? 'text-primary-400 scale-110' : 'group-hover:scale-110']" />
+            <span v-if="!uiStore.sidebarCollapsed" class="tracking-wide">地点足迹</span>
           </button>
         </router-link>
 
@@ -218,17 +241,23 @@
       <div class="mt-3">
         <StorageUsage :collapsed="uiStore.sidebarCollapsed" />
       </div>
+
+      <!-- AI 队列状态 -->
+      <div class="mt-3">
+        <AIQueueStatus :collapsed="uiStore.sidebarCollapsed" />
+      </div>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useStorageStore } from '@/stores/storage'
 import UploadDrawer from '@/components/upload/UploadDrawer.vue'
 import StorageUsage from '@/components/common/StorageUsage.vue'
+import AIQueueStatus from '@/components/common/AIQueueStatus.vue'
 import {
   PhotoIcon,
   MapPinIcon,
@@ -239,9 +268,11 @@ import {
   ShareIcon,
   TrashIcon,
   Cog6ToothIcon,
+  RectangleStackIcon,
 } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
+const route = useRoute()
 const uiStore = useUIStore()
 const storageStore = useStorageStore()
 
@@ -254,26 +285,3 @@ onMounted(() => {
   storageStore.fetchTotalImages()
 })
 </script>
-
-<!--<script setup lang="ts">-->
-<!--import { useRouter } from 'vue-router'-->
-<!--import { useUIStore } from '@/stores/ui'-->
-<!--import { useImageStore } from '@/stores/image'-->
-<!--import UploadDrawer from '@/components/upload/UploadDrawer.vue'-->
-<!--import {-->
-<!--  PhotoIcon,-->
-<!--  MapPinIcon,-->
-<!--  UserGroupIcon,-->
-<!--  CalendarIcon,-->
-<!--  Bars3Icon,-->
-<!--  ShareIcon,-->
-<!--} from '@heroicons/vue/24/outline'-->
-
-<!--const router = useRouter()-->
-<!--const uiStore = useUIStore()-->
-<!--const imageStore = useImageStore()-->
-
-<!--function navigateTo(path: string) {-->
-<!--  router.push(path)-->
-<!--}-->
-<!--</script>-->

@@ -422,7 +422,7 @@ async function downloadImageWithProgress(url: string, expectedSize?: number) {
     }
 
     // 合并所有块
-    const blob = new Blob(chunks)
+    const blob = new Blob(chunks as BlobPart[])
     blobUrl.value = URL.createObjectURL(blob)
     downloadProgress.value = 100
 
@@ -566,7 +566,7 @@ function handleTouchStart(e: TouchEvent) {
     // Two fingers: Pinch
     isDragging.value = false
     isSwiping.value = false
-    initialTouchDistance.value = getDistance(e.touches)
+    initialTouchDistance.value = getDistance(e.touches) ?? 0
     initialTouchScale.value = scale.value
   }
 }

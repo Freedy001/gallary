@@ -77,16 +77,16 @@ func (m *StorageManager) getStorage(ctx context.Context) Storage {
 
 // 以下是 Storage 接口的代理实现
 
-// GetType 获取当前存储类型
-func (m *StorageManager) GetType(ctx context.Context) model.StorageId {
+// DefaultType 获取当前存储类型
+func (m *StorageManager) DefaultType() model.StorageId {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	return m.defaultId
 }
 
-// Upload 上传文件
-func (m *StorageManager) Upload(ctx context.Context, file io.Reader, path string) (string, error) {
+// UploadToDefaultStorage 上传文件
+func (m *StorageManager) UploadToDefaultStorage(ctx context.Context, file io.Reader, path string) (string, error) {
 	storage := m.getStorage(ctx)
 	if storage == nil {
 		return "", fmt.Errorf("存储未初始化")
@@ -96,109 +96,40 @@ func (m *StorageManager) Upload(ctx context.Context, file io.Reader, path string
 }
 
 // Download 下载文件
-func (m *StorageManager) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	storage := m.getStorage(ctx)
+func (m *StorageManager) Download(ctx context.Context, storageId model.StorageId, path string) (io.ReadCloser, error) {
+	storage := m.storages[storageId]
 	if storage == nil {
-		return nil, fmt.Errorf("存储未初始化")
+		return nil, fmt.Errorf("%s存储未初始化", storageId)
 	}
-
 	return storage.Download(ctx, path)
 }
 
 // Delete 删除文件
-func (m *StorageManager) Delete(ctx context.Context, path string) error {
-	storage := m.getStorage(ctx)
+func (m *StorageManager) Delete(ctx context.Context, storageId model.StorageId, path string) error {
+	storage := m.storages[storageId]
 	if storage == nil {
-		return fmt.Errorf("存储未初始化")
+		return fmt.Errorf("%s存储未初始化", storageId)
 	}
-
 	return storage.Delete(ctx, path)
 }
 
 // DeleteBatch 批量删除文件
-func (m *StorageManager) DeleteBatch(ctx context.Context, paths []string) []DeleteResult {
-	storage := m.getStorage(ctx)
+func (m *StorageManager) DeleteBatch(ctx context.Context, storageId model.StorageId, paths []string) ([]DeleteResult, error) {
+	storage := m.storages[storageId]
 	if storage == nil {
-		results := make([]DeleteResult, len(paths))
-		for i, p := range paths {
-			results[i] = DeleteResult{Path: p, Error: fmt.Errorf("存储未初始化")}
-		}
-		return results
+		return nil, fmt.Errorf("%s存储未初始化", storageId)
 	}
 
-	return storage.DeleteBatch(ctx, paths)
-}
-
-// GetURL 获取文件访问URL
-func (m *StorageManager) GetURL(ctx context.Context, path string) (string, error) {
-	storage := m.getStorage(ctx)
-	if storage == nil {
-		return "", fmt.Errorf("存储未初始化")
-	}
-
-	return storage.GetURL(ctx, path)
-}
-
-// GetURLBatch 批量获取文件访问URL
-func (m *StorageManager) GetURLBatch(ctx context.Context, paths []string) []URLResult {
-	storage := m.getStorage(ctx)
-	if storage == nil {
-		results := make([]URLResult, len(paths))
-		for i, p := range paths {
-			results[i] = URLResult{Path: p, Error: fmt.Errorf("存储未初始化")}
-		}
-		return results
-	}
-
-	return storage.GetURLBatch(ctx, paths)
-}
-
-// Exists 检查文件是否存在
-func (m *StorageManager) Exists(ctx context.Context, path string) (bool, error) {
-	storage := m.getStorage(ctx)
-	if storage == nil {
-		return false, fmt.Errorf("存储未初始化")
-	}
-
-	return storage.Exists(ctx, path)
-}
-
-// GetStats 获取存储统计信息
-func (m *StorageManager) GetStats(ctx context.Context) (*StorageStats, error) {
-	storage := m.getStorage(ctx)
-	if storage == nil {
-		return nil, fmt.Errorf("存储未初始化")
-	}
-
-	return storage.GetStats(ctx)
+	return storage.DeleteBatch(ctx, paths), nil
 }
 
 // Move 移动文件到新路径
-func (m *StorageManager) Move(ctx context.Context, oldPath, newPath string) error {
-	storage := m.getStorage(ctx)
+func (m *StorageManager) Move(ctx context.Context, storageId model.StorageId, oldPath, newPath string) error {
+	storage := m.storages[storageId]
 	if storage == nil {
-		return fmt.Errorf("存储未初始化")
+		return fmt.Errorf("%s存储未初始化", storageId)
 	}
-
 	return storage.Move(ctx, oldPath, newPath)
-}
-
-// MoveBatch 批量移动文件
-func (m *StorageManager) MoveBatch(ctx context.Context, moves map[string]string) []MoveResult {
-	storage := m.getStorage(ctx)
-	if storage == nil {
-		results := make([]MoveResult, 0, len(moves))
-		for oldPath, newPath := range moves {
-			results = append(results, MoveResult{
-				OldPath: oldPath,
-				NewPath: newPath,
-				Error:   fmt.Errorf("存储未初始化"),
-			})
-		}
-		return results
-	}
-
-	return storage.MoveBatch(ctx, moves)
 }
 
 // GetLocalStorage 获取本地存储实例（用于缩略图等始终存储在本地的场景）
@@ -253,5 +184,41 @@ func (m *StorageManager) GetMultiStorageStats(ctx context.Context) *MultiStorage
 	return stats
 }
 
-// 确保 StorageManager 实现了 Storage 接口
-var _ Storage = (*StorageManager)(nil)
+// ImageUrl 获取文件访问URL
+func (m *StorageManager) ImageUrl(image *model.Image) (string, string) {
+	thumbnail := "/static/" + image.ThumbnailPath
+	if image.StorageId == model.StorageTypeLocal {
+		return "/static/" + image.StoragePath, thumbnail
+	}
+
+	//fallback use hash to download
+	return fmt.Sprintf("/resouse/%s/file", image.FileHash), thumbnail
+}
+
+// ToVO 将 Image 转换为 ImageVO（包含URL）
+func (m *StorageManager) ToVO(image *model.Image) *model.ImageVO {
+	if image == nil {
+		return nil
+	}
+
+	return image.ToVO(m.ImageUrl(image))
+}
+
+// ToVOList 批量将 Image 转换为 ImageVO（使用批量获取URL）
+func (m *StorageManager) ToVOList(images []*model.Image) []*model.ImageVO {
+	if len(images) == 0 {
+		return []*model.ImageVO{}
+	}
+
+	var result []*model.ImageVO
+
+	for _, image := range images {
+		if image == nil {
+			continue
+		}
+
+		result = append(result, m.ToVO(image))
+	}
+
+	return result
+}

@@ -1,6 +1,6 @@
 import {defineStore} from 'pinia'
 import {ref} from 'vue'
-import type {DialogOptions, DialogState} from '@/types/dialog'
+import type {DialogOptions, DialogState, Notification} from '@/types/dialog'
 
 export const useDialogStore = defineStore('dialog', () => {
   const state = ref<DialogState>({
@@ -9,6 +9,9 @@ export const useDialogStore = defineStore('dialog', () => {
     message: '',
     type: 'info'
   })
+
+  const notifications = ref<Notification[]>([])
+  let notificationIdCounter = 0
 
   // Keep track of the promise resolve function
   let resolvePromise: ((value: boolean) => void) | null = null
@@ -36,12 +39,31 @@ export const useDialogStore = defineStore('dialog', () => {
     })
   }
 
+  function notify(options: Omit<Notification, 'id'>) {
+    const id = ++notificationIdCounter
+    const notification: Notification = {
+      id,
+      ...options,
+      duration: options.duration !== undefined ? options.duration : 3000
+    }
+    notifications.value.push(notification)
+  }
+
+  function removeNotification(id: number) {
+    const index = notifications.value.findIndex(n => n.id === id)
+    if (index !== -1) {
+      notifications.value.splice(index, 1)
+    }
+  }
+
   function alert(options: DialogOptions | string): Promise<boolean> {
     const opts = typeof options === 'string' ? {title: '提示', message: options} : options
-    return show({
-      ...opts,
-      type: opts.type || 'info',
+    notify({
+      title: opts.title || '提示',
+      message: opts.message,
+      type: opts.type || 'info'
     })
+    return Promise.resolve(true)
   }
 
   function handleConfirm() {
@@ -64,9 +86,11 @@ export const useDialogStore = defineStore('dialog', () => {
 
   return {
     state,
-    show,
+    notifications,
     confirm,
     alert,
+    notify,
+    removeNotification,
     handleConfirm,
     handleCancel
   }

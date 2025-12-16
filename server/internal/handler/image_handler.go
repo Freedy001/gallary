@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gallary/server/internal/model"
 	"gallary/server/pkg/database"
 	"io"
 	"strconv"
@@ -31,14 +32,15 @@ func NewImageHandler(service service.ImageService) *ImageHandler {
 // Upload 上传图片
 //
 //	@Summary		上传图片
-//	@Description	上传单个图片文件，支持去重
+//	@Description	上传单个图片文件，支持去重，可选添加到相册
 //	@Tags			图片管理
 //	@Accept			multipart/form-data
 //	@Produce		json
-//	@Param			file	formData	file								true	"图片文件"
-//	@Success		200		{object}	utils.Response{data=model.Image}	"上传成功"
-//	@Failure		400		{object}	utils.Response						"请选择要上传的文件"
-//	@Failure		500		{object}	utils.Response						"上传失败"
+//	@Param			file		formData	file								true	"图片文件"
+//	@Param			album_id	formData	int									false	"相册ID（可选，上传后自动添加到该相册）"
+//	@Success		200			{object}	utils.Response{data=model.Image}	"上传成功"
+//	@Failure		400			{object}	utils.Response						"请选择要上传的文件"
+//	@Failure		500			{object}	utils.Response						"上传失败"
 //	@Router			/api/images/upload [post]
 func (h *ImageHandler) Upload(c *gin.Context) {
 	file, err := c.FormFile("file")
@@ -47,7 +49,18 @@ func (h *ImageHandler) Upload(c *gin.Context) {
 		return
 	}
 
-	image, err := h.service.Upload(c.Request.Context(), file)
+	// 获取可选的相册ID
+	var albumID *int64
+	if albumIDStr := c.PostForm("album_id"); albumIDStr != "" {
+		id, err := strconv.ParseInt(albumIDStr, 10, 64)
+		if err == nil && id > 0 {
+			albumID = &id
+		}
+	}
+
+	image, err := database.Transaction1[*model.ImageVO](c, func(ctx context.Context) (*model.ImageVO, error) {
+		return h.service.Upload(c.Request.Context(), file, albumID)
+	})
 	if err != nil {
 		logger.Error("上传图片失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
@@ -185,7 +198,12 @@ func (h *ImageHandler) BatchDelete(c *gin.Context) {
 //	@Failure		404	{object}	utils.Response	"图片不存在"
 //	@Router			/api/images/{id}/download [get]
 func (h *ImageHandler) Download(c *gin.Context) {
-	h.doDownload(c, true)
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的图片ID")
+		return
+	}
+	h.doDownload(c, id, true)
 }
 
 // ProxyFile 代理获取图片文件（用于阿里云盘等需要后端代理的存储）
@@ -198,21 +216,31 @@ func (h *ImageHandler) Download(c *gin.Context) {
 //	@Success		200	{file}		binary			"图片文件"
 //	@Failure		400	{object}	utils.Response	"无效的图片ID"
 //	@Failure		404	{object}	utils.Response	"图片不存在"
-//	@Router			/api/images/{id}/file [get]
+//	@Router			/resouse/:hash/file
 func (h *ImageHandler) ProxyFile(c *gin.Context) {
-	h.doDownload(c, false)
-}
-
-func (h *ImageHandler) doDownload(c *gin.Context, downloadFile bool) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "无效的图片ID")
+	hash := c.Param("hash")
+	if hash == "" {
+		utils.BadRequest(c, "未提供文件信息")
 		return
 	}
+	h.doDownload(c, hash, true)
+}
 
-	image, err := h.service.GetByID(c.Request.Context(), id)
-	if err != nil {
-		utils.NotFound(c, err.Error())
+func (h *ImageHandler) doDownload(c *gin.Context, idOrHash any, downloadHeader bool) {
+	var image *model.Image
+	var err error
+	if hash, ok := idOrHash.(string); ok {
+		image, err = h.service.Repo().FindByHash(c, hash)
+	} else if id, ok := idOrHash.(int64); ok {
+		image, err = h.service.Repo().FindByID(c, id)
+	}
+
+	if image == nil {
+		if err != nil {
+			utils.NotFound(c, err.Error())
+		} else {
+			utils.NotFound(c, "无法找到图片")
+		}
 		return
 	}
 
@@ -225,7 +253,7 @@ func (h *ImageHandler) doDownload(c *gin.Context, downloadFile bool) {
 		return
 	}
 
-	reader, err := h.service.Download(c.Request.Context(), &image.Image)
+	reader, err := h.service.Download(c.Request.Context(), image)
 	if err != nil {
 		logger.Error("代理获取图片失败", zap.Error(err))
 		utils.NotFound(c, err.Error())
@@ -238,7 +266,7 @@ func (h *ImageHandler) doDownload(c *gin.Context, downloadFile bool) {
 	c.Header("ETag", etag)
 	c.Header("Content-Length", fmt.Sprintf("%d", image.FileSize))
 
-	if downloadFile {
+	if downloadHeader {
 		c.Header("Content-Disposition", "attachment; filename="+image.OriginalName)
 		c.Header("Content-Type", "application/octet-stream")
 	} else {
@@ -311,7 +339,7 @@ func (h *ImageHandler) BatchDownload(c *gin.Context) {
 	c.Header("Transfer-Encoding", "chunked")
 
 	// 直接写入到响应流
-	_, err := h.service.DownloadBatch(c.Request.Context(), ids, c.Writer)
+	_, err := h.service.DownloadZipped(c.Request.Context(), ids, c.Writer)
 	if err != nil {
 		logger.Error("批量下载图片失败", zap.Error(err))
 		return

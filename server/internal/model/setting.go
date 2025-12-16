@@ -29,6 +29,7 @@ const (
 	SettingCategoryAuth    = "auth"
 	SettingCategoryStorage = "storage"
 	SettingCategoryCleanup = "cleanup"
+	SettingCategoryAI      = "ai"
 )
 
 // 值类型常量
@@ -137,9 +138,8 @@ func (a StorageConfigPO) GetStorageConfigById(id StorageId) StorageItem {
 }
 
 type LocalStorageConfig struct {
-	Id        StorageId `json:"id"`
-	BasePath  string    `json:"base_path"`
-	URLPrefix string    `json:"url_prefix"`
+	Id       StorageId `json:"id"`
+	BasePath string    `json:"base_path"`
 }
 
 func (l *LocalStorageConfig) Path() string {
@@ -163,7 +163,7 @@ type AliyunPanStorageConfig struct {
 
 // AliyunPanGlobalConfig 阿里云盘全局配置（所有账号共享）
 type AliyunPanGlobalConfig struct {
-	DownloadChunkSize   int64 `json:"download_chunk_size"`   // 下载分片大小 (KB), 默认 512
+	DownloadChunkSize   int64 `json:"download_chunk_size"`  // 下载分片大小 (KB), 默认 512
 	DownloadConcurrency int   `json:"download_concurrency"` // 下载并发数, 默认 8
 }
 
@@ -353,4 +353,74 @@ func setFieldValue(fieldVal reflect.Value, valStr string) {
 	default:
 		panic("unhandled default case")
 	}
+}
+
+// ==================== AI 配置 ====================
+type Provider string
+
+const (
+	OpenAI                    Provider = "openAI"
+	SelfHosted                Provider = "selfHosted"
+	AliyunMultimodalEmbedding Provider = "alyunMultimodalEmbedding"
+)
+
+type ModelConfig struct {
+	ID           string   `json:"id"`
+	Provider     Provider `json:"provider"`
+	ModelName    string   `json:"model_name"`
+	ApiModelName string   `json:"api_model_name"`
+	Endpoint     string   `json:"endpoint"`
+	APIKey       string   `json:"api_key"`
+	Enabled      bool     `json:"enabled"`
+	ExtraConfig  string   `json:"extra_config"`
+}
+
+// AIPo AI 配置 PO
+type AIPo struct {
+	Models []*ModelConfig `json:"models"` // 通用模型配置
+}
+
+func (a AIPo) Category() string {
+	return SettingCategoryAI
+}
+
+func (a AIPo) ToSettings() []*Setting {
+	return toSetting(a)
+}
+
+// GetEnabledModels 获取所有启用的模型配置（包括自托管模型）
+func (a AIPo) GetEnabledModels() []*ModelConfig {
+	var models []*ModelConfig
+
+	// 添加其他启用的模型
+	for i := range a.Models {
+		if a.Models[i].Enabled {
+			models = append(models, a.Models[i])
+		}
+	}
+
+	return models
+}
+
+// FindModelById 根据名称查找模型配置
+func (a AIPo) FindModelById(id string) *ModelConfig {
+	// 检查其他模型
+	for i := range a.Models {
+		if a.Models[i].ID == id {
+			return a.Models[i]
+		}
+	}
+
+	return nil
+}
+
+// FindModelsByName 根据 ModelName 查找所有启用的模型配置（用于负载均衡）
+func (a AIPo) FindModelsByName(modelName string) []*ModelConfig {
+	var models []*ModelConfig
+	for i := range a.Models {
+		if a.Models[i].ModelName == modelName && a.Models[i].Enabled {
+			models = append(models, a.Models[i])
+		}
+	}
+	return models
 }

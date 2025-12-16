@@ -76,12 +76,61 @@ func AutoMigrate() error {
 		&model.ShareImage{},
 		&model.Setting{},
 		&model.MigrationTask{},
+		&model.AIQueue{},
+		&model.AITaskImage{},
+		&model.ImageEmbedding{},
 	)
 	if err != nil {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
 
+	// 修复向量列类型：如果列存在且类型是 vector(N)，修改为不限制维度的 vector
+	// 这允许不同模型使用不同维度的向量
+	if err := fixVectorColumnType(); err != nil {
+		log.Printf("修复向量列类型警告: %v", err)
+		// 不返回错误，因为这可能是表刚创建
+	}
+
 	log.Println("数据库表迁移成功")
+	return nil
+}
+
+// fixVectorColumnType 修复向量列类型为动态维度
+func fixVectorColumnType() error {
+	// 检查列是否存在以及当前类型
+	var columnType string
+	err := db.Raw(`
+		SELECT data_type || COALESCE('(' || character_maximum_length || ')', '')
+		FROM information_schema.columns
+		WHERE table_name = 'image_embeddings' AND column_name = 'embedding'
+	`).Scan(&columnType).Error
+	if err != nil {
+		return err
+	}
+
+	// 如果列类型包含维度限制（如 USER-DEFINED 或 vector(N)），修改为无限制的 vector
+	// PostgreSQL 中 vector 类型显示为 USER-DEFINED
+	if columnType != "" {
+		// 尝试修改列类型为不限制维度的 vector
+		// 注意：这需要先删除列上的数据或者列类型兼容
+		err = db.Exec(`
+			DO $$
+			BEGIN
+				-- 删除已有数据（因为维度不兼容无法直接转换）
+				DELETE FROM image_embeddings;
+				-- 修改列类型为不限制维度的 vector
+				ALTER TABLE image_embeddings ALTER COLUMN embedding TYPE vector USING embedding::vector;
+			EXCEPTION
+				WHEN others THEN
+					-- 如果失败（可能是新表），忽略错误
+					NULL;
+			END $$;
+		`).Error
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

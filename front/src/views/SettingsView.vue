@@ -42,6 +42,11 @@
           <div v-if="activeTab === 'cleanup'" class="space-y-6">
             <CleanupSettings />
           </div>
+
+          <!-- AI 设置 Tab -->
+          <div v-if="activeTab === 'ai'" class="space-y-6">
+            <AISettings />
+          </div>
         </div>
       </div>
     </template>
@@ -54,10 +59,12 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import SecuritySettings from '@/components/settings/SecuritySettings.vue'
 import StorageSettings from '@/components/settings/StorageSettings.vue'
 import CleanupSettings from '@/components/settings/CleanupSettings.vue'
+import AISettings from '@/components/settings/AISettings.vue'
 import {
   ShieldCheckIcon,
   CloudIcon,
   TrashIcon,
+  SparklesIcon,
 } from '@heroicons/vue/24/outline'
 
 // Tab 配置
@@ -65,6 +72,7 @@ const tabs = [
   { id: 'security', name: '安全设置', icon: ShieldCheckIcon },
   { id: 'storage', name: '存储设置', icon: CloudIcon },
   { id: 'cleanup', name: '清理策略', icon: TrashIcon },
+  { id: 'ai', name: 'AI 设置', icon: SparklesIcon },
 ]
 
 const activeTab = ref('security')

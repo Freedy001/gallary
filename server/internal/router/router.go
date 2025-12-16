@@ -16,9 +16,11 @@ func SetupRouter(
 	authHandler *handler.AuthHandler,
 	imageHandler *handler.ImageHandler,
 	shareHandler *handler.ShareHandler,
+	albumHandler *handler.AlbumHandler,
 	settingHandler *handler.SettingHandler,
 	storageHandler *handler.StorageHandler,
 	migrationHandler *handler.MigrationHandler,
+	aiHandler *handler.AIHandler,
 	configCompose *internal.PlatformConfig,
 ) *gin.Engine {
 	// 设置运行模式
@@ -32,6 +34,7 @@ func SetupRouter(
 
 	// 动态静态文件中间件
 	r.Use(middleware.DynamicStaticMiddleware(configCompose.DynamicStaticConfig))
+	r.GET("/resouse/:hash/file", imageHandler.ProxyFile)
 
 	// API路由组
 	api := r.Group("/api")
@@ -41,6 +44,13 @@ func SetupRouter(
 		{
 			auth.POST("/login", authHandler.Login)
 			auth.GET("/check", authHandler.Check)
+		}
+
+		// 公开分享访问路由（无需认证，或单独认证）
+		publicShares := api.Group("/s")
+		{
+			publicShares.GET("/:code/info", shareHandler.GetPublicInfo)
+			publicShares.POST("/:code/images", shareHandler.SharedImages)
 		}
 
 		// 图片相关路由（需要认证）
@@ -58,8 +68,6 @@ func SetupRouter(
 			images.GET("/:id", imageHandler.GetByID)
 			images.DELETE("/:id", imageHandler.Delete)
 			images.GET("/:id/download", imageHandler.Download)
-			images.GET("/:id/file", imageHandler.ProxyFile)
-
 			// 回收站相关路由
 			images.GET("/trash", imageHandler.ListDeleted)
 			images.POST("/trash/restore", imageHandler.RestoreImages)
@@ -78,27 +86,37 @@ func SetupRouter(
 			shares.DELETE("/:id", shareHandler.Delete)
 		}
 
-		// 公开分享访问路由（无需认证，或单独认证）
-		publicShares := api.Group("/s")
+		// 相册管理路由（需要认证）
+		albums := api.Group("/albums")
+		albums.Use(middleware.AuthMiddleware(configCompose.AdminConfig))
 		{
-			publicShares.GET("/:code/info", shareHandler.GetPublicInfo)
-			publicShares.POST("/:code/images", shareHandler.SharedImages)
+			albums.GET("", albumHandler.List)
+			albums.POST("", albumHandler.Create)
+			albums.GET("/:id", albumHandler.GetByID)
+			albums.PUT("/:id", albumHandler.Update)
+			albums.DELETE("/:id", albumHandler.Delete)
+			albums.GET("/:id/images", albumHandler.GetImages)
+			albums.POST("/:id/images", albumHandler.AddImages)
+			albums.DELETE("/:id/images", albumHandler.RemoveImages)
+			albums.PUT("/:id/cover", albumHandler.SetCover)
 		}
 
 		// 设置路由（无需认证）
 		settings := api.Group("/settings")
+		settings.Use(middleware.AuthMiddleware(configCompose.AdminConfig))
 		{
 			settings.GET("/:category", settingHandler.GetByCategory)
 			settings.GET("/password/status", settingHandler.GetPasswordStatus)
 			settings.PUT("/password", settingHandler.UpdatePassword)
 			settings.PUT("/cleanup", settingHandler.UpdateCleanup)
+			settings.PUT("/ai", settingHandler.UpdateAI)
 
 			// 存储配置 CRUD
-			settings.POST("/storage", settingHandler.AddStorage)                   // 添加存储配置
-			settings.PUT("/storage/default", settingHandler.SetDefaultStorage)     // 设置默认存储（必须在 :storageId 之前）
-			settings.PUT("/storage/global", settingHandler.UpdateGlobalConfig)     // 更新全局配置（必须在 :storageId 之前）
-			settings.PUT("/storage/:storageId", settingHandler.UpdateStorage)      // 修改存储配置
-			settings.DELETE("/storage/:storageId", settingHandler.DeleteStorage)   // 删除存储配置
+			settings.POST("/storage", settingHandler.AddStorage)                 // 添加存储配置
+			settings.PUT("/storage/default", settingHandler.SetDefaultStorage)   // 设置默认存储（必须在 :storageId 之前）
+			settings.PUT("/storage/global", settingHandler.UpdateGlobalConfig)   // 更新全局配置（必须在 :storageId 之前）
+			settings.PUT("/storage/:storageId", settingHandler.UpdateStorage)    // 修改存储配置
+			settings.DELETE("/storage/:storageId", settingHandler.DeleteStorage) // 删除存储配置
 		}
 
 		// 存储统计路由（需要认证）
@@ -121,6 +139,26 @@ func SetupRouter(
 				migration.GET("/active", migrationHandler.GetActive)
 				migration.GET("/:id", migrationHandler.GetByID)
 			}
+		}
+
+		// AI 相关路由（需要认证）
+		ai := api.Group("/ai")
+		ai.Use(middleware.AuthMiddleware(configCompose.AdminConfig))
+		{
+			// AI 连接测试
+			ai.POST("/test", aiHandler.TestConnection)
+
+			// AI 队列管理
+			ai.GET("/queues", aiHandler.GetQueueStatus)                    // 获取所有队列状态
+			ai.GET("/queues/:id", aiHandler.GetQueueDetail)                // 获取队列详情
+			ai.POST("/queues/:id/retry", aiHandler.RetryQueueFailedImages) // 重试队列所有失败图片
+
+			// AI 任务图片操作
+			ai.POST("/task-images/:id/retry", aiHandler.RetryTaskImage)   // 重试单张图片
+			ai.POST("/task-images/:id/ignore", aiHandler.IgnoreTaskImage) // 忽略单张图片
+
+			// 语义搜索
+			ai.POST("/search", aiHandler.SemanticSearch)
 		}
 	}
 

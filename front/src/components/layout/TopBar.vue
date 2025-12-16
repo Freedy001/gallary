@@ -1,22 +1,26 @@
 <template>
   <header class="relative z-30 flex h-20 w-full items-center justify-between border-b border-white/5 bg-transparent px-8 transition-all duration-300 backdrop-blur-sm">
-    <!-- 左侧：搜索按钮 -->
+    <!-- 左侧区域 -->
     <div v-if="!uiStore.isSelectionMode" class="w-96">
-      <button
-        @click="uiStore.openCommandPalette"
-        class="group flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-400 transition-all hover:border-primary-500/30 hover:bg-white/10 hover:text-white hover:shadow-[0_0_15px_rgba(139,92,246,0.1)]"
-      >
-        <MagnifyingGlassIcon class="h-5 w-5 text-gray-500 transition-colors group-hover:text-primary-400" />
-        <span class="font-light tracking-wide">搜索影像记忆...</span>
-        <div class="ml-auto flex gap-1">
-          <kbd class="hidden rounded bg-white/10 px-2 py-0.5 text-xs font-mono text-gray-500 group-hover:text-gray-300 md:inline-block">
-            {{ isMac ? '⌘' : 'Ctrl' }}
-          </kbd>
-          <kbd class="hidden rounded bg-white/10 px-2 py-0.5 text-xs font-mono text-gray-500 group-hover:text-gray-300 md:inline-block">
-            K
-          </kbd>
-        </div>
-      </button>
+      <!-- 自定义左侧内容插槽 -->
+      <slot name="left">
+        <!-- 默认：搜索按钮 -->
+        <button
+          @click="uiStore.openCommandPalette"
+          class="group flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-400 transition-all hover:border-primary-500/30 hover:bg-white/10 hover:text-white hover:shadow-[0_0_15px_rgba(139,92,246,0.1)]"
+        >
+          <MagnifyingGlassIcon class="h-5 w-5 text-gray-500 transition-colors group-hover:text-primary-400" />
+          <span class="font-light tracking-wide">搜索影像记忆...</span>
+          <div class="ml-auto flex gap-1">
+            <kbd class="hidden rounded bg-white/10 px-2 py-0.5 text-xs font-mono text-gray-500 group-hover:text-gray-300 md:inline-block">
+              {{ isMac ? '⌘' : 'Ctrl' }}
+            </kbd>
+            <kbd class="hidden rounded bg-white/10 px-2 py-0.5 text-xs font-mono text-gray-500 group-hover:text-gray-300 md:inline-block">
+              K
+            </kbd>
+          </div>
+        </button>
+      </slot>
     </div>
 
     <!-- 选择模式下的左侧 -->
@@ -37,22 +41,26 @@
     <div class="flex items-center gap-6">
       <!-- 选择模式下的操作按钮 -->
       <div v-if="uiStore.isSelectionMode" class="flex items-center gap-4">
-        <button
-          v-if="imageStore.selectedCount > 0"
-          @click="handleBatchDownload"
-          class="flex items-center gap-2 rounded-xl bg-blue-500/10 border border-blue-500/20 px-5 py-2.5 text-sm font-medium text-blue-400 transition-all hover:bg-blue-500/20 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)]"
-        >
-          <ArrowDownTrayIcon class="h-4 w-4" />
-          <span>下载 ({{ imageStore.selectedCount }})</span>
-        </button>
-        <button
-          v-if="imageStore.selectedCount > 0"
-          @click="handleBatchDelete"
-          class="flex items-center gap-2 rounded-xl bg-red-500/10 border border-red-500/20 px-5 py-2.5 text-sm font-medium text-red-400 transition-all hover:bg-red-500/20 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]"
-        >
-          <TrashIcon class="h-4 w-4" />
-          <span>删除 ({{ imageStore.selectedCount }})</span>
-        </button>
+        <!-- 自定义选择模式操作插槽 -->
+        <slot name="selection-actions">
+          <!-- 默认：下载和删除按钮 -->
+          <button
+            v-if="imageStore.selectedCount > 0"
+            @click="handleBatchDownload"
+            class="flex items-center gap-2 rounded-xl bg-blue-500/10 border border-blue-500/20 px-5 py-2.5 text-sm font-medium text-blue-400 transition-all hover:bg-blue-500/20 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+          >
+            <ArrowDownTrayIcon class="h-4 w-4" />
+            <span>下载 ({{ imageStore.selectedCount }})</span>
+          </button>
+          <button
+            v-if="imageStore.selectedCount > 0"
+            @click="handleBatchDelete"
+            class="flex items-center gap-2 rounded-xl bg-red-500/10 border border-red-500/20 px-5 py-2.5 text-sm font-medium text-red-400 transition-all hover:bg-red-500/20 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+          >
+            <TrashIcon class="h-4 w-4" />
+            <span>删除 ({{ imageStore.selectedCount }})</span>
+          </button>
+        </slot>
         <button
           @click="exitSelectionMode"
           class="rounded-xl border border-white/10 bg-white/5 px-6 py-2.5 text-sm font-medium text-white hover:bg-white/10 transition-colors"
@@ -125,6 +133,10 @@ import {
 } from '@heroicons/vue/24/outline'
 import { imageApi } from '@/api/image'
 
+const props = defineProps<{
+  uploadAlbumId?: number  // 上传后自动添加到的相册ID
+}>()
+
 const uiStore = useUIStore()
 const imageStore = useImageStore()
 const dialogStore = useDialogStore()
@@ -151,7 +163,7 @@ function handleSelectAll() {
   if (isAllSelected.value) {
     imageStore.clearSelection()
   } else {
-    imageStore.images.forEach(img => imageStore.selectImage(img.id))
+    imageStore.images.forEach(img => img && imageStore.selectImage(img.id))
   }
 }
 
@@ -197,8 +209,8 @@ function handleFileSelect(event: Event) {
 
   if (!files || files.length === 0) return
 
-  // 添加文件到上传队列
-  uiStore.addUploadTask(Array.from(files))
+  // 添加文件到上传队列，传入相册ID
+  uiStore.addUploadTask(Array.from(files), props.uploadAlbumId)
 
   // 打开上传抽屉
   uiStore.openUploadDrawer()

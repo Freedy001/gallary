@@ -79,6 +79,7 @@ export const useImageStore = defineStore('image', () => {
     if (fetcher) imageFetcher = fetcher
     currentPage.value = 1
     loadingPages.clear()
+    images.value = []
     await fetchImages(1, pageSize)
   }
 
@@ -99,7 +100,7 @@ export const useImageStore = defineStore('image', () => {
       idsToDelete.forEach(id => selectedImages.value.delete(id))
 
       // 更新 storageStore 中的总数（延迟导入避免循环依赖）
-      const { useStorageStore } = await import('@/stores/storage')
+      const {useStorageStore} = await import('@/stores/storage')
       const storageStore = useStorageStore()
       storageStore.updateTotalImages(-idsToDelete.length)
     } catch (err) {

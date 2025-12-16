@@ -13,27 +13,19 @@ import (
 func DynamicStaticMiddleware(config *DynamicStaticConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		config.mu.RLock()
-		enabled := config.enabled
-		urlPrefix := config.urlPrefix
 		basePath := config.basePath
 		config.mu.RUnlock()
-
-		// 未启用则跳过
-		if !enabled {
-			c.Next()
-			return
-		}
 
 		requestPath := c.Request.URL.Path
 
 		// 检查请求路径是否匹配 URL 前缀
-		if !strings.HasPrefix(requestPath, urlPrefix+"/") && requestPath != urlPrefix {
+		if !strings.HasPrefix(requestPath, "/static/") && requestPath != "/static/" {
 			c.Next()
 			return
 		}
 
 		// 提取相对路径
-		relativePath := strings.TrimPrefix(requestPath, urlPrefix)
+		relativePath := strings.TrimPrefix(requestPath, "/static")
 		if relativePath == "" {
 			relativePath = "/"
 		}

@@ -9,32 +9,26 @@ import (
 	"path/filepath"
 )
 
-// LocalStorage 本地存储实现
-type LocalStorage struct {
-	basePath  string
-	urlPrefix string
-}
+type basePath string
 
 // NewLocalStorage 创建本地存储实例
-func NewLocalStorage(cfg *model.LocalStorageConfig) (*LocalStorage, error) {
+func NewLocalStorage(cfg *model.LocalStorageConfig) (Storage, error) {
 	// 确保存储目录存在
 	if err := os.MkdirAll(cfg.BasePath, 0755); err != nil {
 		return nil, fmt.Errorf("创建存储目录失败: %w", err)
 	}
 
-	return &LocalStorage{
-		basePath:  cfg.BasePath,
-		urlPrefix: cfg.URLPrefix,
-	}, nil
+	storage := basePath(cfg.BasePath)
+	return &storage, nil
 }
 
-func (s *LocalStorage) GetType(ctx context.Context) model.StorageId {
+func (s *basePath) GetType(ctx context.Context) model.StorageId {
 	return model.StorageTypeLocal
 }
 
 // Upload 上传文件到本地
-func (s *LocalStorage) Upload(ctx context.Context, file io.Reader, path string) (string, error) {
-	fullPath := filepath.Join(s.basePath, path)
+func (s *basePath) Upload(ctx context.Context, file io.Reader, path string) (string, error) {
+	fullPath := filepath.Join(string(*s), path)
 
 	// 确保目标目录存在
 	dir := filepath.Dir(fullPath)
@@ -59,8 +53,8 @@ func (s *LocalStorage) Upload(ctx context.Context, file io.Reader, path string) 
 }
 
 // Download 从本地下载文件
-func (s *LocalStorage) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	fullPath := filepath.Join(s.basePath, path)
+func (s *basePath) Download(ctx context.Context, path string) (io.ReadCloser, error) {
+	fullPath := filepath.Join(string(*s), path)
 
 	file, err := os.Open(fullPath)
 	if err != nil {
@@ -74,8 +68,8 @@ func (s *LocalStorage) Download(ctx context.Context, path string) (io.ReadCloser
 }
 
 // Delete 删除本地文件
-func (s *LocalStorage) Delete(ctx context.Context, path string) error {
-	fullPath := filepath.Join(s.basePath, path)
+func (s *basePath) Delete(ctx context.Context, path string) error {
+	fullPath := filepath.Join(string(*s), path)
 
 	if err := os.Remove(fullPath); err != nil {
 		if os.IsNotExist(err) {
@@ -88,7 +82,7 @@ func (s *LocalStorage) Delete(ctx context.Context, path string) error {
 }
 
 // DeleteBatch 批量删除本地文件
-func (s *LocalStorage) DeleteBatch(ctx context.Context, paths []string) []DeleteResult {
+func (s *basePath) DeleteBatch(ctx context.Context, paths []string) []DeleteResult {
 	results := make([]DeleteResult, len(paths))
 	for i, path := range paths {
 		results[i] = DeleteResult{
@@ -100,12 +94,12 @@ func (s *LocalStorage) DeleteBatch(ctx context.Context, paths []string) []Delete
 }
 
 // GetURL 获取文件访问URL
-func (s *LocalStorage) GetURL(ctx context.Context, path string) (string, error) {
-	return fmt.Sprintf("%s/%s", s.urlPrefix, path), nil
+func (s *basePath) GetURL(ctx context.Context, path string) (string, error) {
+	return fmt.Sprintf("%s/%s", "static", path), nil
 }
 
 // GetURLBatch 批量获取文件访问URL
-func (s *LocalStorage) GetURLBatch(ctx context.Context, paths []string) []URLResult {
+func (s *basePath) GetURLBatch(ctx context.Context, paths []string) []URLResult {
 	results := make([]URLResult, len(paths))
 	for i, path := range paths {
 		url, err := s.GetURL(ctx, path)
@@ -119,8 +113,8 @@ func (s *LocalStorage) GetURLBatch(ctx context.Context, paths []string) []URLRes
 }
 
 // Exists 检查文件是否存在
-func (s *LocalStorage) Exists(ctx context.Context, path string) (bool, error) {
-	fullPath := filepath.Join(s.basePath, path)
+func (s *basePath) Exists(ctx context.Context, path string) (bool, error) {
+	fullPath := filepath.Join(string(*s), path)
 
 	_, err := os.Stat(fullPath)
 	if err != nil {
@@ -134,14 +128,14 @@ func (s *LocalStorage) Exists(ctx context.Context, path string) (bool, error) {
 }
 
 // GetStats 获取存储统计信息
-func (s *LocalStorage) GetStats(ctx context.Context) (*StorageStats, error) {
+func (s *basePath) GetStats(ctx context.Context) (*StorageStats, error) {
 	return s.getStats()
 }
 
 // Move 移动文件到新路径
-func (s *LocalStorage) Move(ctx context.Context, oldPath, newPath string) error {
-	srcPath := filepath.Join(s.basePath, oldPath)
-	dstPath := filepath.Join(s.basePath, newPath)
+func (s *basePath) Move(ctx context.Context, oldPath, newPath string) error {
+	srcPath := filepath.Join(string(*s), oldPath)
+	dstPath := filepath.Join(string(*s), newPath)
 
 	// 检查源文件是否存在
 	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
@@ -160,20 +154,4 @@ func (s *LocalStorage) Move(ctx context.Context, oldPath, newPath string) error 
 	}
 
 	return nil
-}
-
-// MoveBatch 批量移动文件
-func (s *LocalStorage) MoveBatch(ctx context.Context, moves map[string]string) []MoveResult {
-	results := make([]MoveResult, 0, len(moves))
-
-	for oldPath, newPath := range moves {
-		err := s.Move(ctx, oldPath, newPath)
-		results = append(results, MoveResult{
-			OldPath: oldPath,
-			NewPath: newPath,
-			Error:   err,
-		})
-	}
-
-	return results
 }

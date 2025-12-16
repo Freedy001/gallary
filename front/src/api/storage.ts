@@ -39,7 +39,7 @@ export interface AliyunPanLoginResponse {
 export function parseStorageId(id: StorageId): { driver: string; accountId?: string } {
   const parts = id.split(':')
   return {
-    driver: parts[0],
+    driver: parts[0] ?? '',
     accountId: parts[1],
   }
 }

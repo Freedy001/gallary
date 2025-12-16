@@ -7,28 +7,52 @@
           @click.self="close"
           @keydown.esc="close"
       >
-        <div class="w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a]/90 shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl ring-1 ring-white/5" @click.stop>
+        <div
+            class="w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a]/90 shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl ring-1 ring-white/5"
+            @click.stop>
           <!-- 搜索输入框 -->
           <div class="border-b border-white/5 px-5 py-5">
             <div class="flex items-center gap-4">
-              <MagnifyingGlassIcon class="h-6 w-6 flex-shrink-0 text-primary-500 animate-pulse"/>
+              <component
+                  :is="isSemanticSearch ? SparklesIcon : MagnifyingGlassIcon"
+                  :class="[
+                    'h-6 w-6 flex-shrink-0 animate-pulse',
+                    isSemanticSearch ? 'text-pink-500' : 'text-primary-500'
+                  ]"
+              />
               <input
                   ref="searchInputRef"
                   v-model="searchQuery"
                   type="text"
-                  placeholder="搜索影像记忆 / 日期 / 地点..."
+                  :placeholder="isSemanticSearch ? '描述你想找的图片，如：海边日落、穿红色衣服的人...' : '搜索影像记忆 / 日期 / 地点...'"
                   class="flex-1 border-none bg-transparent text-lg text-white placeholder:text-gray-600 focus:outline-none font-light tracking-wide"
                   @keydown.down.prevent="selectNext"
                   @keydown.up.prevent="selectPrevious"
                   @keydown.enter="executeSearch"
               />
-              <kbd class="rounded-md bg-white/10 px-2 py-1 text-xs font-mono text-gray-400 border border-white/5">ESC</kbd>
+              <kbd
+                  class="rounded-md bg-white/10 px-2 py-1 text-xs font-mono text-gray-400 border border-white/5">ESC</kbd>
             </div>
           </div>
 
           <!-- 筛选选项 -->
           <div class="border-b border-white/5 px-5 py-4 bg-white/[0.02]">
             <div class="flex flex-wrap gap-2">
+              <!-- AI 语义搜索 -->
+              <button
+                  v-if="hasEmbeddingModel"
+                  @click="isSemanticSearch = !isSemanticSearch"
+                  :class="[
+                  'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-all duration-300 border',
+                  isSemanticSearch
+                    ? 'bg-gradient-to-r from-primary-500/30 to-pink-500/30 text-primary-200 border-primary-400/50 shadow-[0_0_15px_rgba(139,92,246,0.3)]'
+                    : 'bg-white/5 text-gray-400 border-transparent hover:bg-white/10 hover:text-gray-200',
+                ]"
+              >
+                <SparklesIcon class="h-3.5 w-3.5"/>
+                AI 语义搜索
+              </button>
+
               <!-- 日期范围 -->
               <button
                   @click="toggleFilter('date')"
@@ -159,9 +183,23 @@
               </button>
               <button
                   @click="executeSearch"
-                  class="rounded-xl bg-primary-600 px-6 py-2 text-sm font-bold text-white shadow-[0_0_20px_rgba(124,58,237,0.4)] transition-all hover:bg-primary-500 hover:shadow-[0_0_30px_rgba(124,58,237,0.6)] active:scale-95"
+                  :disabled="semanticSearching"
+                  :class="[
+                    'rounded-xl px-6 py-2 text-sm font-bold text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed',
+                    isSemanticSearch
+                      ? 'bg-gradient-to-r from-primary-600 to-pink-600 shadow-[0_0_20px_rgba(236,72,153,0.4)] hover:shadow-[0_0_30px_rgba(236,72,153,0.6)]'
+                      : 'bg-primary-600 shadow-[0_0_20px_rgba(124,58,237,0.4)] hover:bg-primary-500 hover:shadow-[0_0_30px_rgba(124,58,237,0.6)]'
+                  ]"
               >
-                搜索影像
+                <span v-if="semanticSearching" class="flex items-center gap-2">
+                  <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                  搜索中...
+                </span>
+                <span v-else-if="isSemanticSearch" class="flex items-center gap-1.5">
+                  <SparklesIcon class="h-4 w-4"/>
+                  语义搜索
+                </span>
+                <span v-else>搜索影像</span>
               </button>
             </div>
           </div>
@@ -172,27 +210,33 @@
 </template>
 
 <script setup lang="ts">
-import {ref, watch, onMounted, onUnmounted, nextTick} from 'vue'
+import {ref, watch, onMounted, onUnmounted, nextTick, computed} from 'vue'
 import {useRouter} from 'vue-router'
 import {useUIStore} from '@/stores/ui'
 import {useImageStore} from '@/stores/image'
+import {useAIStore} from '@/stores/ai'
 import {
   MagnifyingGlassIcon,
   CalendarIcon,
   CameraIcon,
   MapPinIcon,
   TagIcon,
+  SparklesIcon,
 } from '@heroicons/vue/24/outline'
 import type {SearchParams} from '@/types'
-import {imageApi} from "@/api/image.ts";
+import {imageApi} from "@/api/image.ts"
+import {aiApi} from "@/api/ai.ts"
 
 const router = useRouter()
 const uiStore = useUIStore()
 const imageStore = useImageStore()
+const aiStore = useAIStore()
 
 const searchInputRef = ref<HTMLInputElement>()
 const searchQuery = ref('')
 const selectedIndex = ref(0)
+const isSemanticSearch = ref(false)
+const semanticSearching = ref(false)
 
 const activeFilters = ref(new Set<string>())
 const filters = ref<Partial<SearchParams>>({
@@ -204,12 +248,19 @@ const filters = ref<Partial<SearchParams>>({
   tags: '',
 })
 
+// 是否有可用的嵌入模型
+const hasEmbeddingModel = computed(() => {
+  return aiStore.enabledModels.length > 0
+})
+
 // 监听命令面板打开，自动聚焦输入框
 watch(() => uiStore.commandPaletteOpen, (isOpen) => {
   if (isOpen) {
     nextTick(() => {
       searchInputRef.value?.focus()
     })
+    // 获取 AI 配置以检查是否有可用的嵌入模型
+    aiStore.fetchConfig()
   }
 })
 
@@ -239,6 +290,36 @@ function clearFilters() {
 }
 
 async function executeSearch() {
+  // 语义搜索模式
+  if (isSemanticSearch.value && searchQuery.value.trim()) {
+    try {
+      semanticSearching.value = true
+      const response = await aiApi.semanticSearch({
+        query: searchQuery.value.trim(),
+        model_name: 'google/siglip-so400m-patch14-384',
+        limit: 50
+      })
+
+      // 将搜索结果设置到 imageStore
+      const images = response.data || []
+      imageStore.images = images
+      imageStore.total = images.length
+
+      close()
+
+      // 确保在画廊页面
+      if (router.currentRoute.value.path !== '/gallery') {
+        await router.push('/gallery')
+      }
+    } catch (error) {
+      console.error('Semantic search failed:', error)
+    } finally {
+      semanticSearching.value = false
+    }
+    return
+  }
+
+  // 传统搜索模式
   // 构建搜索参数
   const searchParams: SearchParams = {}
 

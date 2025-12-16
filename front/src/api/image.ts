@@ -9,9 +9,12 @@ import type {
 
 export const imageApi = {
   // 上传图片
-  upload(file: File, onProgress?: (progress: number) => void): Promise<ApiResponse<Image>> {
+  upload(file: File, albumId?: number, onProgress?: (progress: number) => void): Promise<ApiResponse<Image>> {
     const formData = new FormData()
     formData.append('file', file)
+    if (albumId) {
+      formData.append('album_id', albumId.toString())
+    }
     return http.upload('/api/images/upload', formData, onProgress)
   },
 

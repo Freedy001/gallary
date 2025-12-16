@@ -43,6 +43,9 @@ type Image struct {
 	MigrationStatus *string `gorm:"type:varchar(20)" json:"migration_status,omitempty"`
 	MigrationTaskID *int64  `gorm:"index" json:"migration_task_id,omitempty"`
 
+	// AI 相关字段
+	AIScore *float64 `gorm:"type:decimal(3,2)" json:"ai_score,omitempty"`
+
 	// 系统字段
 	CreatedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`

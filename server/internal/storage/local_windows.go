@@ -10,14 +10,14 @@ import (
 )
 
 // getStats 获取 Windows 平台的存储统计信息
-func (s *LocalStorage) getStats() (*StorageStats, error) {
+func (s *basePath) getStats() (*StorageStats, error) {
 	// 获取磁盘的可用空间和总容量
 	var freeBytesAvailable uint64
 	var totalBytes uint64
 	var totalFreeBytes uint64
 
 	// 将路径转换为 Windows API 需要的 UTF16 指针
-	pathPtr, err := windows.UTF16PtrFromString(s.basePath)
+	pathPtr, err := windows.UTF16PtrFromString(string(*s))
 	if err != nil {
 		return nil, fmt.Errorf("路径转换失败: %w", err)
 	}
@@ -42,7 +42,7 @@ func (s *LocalStorage) getStats() (*StorageStats, error) {
 }
 
 // getStatsUnix 在 Windows 上返回空统计
-func (s *LocalStorage) getStatsUnix() (*StorageStats, error) {
+func (s *basePath) getStatsUnix() (*StorageStats, error) {
 	return &StorageStats{
 		UsedBytes:  0,
 		TotalBytes: 0,

@@ -4,16 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"gallary/server/internal/model"
 	"gallary/server/internal/repository"
 	"gallary/server/internal/storage"
-	"gallary/server/pkg/logger"
 	"math/big"
-	"strings"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 // ShareService 分享服务接口
@@ -152,48 +147,11 @@ func (s *shareService) SharedImages(ctx context.Context, code string, password s
 	// 转换为 VO
 	vos := make([]*model.ImageVO, 0, len(images))
 	for _, img := range images {
-		vo := s.toVO(ctx, img)
+		vo := s.storage.ToVO(img)
 		vos = append(vos, vo)
 	}
 
 	return vos, total, nil
-}
-
-// toVO 将 Image 转换为 ImageVO
-func (s *shareService) toVO(ctx context.Context, image *model.Image) *model.ImageVO {
-	if image == nil {
-		return nil
-	}
-
-	var url string
-	var err error
-
-	// 阿里云盘存储使用后端代理URL
-	if strings.HasPrefix(image.StoragePath, "aliyunpan") {
-		url = fmt.Sprintf("/api/images/%d/file", image.ID)
-	} else {
-		// 其他存储类型直接获取URL
-		url, err = s.storage.GetURL(context.WithValue(ctx, storage.OverrideStorageType, image.StorageId), image.StoragePath)
-		if err != nil {
-			logger.Warn("获取图片URL失败", zap.Error(err), zap.String("path", image.StoragePath), zap.String("storage_type", string(image.StorageId)))
-			url = ""
-		}
-	}
-
-	// 缩略图始终从本地存储获取
-	var thumbnailURL string
-	if image.ThumbnailPath != "" {
-		localStorage := s.storage.GetLocalStorage()
-		if localStorage != nil {
-			thumbnailURL, err = localStorage.GetURL(ctx, image.ThumbnailPath)
-			if err != nil {
-				logger.Warn("获取缩略图URL失败", zap.Error(err), zap.String("path", image.ThumbnailPath))
-				thumbnailURL = ""
-			}
-		}
-	}
-
-	return image.ToVO(url, thumbnailURL)
 }
 
 // ListShares 管理端获取列表

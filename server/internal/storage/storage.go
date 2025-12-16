@@ -93,9 +93,4 @@ type Storage interface {
 	// newPath: 目标文件路径（相对路径）
 	// 返回: 错误
 	Move(ctx context.Context, oldPath, newPath string) error
-
-	// MoveBatch 批量移动文件
-	// moves: 路径映射 map[oldPath]newPath
-	// 返回: 每个文件的移动结果
-	MoveBatch(ctx context.Context, moves map[string]string) []MoveResult
 }

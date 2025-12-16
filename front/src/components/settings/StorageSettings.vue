@@ -72,7 +72,6 @@
       <LocalStorageConfig
           v-if="editingType === 'local' && form.localConfig"
           v-model:base-path="form.localConfig.base_path"
-          v-model:url-prefix="form.localConfig.url_prefix"
       />
 
       <!-- 阿里云盘配置 (多账号) -->
@@ -119,7 +118,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { settingsApi, type StorageConfigPO, type AliyunPanStorageConfig, type AliyunPanGlobalConfig } from '@/api/settings'
+import { settingsApi, type StorageConfigPO, type AliyunPanStorageConfig } from '@/api/settings'
 import type { StorageId } from '@/api/storage'
 import { parseStorageId } from '@/api/storage'
 import { useDialogStore } from '@/stores/dialog'
@@ -157,7 +156,6 @@ const form = reactive<StorageConfigPO>({
   localConfig: {
     id: 'local',
     base_path: '',
-    url_prefix: '',
   },
   aliyunpanConfig: [],
   aliyunpanGlobal: {

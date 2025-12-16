@@ -91,7 +91,6 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import ImageGrid from '@/components/gallery/ImageGrid.vue'
 import {
   TrashIcon,
-  CheckIcon,
   ArrowUturnLeftIcon,
   XMarkIcon,
 } from '@heroicons/vue/24/outline'

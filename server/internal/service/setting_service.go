@@ -71,6 +71,10 @@ type SettingService interface {
 
 	// 检查是否有迁移正在进行
 	IsMigrationRunning(ctx context.Context) bool
+
+	// AI 配置管理
+	GetAIConfig(ctx context.Context) (*model.AIPo, error)
+	UpdateAIConfig(ctx context.Context, config *model.AIPo) error
 }
 
 type settingService struct {
@@ -115,6 +119,8 @@ func (s *settingService) GetSettingsByCategory(ctx context.Context, category str
 		}, nil
 	case model.SettingCategoryCleanup:
 		return model.ToSettingPO[model.CleanupPO](settings), nil
+	case model.SettingCategoryAI:
+		return model.ToSettingPO[model.AIPo](settings), nil
 	default:
 		return nil, fmt.Errorf("未知的设置分类: %s", category)
 	}
@@ -179,14 +185,7 @@ func (s *settingService) UpdateStorageConfig(ctx context.Context, storageItem mo
 
 	oldStorageItem := storageConfig.GetStorageConfigById(storageItem.StorageId())
 
-	var oldPath, newPath, oldUrl, newUrl = oldStorageItem.Path(), storageItem.Path(), "", ""
-
-	if newConfig, ok := storageItem.(*model.LocalStorageConfig); ok {
-		if oldConfig, ok := oldStorageItem.(*model.LocalStorageConfig); ok {
-			oldUrl = oldConfig.URLPrefix
-			newUrl = newConfig.URLPrefix
-		}
-	}
+	var oldPath, newPath = oldStorageItem.Path(), storageItem.Path()
 
 	// 3. 检测是否需要迁移
 	if oldPath != newPath {
@@ -204,7 +203,7 @@ func (s *settingService) UpdateStorageConfig(ctx context.Context, storageItem mo
 					return
 				}
 
-				s.cfg.DynamicStaticConfig.Update(newUrl, newPath)
+				s.cfg.DynamicStaticConfig.Update(newPath)
 
 				if err = s.repo.BatchUpsert(ctx, storageItem.ToSettings()); err != nil {
 					logger.Error("保存设置结果失败", zap.Error(err))
@@ -231,23 +230,19 @@ func (s *settingService) UpdateStorageConfig(ctx context.Context, storageItem mo
 			TaskID:         task.ID,
 			Message:        "配置变更需要迁移文件，迁移任务已启动",
 		}, nil
-	} else {
-		if newUrl != oldUrl {
-			s.cfg.DynamicStaticConfig.Update(newUrl, newPath)
-		}
-
-		// 5. 无需迁移，直接保存配置
-		if err := s.repo.BatchUpsert(ctx, storageItem.ToSettings()); err != nil {
-			return nil, fmt.Errorf("保存存储配置失败: %w", err)
-		}
-
-		// 6. 应用设置到运行时配置
-		if _, err := s.ResetStorage(ctx); err != nil {
-			logger.Warn("应用存储配置失败", zap.Error(err))
-		}
-
-		logger.Info("存储配置已更新")
 	}
+
+	// 5. 无需迁移，直接保存配置
+	if err := s.repo.BatchUpsert(ctx, storageItem.ToSettings()); err != nil {
+		return nil, fmt.Errorf("保存存储配置失败: %w", err)
+	}
+
+	// 6. 应用设置到运行时配置
+	if _, err := s.ResetStorage(ctx); err != nil {
+		logger.Warn("应用存储配置失败", zap.Error(err))
+	}
+
+	logger.Info("存储配置已更新")
 
 	return &StorageUpdateResult{
 		NeedsMigration: false,
@@ -308,9 +303,8 @@ func (s *settingService) InitializeDefaults(ctx context.Context) error {
 		model.StorageConfigPO{
 			DefaultId: model.StorageTypeLocal,
 			LocalConfig: &model.LocalStorageConfig{
-				Id:        model.StorageTypeLocal,
-				BasePath:  "./storage/images",
-				URLPrefix: "/static/images",
+				Id:       model.StorageTypeLocal,
+				BasePath: "./storage/images",
 			},
 		}.ToSettings(),
 		model.CleanupPO{
@@ -558,5 +552,45 @@ func (s *settingService) UpdateGlobalConfig(ctx context.Context, globalConfig *m
 	logger.Info("阿里云盘全局配置已更新",
 		zap.Int64("download_chunk_size", globalConfig.DownloadChunkSize),
 		zap.Int("download_concurrency", globalConfig.DownloadConcurrency))
+	return nil
+}
+
+// ==================== AI 配置管理 ====================
+
+// GetAIConfig 获取 AI 配置
+func (s *settingService) GetAIConfig(ctx context.Context) (*model.AIPo, error) {
+	settings, err := s.repo.GetByCategory(ctx, model.SettingCategoryAI)
+	if err != nil {
+		return nil, fmt.Errorf("获取 AI 配置失败: %w", err)
+	}
+
+	config := model.ToSettingPO[model.AIPo](settings)
+
+	// 确保返回非空切片
+	if config.Models == nil {
+		config.Models = []*model.ModelConfig{}
+	}
+
+	return &config, nil
+}
+
+// UpdateAIConfig 更新 AI 配置
+func (s *settingService) UpdateAIConfig(ctx context.Context, config *model.AIPo) error {
+	for _, m := range config.Models {
+		if m.Provider != model.OpenAI && m.Provider != model.SelfHosted && m.Provider != model.AliyunMultimodalEmbedding {
+			return fmt.Errorf("不支持的模型提供者: %s", m.Provider)
+		}
+		if m.Provider == model.SelfHosted {
+			m.ModelName = "google/siglip-so400m-patch14-384"
+			m.ApiModelName = "google/siglip-so400m-patch14-384"
+		}
+	}
+
+	if err := s.repo.BatchUpsert(ctx, config.ToSettings()); err != nil {
+		return fmt.Errorf("保存 AI 配置失败: %w", err)
+	}
+
+	logger.Info("AI 配置已更新",
+		zap.Int("models_count", len(config.Models)))
 	return nil
 }

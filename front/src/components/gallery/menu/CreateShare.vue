@@ -179,14 +179,13 @@ import {
   ClipboardDocumentIcon,
 } from '@heroicons/vue/24/outline'
 
+const isOpen = defineModel<boolean>({ default: false })
 const props = defineProps<{
-  isOpen: boolean
   selectedCount: number
   selectedIds: number[]
 }>()
 
 const emit = defineEmits<{
-  (e: 'close'): void
   (e: 'created', shareCode: string): void
 }>()
 
@@ -219,7 +218,7 @@ function handleModalClose(value: boolean) {
 }
 
 function closeModal() {
-  emit('close')
+  isOpen.value = false
   setTimeout(() => {
     step.value = 'form'
     form.title = ''
@@ -251,7 +250,7 @@ async function handleSubmit() {
     emit('created', code)
   } catch (error) {
     console.error('Create share failed:', error)
-    dialogStore.alert({ title: '错误', message: '创建分享失败', type: 'error' })
+    await dialogStore.alert({ title: '错误', message: '创建分享失败', type: 'error' })
   } finally {
     loading.value = false
   }

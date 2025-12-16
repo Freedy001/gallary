@@ -771,33 +771,34 @@ func (s *AliyunPanStorage) DeleteBatch(ctx context.Context, paths []string) []De
 
 // GetURL 获取文件访问 URL
 func (s *AliyunPanStorage) GetURL(ctx context.Context, filePath string) (string, error) {
-	if err := s.ensureValidToken(); err != nil {
-		return "", err
-	}
-
-	fullPath := path.Join(s.basePath, filePath)
-
-	// 获取文件信息
-	fileInfo, apiErr := s.client.FileInfoByPath(s.driveId, fullPath)
-	if apiErr != nil {
-		return "", fmt.Errorf("获取文件信息失败: %s", apiErr.Error())
-	}
-
-	if fileInfo.IsFolder() {
-		return "", fmt.Errorf("路径是文件夹，不是文件: %s", filePath)
-	}
-
-	// 获取下载 URL（有效期约 4 小时）
-	downloadResult, apiErr := s.client.GetFileDownloadUrl(&aliyunpan.GetFileDownloadUrlParam{
-		DriveId:   s.driveId,
-		FileId:    fileInfo.FileId,
-		ExpireSec: 14400, // 4 小时
-	})
-	if apiErr != nil {
-		return "", fmt.Errorf("获取下载链接失败: %s", apiErr.Error())
-	}
-
-	return downloadResult.Url, nil
+	return "aliyunpan/" + filePath, nil
+	//if err := s.ensureValidToken(); err != nil {
+	//	return "", err
+	//}
+	//
+	//fullPath := path.Join(s.basePath, filePath)
+	//
+	//// 获取文件信息
+	//fileInfo, apiErr := s.client.FileInfoByPath(s.driveId, fullPath)
+	//if apiErr != nil {
+	//	return "", fmt.Errorf("获取文件信息失败: %s", apiErr.Error())
+	//}
+	//
+	//if fileInfo.IsFolder() {
+	//	return "", fmt.Errorf("路径是文件夹，不是文件: %s", filePath)
+	//}
+	//
+	//// 获取下载 URL（有效期约 4 小时）
+	//downloadResult, apiErr := s.client.GetFileDownloadUrl(&aliyunpan.GetFileDownloadUrlParam{
+	//	DriveId:   s.driveId,
+	//	FileId:    fileInfo.FileId,
+	//	ExpireSec: 14400, // 4 小时
+	//})
+	//if apiErr != nil {
+	//	return "", fmt.Errorf("获取下载链接失败: %s", apiErr.Error())
+	//}
+	//
+	//return downloadResult.Url, nil
 }
 
 // GetURLBatch 批量获取文件访问 URL（并发10线程）
@@ -958,20 +959,4 @@ func (s *AliyunPanStorage) Move(ctx context.Context, oldPath, newPath string) er
 		zap.String("to", newPath))
 
 	return nil
-}
-
-// MoveBatch 批量移动文件
-func (s *AliyunPanStorage) MoveBatch(ctx context.Context, moves map[string]string) []MoveResult {
-	results := make([]MoveResult, 0, len(moves))
-
-	for oldPath, newPath := range moves {
-		err := s.Move(ctx, oldPath, newPath)
-		results = append(results, MoveResult{
-			OldPath: oldPath,
-			NewPath: newPath,
-			Error:   err,
-		})
-	}
-
-	return results
 }

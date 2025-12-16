@@ -10,9 +10,9 @@ import (
 )
 
 // getStats 获取 Unix/Linux 平台的存储统计信息
-func (s *LocalStorage) getStats() (*StorageStats, error) {
+func (s *basePath) getStats() (*StorageStats, error) {
 	var stat unix.Statfs_t
-	if err := unix.Statfs(s.basePath, &stat); err != nil {
+	if err := unix.Statfs(string(*s), &stat); err != nil {
 		return nil, fmt.Errorf("获取存储统计失败: %w", err)
 	}
 

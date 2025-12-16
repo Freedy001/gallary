@@ -14,3 +14,11 @@ export interface DialogState extends DialogOptions {
   visible: boolean
   resolve?: (value: boolean) => void
 }
+
+export interface Notification {
+  id: number
+  title?: string
+  message: string
+  type: DialogType
+  duration?: number
+}

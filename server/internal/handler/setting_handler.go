@@ -164,7 +164,7 @@ func (h *SettingHandler) GetPasswordStatus(c *gin.Context) {
 
 // AddStorageRequest 添加存储配置请求
 type AddStorageRequest struct {
-	Type   string                        `json:"type" binding:"required"` // 存储类型: aliyunpan
+	Type   string                       `json:"type" binding:"required"` // 存储类型: aliyunpan
 	Config model.AliyunPanStorageConfig `json:"config" binding:"required"`
 }
 
@@ -284,4 +284,31 @@ func (h *SettingHandler) UpdateGlobalConfig(c *gin.Context) {
 	}
 
 	utils.Success(c, gin.H{"message": "全局配置更新成功"})
+}
+
+// UpdateAI 更新 AI 配置
+//
+//	@Summary		更新 AI 配置
+//	@Description	更新嵌入模型和 LLM 配置
+//	@Tags			设置
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		model.AIPo		true	"AI 配置"
+//	@Success		200		{object}	utils.Response	"更新成功"
+//	@Failure		400		{object}	utils.Response	"请求参数错误"
+//	@Failure		500		{object}	utils.Response	"服务器错误"
+//	@Router			/api/settings/ai [put]
+func (h *SettingHandler) UpdateAI(c *gin.Context) {
+	var req model.AIPo
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+
+	if err := h.settingService.UpdateAIConfig(c.Request.Context(), &req); err != nil {
+		utils.Error(c, 400, err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "AI 配置更新成功"})
 }

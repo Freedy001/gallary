@@ -306,7 +306,7 @@ func (s *migrationService) clearImageMigrationStatus(ctx context.Context, taskID
 
 // executeMove 复制本地文件到新目录
 func (s *migrationService) executeMove(ctx context.Context, storageType model.StorageId, oldBasePath, newBasePath string) error {
-	err := s.storageManager.Move(context.WithValue(ctx, storage.OverrideStorageType, storageType), oldBasePath, newBasePath)
+	err := s.storageManager.Move(context.WithValue(ctx, storage.OverrideStorageType, storageType), "", oldBasePath, newBasePath)
 	if err != nil {
 		return err
 	}

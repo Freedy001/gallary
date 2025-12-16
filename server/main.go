@@ -1,9 +1,6 @@
 package main
 
 import (
-	_ "net/http/pprof"
-)
-import (
 	"context"
 	"gallary/server/internal"
 	"gallary/server/internal/model"
@@ -59,7 +56,7 @@ func main() {
 		DynamicStaticConfig: middleware.NewDynamicStaticConfig(),
 	}
 
-	settingService, migrationService, imageService, shareService := initService(platformConfig, cfg)
+	settingService, migrationService, imageService, shareService, albumService, aiService := initService(platformConfig, cfg)
 
 	// 11. 设置路由
 	r := router.SetupRouter(
@@ -67,13 +64,19 @@ func main() {
 		handler.NewAuthHandler(platformConfig),
 		handler.NewImageHandler(imageService),
 		handler.NewShareHandler(shareService),
+		handler.NewAlbumHandler(albumService),
 		handler.NewSettingHandler(settingService),
 		handler.NewStorageHandler(settingService.GetStorageManager(), settingService),
 		handler.NewMigrationHandler(migrationService),
+		handler.NewAIHandler(aiService),
 		platformConfig,
 	)
 
-	// 12. 启动回收站自动清理任务
+	// 12. 启动 AI 处理器
+	aiService.StartProcessor(context.Background())
+	defer aiService.StopProcessor()
+
+	// 13. 启动回收站自动清理任务
 	stopCleanup := startTrashCleanupTask(imageService, platformConfig)
 	defer stopCleanup()
 
@@ -117,10 +120,11 @@ func main() {
 	logger.Info("服务器已关闭")
 }
 
-func initService(platformConfig *internal.PlatformConfig, cfg *config.Config) (service.SettingService, service.MigrationService, service.ImageService, service.ShareService) {
+func initService(platformConfig *internal.PlatformConfig, cfg *config.Config) (service.SettingService, service.MigrationService, service.ImageService, service.ShareService, service.AlbumService, service.AIService) {
 	var err error
 	// 6. 初始化Repository层
-	imageRepo, shareRepo, settingRepo, migrationRepo := repository.NewImageRepository(), repository.NewShareRepository(), repository.NewSettingRepository(), repository.NewMigrationRepository()
+	imageRepo, shareRepo, settingRepo, migrationRepo, albumRepo := repository.NewImageRepository(), repository.NewShareRepository(), repository.NewSettingRepository(), repository.NewMigrationRepository(), repository.NewAlbumRepository()
+	aiTaskRepo, embeddingRepo := repository.NewAITaskRepository(), repository.NewEmbeddingRepository()
 
 	// 7. 初始化设置服务并加载数据库设置
 	settingService := service.NewSettingService(settingRepo, platformConfig)
@@ -148,13 +152,15 @@ func initService(platformConfig *internal.PlatformConfig, cfg *config.Config) (s
 	)
 
 	// 9. 初始化Service层
-	imageService := service.NewImageService(imageRepo, storageManager, cfg)
+	imageService := service.NewImageService(imageRepo, albumRepo, storageManager, cfg)
 	shareService := service.NewShareService(shareRepo, storageManager)
+	albumService := service.NewAlbumService(albumRepo, storageManager)
+	aiService := service.NewAIService(aiTaskRepo, embeddingRepo, imageRepo, settingService)
 
 	// 10. 初始化Handler层
 	// 10.1 连接 SettingService 和 MigrationService
 	settingService.SetMigrationService(migrationService)
-	return settingService, migrationService, imageService, shareService
+	return settingService, migrationService, imageService, shareService, albumService, aiService
 }
 
 func initPlatformConfig(platformConfig *internal.PlatformConfig, settingService service.SettingService) {
@@ -182,8 +188,7 @@ func initPlatformConfig(platformConfig *internal.PlatformConfig, settingService 
 	}
 
 	localConfig := storage.(service.StorageConfigDTO).LocalConfig
-	platformConfig.DynamicStaticConfig.Update(localConfig.URLPrefix, localConfig.BasePath)
-	platformConfig.Enable()
+	platformConfig.DynamicStaticConfig.Update(localConfig.BasePath)
 }
 
 // startTrashCleanupTask 启动回收站自动清理任务

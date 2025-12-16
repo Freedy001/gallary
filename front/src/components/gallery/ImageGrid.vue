@@ -51,6 +51,9 @@
         </ContextMenuItem>
 
         <template v-if="props.mode === 'gallery'">
+          <ContextMenuItem :icon="RectangleStackIcon" @click="handleAddToAlbum">
+            添加到相册 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+          </ContextMenuItem>
           <ContextMenuItem :icon="ShareIcon" @click="handleShare">
             分享 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
           </ContextMenuItem>
@@ -86,10 +89,16 @@
       />
 
       <CreateShare
-          :is-open="isShareModalOpen"
+          v-model="isShareModalOpen"
           :selected-count="shareTargetIds.length"
           :selected-ids="shareTargetIds"
-          @close="isShareModalOpen = false"
+      />
+
+      <AddToAlbumModal
+          v-model="isAddToAlbumOpen"
+          :image-ids="addToAlbumTargetIds"
+          :exclude-album-id="props.excludeAlbumId"
+          @added="onAddedToAlbum"
       />
 
       <!-- 框选区域 -->
@@ -239,7 +248,8 @@ import {
   ArchiveBoxArrowDownIcon,
   CloudArrowUpIcon,
   ArrowUturnLeftIcon,
-  XMarkIcon
+  XMarkIcon,
+  RectangleStackIcon
 } from '@heroicons/vue/24/outline'
 import ImageCard from './ImageCard.vue'
 import ContextMenu from '@/components/common/ContextMenu.vue'
@@ -247,11 +257,13 @@ import ContextMenuItem from '@/components/common/ContextMenuItem.vue'
 import SelectionBox from '@/components/common/SelectionBox.vue'
 import MetadataEditor from './menu/MetadataEditor.vue'
 import CreateShare from '@/components/gallery/menu/CreateShare.vue'
+import AddToAlbumModal from '@/components/album/AddToAlbumModal.vue'
 import ImageViewer from "@/components/gallery/ImageViewer.vue";
 import {useBoxSelection} from '@/composables/useBoxSelection'
 
 const props = withDefaults(defineProps<{
   mode?: 'gallery' | 'trash'
+  excludeAlbumId?: number  // 添加到相册时排除的相册ID
 }>(), {
   mode: 'gallery'
 })
@@ -277,6 +289,10 @@ const metadataEditorInitialData = ref<Image | null>(null)
 const isShareModalOpen = ref(false)
 const shareTargetIds = ref<number[]>([])
 
+// 添加到相册弹窗状态
+const isAddToAlbumOpen = ref(false)
+const addToAlbumTargetIds = ref<number[]>([])
+
 const handleContextMenu = (e: MouseEvent, image: Image, index: number) => {
   contextMenu.value = {
     visible: true,
@@ -297,6 +313,18 @@ const handleShare = () => {
   shareTargetIds.value = contextMenuTargetIds.value
   isShareModalOpen.value = true
   contextMenu.value.visible = false
+}
+
+const handleAddToAlbum = () => {
+  addToAlbumTargetIds.value = contextMenuTargetIds.value
+  isAddToAlbumOpen.value = true
+  contextMenu.value.visible = false
+}
+
+const onAddedToAlbum = () => {
+  // 添加成功后清除选择
+  imageStore.selectedImages.clear()
+  uiStore.setSelectionMode(false)
 }
 
 const handleView = () => {
