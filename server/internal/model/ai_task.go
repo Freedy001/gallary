@@ -107,17 +107,17 @@ type AIQueueDetail struct {
 
 // AITaskImageInfo 任务图片信息（前端展示）
 type AITaskImageInfo struct {
-	ID        int64   `json:"id"`
-	ImageID   int64   `json:"image_id"`
-	ImagePath string  `json:"image_path"`
-	Thumbnail string  `json:"thumbnail,omitempty"`
-	Status    string  `json:"status"`
-	Error     *string `json:"error,omitempty"`
-	CreatedAt string  `json:"created_at"`
+	ID           int64   `json:"id"`
+	ImageID      int64   `json:"image_id"`
+	ImageName    string  `json:"imageName"`
+	ThumbnailUrl string  `json:"thumbnailurl,omitempty"`
+	Status       string  `json:"status"`
+	Error        *string `json:"error,omitempty"`
+	CreatedAt    string  `json:"created_at"`
 }
 
 // ToInfo 转换为前端展示信息
-func (ti *AITaskImage) ToInfo() AITaskImageInfo {
+func (ti *AITaskImage) ToInfo(thumbnailUrl string) AITaskImageInfo {
 	info := AITaskImageInfo{
 		ID:        ti.ID,
 		ImageID:   ti.ImageID,
@@ -126,8 +126,8 @@ func (ti *AITaskImage) ToInfo() AITaskImageInfo {
 		CreatedAt: ti.CreatedAt.Format(time.RFC3339),
 	}
 	if ti.Image != nil {
-		info.ImagePath = ti.Image.StoragePath
-		info.Thumbnail = ti.Image.ThumbnailPath
+		info.ImageName = ti.Image.OriginalName
 	}
+	info.ThumbnailUrl = thumbnailUrl
 	return info
 }

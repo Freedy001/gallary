@@ -64,9 +64,6 @@ export function getStorageDriverName(id: StorageId): string {
 }
 
 export const storageApi = {
-  // 获取存储统计信息
-  getStorageStats: () => http.get<StorageStats>('/api/storage/stats'),
-
   // 生成阿里云盘登录二维码
   generateAliyunPanQRCode: () =>
     http.post<AliyunPanQRCodeResponse>('/api/storage/aliyunpan/qrcode'),

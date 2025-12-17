@@ -4,6 +4,7 @@ import (
 	"context"
 	"gallary/server/internal"
 	"gallary/server/internal/model"
+	"gallary/server/internal/websocket"
 	"log"
 	"net/http"
 	"os"
@@ -56,7 +57,13 @@ func main() {
 		DynamicStaticConfig: middleware.NewDynamicStaticConfig(),
 	}
 
-	settingService, migrationService, imageService, shareService, albumService, aiService := initService(platformConfig, cfg)
+	// 创建 WebSocket Hub
+	wsHub := websocket.NewHub()
+	defer wsHub.Stop()
+	// 创建通知器
+	notifier := websocket.NewNotifier(wsHub)
+
+	settingService, migrationService, imageService, shareService, albumService, aiService := initService(platformConfig, cfg, notifier)
 
 	// 11. 设置路由
 	r := router.SetupRouter(
@@ -69,6 +76,7 @@ func main() {
 		handler.NewStorageHandler(settingService.GetStorageManager(), settingService),
 		handler.NewMigrationHandler(migrationService),
 		handler.NewAIHandler(aiService),
+		handler.NewWebSocketHandler(wsHub, platformConfig.AdminConfig),
 		platformConfig,
 	)
 
@@ -120,7 +128,7 @@ func main() {
 	logger.Info("服务器已关闭")
 }
 
-func initService(platformConfig *internal.PlatformConfig, cfg *config.Config) (service.SettingService, service.MigrationService, service.ImageService, service.ShareService, service.AlbumService, service.AIService) {
+func initService(platformConfig *internal.PlatformConfig, cfg *config.Config, notifier websocket.Notifier) (service.SettingService, service.MigrationService, service.ImageService, service.ShareService, service.AlbumService, service.AIService) {
 	var err error
 	// 6. 初始化Repository层
 	imageRepo, shareRepo, settingRepo, migrationRepo, albumRepo := repository.NewImageRepository(), repository.NewShareRepository(), repository.NewSettingRepository(), repository.NewMigrationRepository(), repository.NewAlbumRepository()
@@ -152,10 +160,28 @@ func initService(platformConfig *internal.PlatformConfig, cfg *config.Config) (s
 	)
 
 	// 9. 初始化Service层
-	imageService := service.NewImageService(imageRepo, albumRepo, storageManager, cfg)
+	// 先初始化 AI Service（Image Service 依赖它）
+	aiService := service.NewAIService(aiTaskRepo, embeddingRepo, imageRepo, settingService, notifier)
+
+	imageService := service.NewImageService(imageRepo, albumRepo, storageManager, cfg, notifier, aiService)
 	shareService := service.NewShareService(shareRepo, storageManager)
 	albumService := service.NewAlbumService(albumRepo, storageManager)
-	aiService := service.NewAIService(aiTaskRepo, embeddingRepo, imageRepo, settingService)
+
+	notifier.OnClientSetup(func(notifier websocket.Notifier) {
+		stats := settingService.GetStorageManager().GetMultiStorageStats(context.Background())
+		if stats != nil {
+			notifier.NotifyStorageStats(stats)
+		}
+		status, err := aiService.GetQueueStatus(context.Background())
+		if err == nil && status != nil {
+			notifier.NotifyAIQueueStatus(status)
+		}
+		// 推送当前图片总数
+		count, err := imageService.Repo().Count(context.Background())
+		if err == nil {
+			notifier.NotifyImageCount(count)
+		}
+	})
 
 	// 10. 初始化Handler层
 	// 10.1 连接 SettingService 和 MigrationService

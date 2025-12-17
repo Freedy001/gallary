@@ -19,6 +19,7 @@ type ImageRepository interface {
 	FindByID(ctx context.Context, id int64) (*model.Image, error)
 	FindByHash(ctx context.Context, hash string) (*model.Image, error)
 	List(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error)
+	Count(ctx context.Context) (int64, error)
 	Update(ctx context.Context, image *model.Image) error
 	Delete(ctx context.Context, id int64) error
 	DeleteBatch(ctx context.Context, ids []int64) error
@@ -58,14 +59,16 @@ type ImageRepository interface {
 
 // SearchParams 搜索参数
 type SearchParams struct {
-	Keyword      string
-	StartDate    *string
-	EndDate      *string
-	Tags         []int64
-	LocationName string
-	CameraModel  string
-	Page         int
-	PageSize     int
+	Keyword       string
+	StartDate     *string
+	EndDate       *string
+	Tags          []int64
+	LocationName  string
+	CameraModel   string
+	Page          int
+	PageSize      int
+	SemanticQuery string // 语义搜索查询词
+	ModelName     string // 使用的模型名称
 }
 
 type imageRepository struct {
@@ -162,6 +165,15 @@ func (r *imageRepository) List(ctx context.Context, page, pageSize int) ([]*mode
 	}
 
 	return images, total, nil
+}
+
+// Count 获取图片总数（不包括已删除）
+func (r *imageRepository) Count(ctx context.Context) (int64, error) {
+	var count int64
+	if err := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 // Update 更新图片信息

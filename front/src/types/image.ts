@@ -52,6 +52,8 @@ export interface SearchParams {
   location?: string
   camera_model?: string
   tags?: string
+  semantic_query?: string
+  model_name?: string
   page?: number
   page_size?: number
 }

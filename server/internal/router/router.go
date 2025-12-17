@@ -21,6 +21,7 @@ func SetupRouter(
 	storageHandler *handler.StorageHandler,
 	migrationHandler *handler.MigrationHandler,
 	aiHandler *handler.AIHandler,
+	wsHandler *handler.WebSocketHandler,
 	configCompose *internal.PlatformConfig,
 ) *gin.Engine {
 	// 设置运行模式
@@ -39,6 +40,9 @@ func SetupRouter(
 	// API路由组
 	api := r.Group("/api")
 	{
+		// WebSocket 连接（在路由组内，但独立路由）
+		api.GET("/ws", wsHandler.HandleWebSocket)
+
 		// 认证相关路由（无需认证）
 		auth := api.Group("/auth")
 		{

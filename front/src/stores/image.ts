@@ -9,7 +9,6 @@ export const useImageStore = defineStore('image', () => {
   const viewerIndex = ref<number>(-1);
   const selectedImages = ref<Set<number>>(new Set())
   const loading = ref(false)
-  const error = ref<string | null>(null)
 
   // Pagination state
   const currentPage = ref(1)
@@ -31,7 +30,6 @@ export const useImageStore = defineStore('image', () => {
     try {
       loadingPages.add(page)
       if (page === 1) loading.value = true
-      error.value = null
 
       const data: Pageable<Image> = await imageFetcher(page, pageSize)
 
@@ -65,7 +63,6 @@ export const useImageStore = defineStore('image', () => {
 
       return data
     } catch (err) {
-      error.value = err instanceof Error ? err.message : '获取图片列表失败'
       throw err
     } finally {
       if (page === 1) loading.value = false
@@ -98,13 +95,7 @@ export const useImageStore = defineStore('image', () => {
 
       // 清除选中状态
       idsToDelete.forEach(id => selectedImages.value.delete(id))
-
-      // 更新 storageStore 中的总数（延迟导入避免循环依赖）
-      const {useStorageStore} = await import('@/stores/storage')
-      const storageStore = useStorageStore()
-      storageStore.updateTotalImages(-idsToDelete.length)
     } catch (err) {
-      error.value = err instanceof Error ? err.message : '批量删除图片失败'
       throw err
     } finally {
       loading.value = false
@@ -133,7 +124,6 @@ export const useImageStore = defineStore('image', () => {
     viewerIndex,
     selectedImages,
     loading,
-    error,
     currentPage,
     total,
     // Computed

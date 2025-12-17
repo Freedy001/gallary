@@ -3,11 +3,9 @@ import {ref, computed} from 'vue'
 import {createThumbnail} from "@/utils/image.ts";
 import {imageApi} from "@/api/image.ts";
 import {useImageStore} from "@/stores/image.ts";
-import {useStorageStore} from "@/stores/storage.ts";
 import {useAlbumStore} from "@/stores/album.ts";
 
 const imageStore = useImageStore()
-const storageStore = useStorageStore()
 const albumStore = useAlbumStore()
 
 export interface UploadTask {
@@ -32,10 +30,6 @@ export const useUIStore = defineStore('ui', () => {
   // Upload state
   const uploadDrawerOpen = ref(false)
   const uploadTasks = ref<UploadTask[]>([])
-
-  // Loading state
-  const globalLoading = ref(false)
-  const loadingMessage = ref('')
 
   // Selection mode state
   const isSelectionMode = ref(false)
@@ -94,10 +88,6 @@ export const useUIStore = defineStore('ui', () => {
     const total = uploadTasks.value.reduce((sum, task) => sum + task.progress, 0)
     return Math.round(total / uploadTasks.value.length)
   })
-
-  const hasActiveUploads = computed(() =>
-    uploadTasks.value.some(t => t.status === 'uploading' || t.status === 'pending')
-  )
 
   // Actions
   function setGridDensity(density: number) {
@@ -182,7 +172,6 @@ export const useUIStore = defineStore('ui', () => {
     // 只在有成功上传时刷新图片列表和总数
     if (hasSuccess) {
       await imageStore.refreshImages()
-      await storageStore.refreshTotalImages()
     }
   }
 
@@ -244,11 +233,6 @@ export const useUIStore = defineStore('ui', () => {
     )
   }
 
-  function setGlobalLoading(loading: boolean, message = '') {
-    globalLoading.value = loading
-    loadingMessage.value = message
-  }
-
   function setSelectionMode(mode: boolean) {
     isSelectionMode.value = mode
   }
@@ -264,8 +248,6 @@ export const useUIStore = defineStore('ui', () => {
     commandPaletteOpen,
     uploadDrawerOpen,
     uploadTasks,
-    globalLoading,
-    loadingMessage,
     isSelectionMode,
     timeLineState,
 
@@ -276,7 +258,6 @@ export const useUIStore = defineStore('ui', () => {
     completedCount,
     failedCount,
     totalProgress,
-    hasActiveUploads,
 
     // Actions
     setGridDensity,
@@ -288,10 +269,8 @@ export const useUIStore = defineStore('ui', () => {
     closeUploadDrawer,
     addUploadTask,
     retryUploadTask,
-    updateUploadTask,
     removeUploadTask,
     clearCompletedTasks,
-    setGlobalLoading,
     setSelectionMode,
     setTimeLineState,
   }

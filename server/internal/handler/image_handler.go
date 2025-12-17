@@ -365,9 +365,11 @@ func (h *ImageHandler) BatchDownload(c *gin.Context) {
 //	@Router			/api/search [get]
 func (h *ImageHandler) Search(c *gin.Context) {
 	params := &repository.SearchParams{
-		Keyword:      c.Query("keyword"),
-		LocationName: c.Query("location"),
-		CameraModel:  c.Query("camera_model"),
+		Keyword:       c.Query("keyword"),
+		LocationName:  c.Query("location"),
+		CameraModel:   c.Query("camera_model"),
+		SemanticQuery: c.Query("semantic_query"),
+		ModelName:     c.Query("model_name"),
 	}
 
 	if startDate := c.Query("start_date"); startDate != "" {

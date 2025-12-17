@@ -25,11 +25,6 @@ export const imageApi = {
     })
   },
 
-  // 获取图片详情
-  getDetail(id: number): Promise<ApiResponse<Image>> {
-    return http.get(`/api/images/${id}`)
-  },
-
   // 删除图片
   delete(id: number): Promise<ApiResponse<null>> {
     return http.delete(`/api/images/${id}`)

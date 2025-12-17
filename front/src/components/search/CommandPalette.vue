@@ -225,7 +225,6 @@ import {
 } from '@heroicons/vue/24/outline'
 import type {SearchParams} from '@/types'
 import {imageApi} from "@/api/image.ts"
-import {aiApi} from "@/api/ai.ts"
 
 const router = useRouter()
 const uiStore = useUIStore()
@@ -290,48 +289,28 @@ function clearFilters() {
 }
 
 async function executeSearch() {
-  // 语义搜索模式
-  if (isSemanticSearch.value && searchQuery.value.trim()) {
-    try {
-      semanticSearching.value = true
-      const response = await aiApi.semanticSearch({
-        query: searchQuery.value.trim(),
-        model_name: 'google/siglip-so400m-patch14-384',
-        limit: 50
-      })
-
-      // 将搜索结果设置到 imageStore
-      const images = response.data || []
-      imageStore.images = images
-      imageStore.total = images.length
-
-      close()
-
-      // 确保在画廊页面
-      if (router.currentRoute.value.path !== '/gallery') {
-        await router.push('/gallery')
-      }
-    } catch (error) {
-      console.error('Semantic search failed:', error)
-    } finally {
-      semanticSearching.value = false
-    }
-    return
-  }
-
-  // 传统搜索模式
   // 构建搜索参数
   const searchParams: SearchParams = {}
 
-  if (filters.value.keyword) searchParams.keyword = filters.value.keyword
-  if (filters.value.start_date) searchParams.start_date = filters.value.start_date
-  if (filters.value.end_date) searchParams.end_date = filters.value.end_date
-  if (filters.value.camera_model) searchParams.camera_model = filters.value.camera_model
-  if (filters.value.location) searchParams.location = filters.value.location
-  if (filters.value.tags) searchParams.tags = filters.value.tags
+  // 语义搜索模式
+  if (isSemanticSearch.value && searchQuery.value.trim()) {
+    searchParams.semantic_query = searchQuery.value.trim()
+    searchParams.model_name = 'google/siglip-so400m-patch14-384'
+    // searchParams.model_name = 'qwen2.5-vl-embedding'
+    searchParams.page_size = 50
+  } else {
+    // 传统搜索模式
+    if (filters.value.keyword) searchParams.keyword = filters.value.keyword
+    if (filters.value.start_date) searchParams.start_date = filters.value.start_date
+    if (filters.value.end_date) searchParams.end_date = filters.value.end_date
+    if (filters.value.camera_model) searchParams.camera_model = filters.value.camera_model
+    if (filters.value.location) searchParams.location = filters.value.location
+    if (filters.value.tags) searchParams.tags = filters.value.tags
+  }
 
-  // 执行搜索
+  // 执行统一搜索
   try {
+    semanticSearching.value = true
     await imageStore.refreshImages(async (page, size) => {
       searchParams.page = page
       searchParams.page_size = size
@@ -346,6 +325,8 @@ async function executeSearch() {
     }
   } catch (error) {
     console.error('Search failed:', error)
+  } finally {
+    semanticSearching.value = false
   }
 }
 

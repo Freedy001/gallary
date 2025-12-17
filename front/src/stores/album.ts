@@ -9,7 +9,6 @@ export const useAlbumStore = defineStore('album', () => {
   const currentAlbum = ref<Album | null>(null)
   const loading = ref(false)
   const total = ref(0)
-  const currentPage = ref(1)
 
   // Actions
   async function fetchAlbums(page = 1, pageSize = 20) {
@@ -18,7 +17,6 @@ export const useAlbumStore = defineStore('album', () => {
       const { data } = await albumApi.getList(page, pageSize)
       albums.value = data.list
       total.value = data.total
-      currentPage.value = page
     } finally {
       loading.value = false
     }
@@ -41,18 +39,6 @@ export const useAlbumStore = defineStore('album', () => {
     return data
   }
 
-  async function updateAlbum(id: number, name?: string, description?: string) {
-    const { data } = await albumApi.update(id, { name, description })
-    const index = albums.value.findIndex(a => a.id === id)
-    if (index !== -1) {
-      albums.value[index] = data
-    }
-    if (currentAlbum.value?.id === id) {
-      currentAlbum.value = data
-    }
-    return data
-  }
-
   async function deleteAlbum(id: number) {
     await albumApi.delete(id)
     albums.value = albums.value.filter(a => a.id !== id)
@@ -72,12 +58,10 @@ export const useAlbumStore = defineStore('album', () => {
     currentAlbum,
     loading,
     total,
-    currentPage,
     // Actions
     fetchAlbums,
     fetchAlbum,
     createAlbum,
-    updateAlbum,
     deleteAlbum,
     clearCurrentAlbum,
   }

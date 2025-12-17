@@ -37,3 +37,4 @@ temp/
 /server/storage/
 front/node_modules
 /model/venv/
+/front/dist/

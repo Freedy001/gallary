@@ -231,10 +231,10 @@
 
       <div v-if="!uiStore.sidebarCollapsed" class="mt-4 text-xs text-gray-500 font-mono tracking-wider flex items-center justify-between">
         <span>总影像</span>
-        <span class="text-primary-400 font-bold">{{ storageStore.totalImages }}</span>
+        <span class="text-primary-400 font-bold">{{ notificationStore.imageCount }}</span>
       </div>
       <div v-else class="mt-4 flex justify-center">
-        <span class="text-[10px] font-bold text-primary-500/70">{{ storageStore.totalImages }}</span>
+        <span class="text-[10px] font-bold text-primary-500/70">{{ notificationStore.imageCount }}</span>
       </div>
 
       <!-- 存储容量 -->
@@ -242,22 +242,31 @@
         <StorageUsage :collapsed="uiStore.sidebarCollapsed" />
       </div>
 
-      <!-- AI 队列状态 -->
-      <div class="mt-3">
-        <AIQueueStatus :collapsed="uiStore.sidebarCollapsed" />
-      </div>
+      <!-- AI 队列状态 - 仅在有任务时显示 -->
+      <Transition
+        enter-active-class="transition-all duration-300 ease-out"
+        leave-active-class="transition-all duration-200 ease-in"
+        enter-from-class="opacity-0 -translate-y-2 scale-95"
+        enter-to-class="opacity-100 translate-y-0 scale-100"
+        leave-from-class="opacity-100 translate-y-0 scale-100"
+        leave-to-class="opacity-0 -translate-y-2 scale-95"
+      >
+        <div v-if="hasAITasks" class="mt-3">
+          <AIQueueStatus :collapsed="uiStore.sidebarCollapsed"/>
+        </div>
+      </Transition>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
-import { useStorageStore } from '@/stores/storage'
+import { useNotificationStore } from '@/stores/notification'
 import UploadDrawer from '@/components/upload/UploadDrawer.vue'
-import StorageUsage from '@/components/common/StorageUsage.vue'
-import AIQueueStatus from '@/components/common/AIQueueStatus.vue'
+import StorageUsage from '@/components/widgets/StorageUsage.vue'
+import AIQueueStatus from '@/components/widgets/AIQueueStatus.vue'
 import {
   PhotoIcon,
   MapPinIcon,
@@ -274,14 +283,17 @@ import {
 const router = useRouter()
 const route = useRoute()
 const uiStore = useUIStore()
-const storageStore = useStorageStore()
+const notificationStore = useNotificationStore()
+
+// 判断是否有 AI 任务（pending、processing 或 failed）
+const hasAITasks = computed(() => {
+  const status = notificationStore.aiQueueStatus
+  if (!status) return false
+  return (status.total_pending > 0 || status.total_processing > 0 || status.total_failed > 0)
+})
 
 function navigateTo(path: string) {
   router.push(path)
 }
 
-onMounted(() => {
-  // 获取图片总数（带缓存）
-  storageStore.fetchTotalImages()
-})
 </script>

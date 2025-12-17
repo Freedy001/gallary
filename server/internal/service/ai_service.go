@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 	"gallary/server/internal/llms"
-	"net/http"
+	"gallary/server/internal/websocket"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"gallary/server/internal/model"
@@ -45,15 +44,8 @@ type aiService struct {
 	imageRepo      repository.ImageRepository
 	settingService SettingService
 
-	httpClient *http.Client
-
-	// 模型客户端缓存（按 ID 缓存）
-	modelClients map[string]llms.ModelClient
-	modelMu      sync.RWMutex
-
-	// 负载均衡计数器（按 ModelName 分组）
-	loadBalanceCounters map[string]*uint64
-	lbMu                sync.RWMutex
+	loadBalancer *llms.ModelLoadBalancer
+	notifier     websocket.Notifier
 
 	processorCtx    context.Context
 	processorCancel context.CancelFunc
@@ -68,112 +60,25 @@ func NewAIService(
 	embeddingRepo repository.EmbeddingRepository,
 	imageRepo repository.ImageRepository,
 	settingService SettingService,
+	notifier websocket.Notifier,
 ) AIService {
 	return &aiService{
-		taskRepo:            taskRepo,
-		embeddingRepo:       embeddingRepo,
-		imageRepo:           imageRepo,
-		settingService:      settingService,
-		httpClient:          &http.Client{Timeout: 120 * time.Second},
-		modelClients:        make(map[string]llms.ModelClient),
-		loadBalanceCounters: make(map[string]*uint64),
+		taskRepo:       taskRepo,
+		embeddingRepo:  embeddingRepo,
+		imageRepo:      imageRepo,
+		settingService: settingService,
+		loadBalancer:   llms.NewModelLoadBalancer(settingService.GetAIConfig, settingService.GetStorageManager()),
+		notifier:       notifier,
 	}
-}
-
-// ================== 模型客户端管理 ==================
-
-// getModelClient 获取或创建模型客户端
-func (s *aiService) getModelClient(modelConfig *model.ModelConfig) llms.ModelClient {
-	s.modelMu.RLock()
-	if client, exists := s.modelClients[modelConfig.ID]; exists {
-		s.modelMu.RUnlock()
-		return client
-	}
-	s.modelMu.RUnlock()
-
-	s.modelMu.Lock()
-	defer s.modelMu.Unlock()
-
-	// 双重检查
-	if client, exists := s.modelClients[modelConfig.ID]; exists {
-		return client
-	}
-
-	// 创建新的客户端
-	client := llms.CreateModelClient(modelConfig, s.httpClient, s.settingService.GetStorageManager())
-	s.modelClients[modelConfig.ID] = client
-	return client
-}
-
-// getModelClientByName 根据模型名称获取客户端（支持负载均衡）
-func (s *aiService) getModelClientByName(ctx context.Context, modelName string) (llms.ModelClient, *model.ModelConfig, error) {
-	config, err := s.settingService.GetAIConfig(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// 获取该模型名称对应的所有启用的模型配置
-	models := config.FindModelsByName(modelName)
-	if len(models) == 0 {
-		return nil, nil, fmt.Errorf("未找到模型配置: %s", modelName)
-	}
-
-	// 负载均衡：轮询选择
-	modelConfig := s.selectModelByLoadBalance(modelName, models)
-
-	client := s.getModelClient(modelConfig)
-	if client == nil {
-		return nil, nil, fmt.Errorf("无法获取模型客户端: %s", modelConfig.ID)
-	}
-
-	return client, modelConfig, nil
-}
-
-// selectModelByLoadBalance 使用轮询算法选择模型
-func (s *aiService) selectModelByLoadBalance(modelName string, models []*model.ModelConfig) *model.ModelConfig {
-	if len(models) == 1 {
-		return models[0]
-	}
-
-	s.lbMu.RLock()
-	counter, exists := s.loadBalanceCounters[modelName]
-	s.lbMu.RUnlock()
-
-	if !exists {
-		s.lbMu.Lock()
-		// 双重检查
-		if counter, exists = s.loadBalanceCounters[modelName]; !exists {
-			var zero uint64
-			counter = &zero
-			s.loadBalanceCounters[modelName] = counter
-		}
-		s.lbMu.Unlock()
-	}
-
-	// 原子递增并取模
-	idx := atomic.AddUint64(counter, 1) % uint64(len(models))
-	return models[idx]
 }
 
 // ================== 连接测试 ==================
 
 // TestConnection 测试连接
 func (s *aiService) TestConnection(ctx context.Context, id string) error {
-	config, err := s.settingService.GetAIConfig(ctx)
+	client, _, err := s.loadBalancer.GetClientByID(ctx, id)
 	if err != nil {
 		return err
-	}
-
-	// 查找模型配置
-	modelConfig := config.FindModelById(id)
-	if modelConfig == nil {
-		return fmt.Errorf("未找到模型配置: %s", id)
-	}
-
-	// 使用模型客户端测试连接
-	client := s.getModelClient(modelConfig)
-	if client == nil {
-		return fmt.Errorf("无法获取模型客户端: %s", id)
 	}
 	return client.TestConnection(ctx)
 }
@@ -207,8 +112,10 @@ func (s *aiService) GetQueueDetail(ctx context.Context, queueID int64, page, pag
 
 	// 转换为前端格式
 	imageInfos := make([]model.AITaskImageInfo, len(failedImages))
+	manager := s.settingService.GetStorageManager()
 	for i, img := range failedImages {
-		imageInfos[i] = img.ToInfo()
+		_, thumbnail := manager.ImageUrl(img.Image)
+		imageInfos[i] = img.ToInfo(thumbnail)
 	}
 
 	return &model.AIQueueDetail{
@@ -304,30 +211,13 @@ func (s *aiService) processLoop(processor func()) {
 func (s *aiService) syncQueueImages() {
 	ctx := context.Background()
 
-	// 获取 AI 配置
-	config, err := s.settingService.GetAIConfig(ctx)
+	models, err := s.loadBalancer.GetAllEmbeddingModels(ctx)
 	if err != nil {
 		logger.Error("获取 AI 配置失败", zap.Error(err))
 		return
 	}
 
-	// 获取所有启用的模型
-	enabledModels := config.GetEnabledModels()
-	if len(enabledModels) == 0 {
-		return
-	}
-
-	// 按 ModelName 分组，每个 ModelName 只需要一个队列
-	modelNames := make(map[string]bool)
-	for _, modelConfig := range enabledModels {
-		client := s.getModelClient(modelConfig)
-		if client == nil || !client.SupportEmbedding() {
-			continue
-		}
-		modelNames[modelConfig.ModelName] = true
-	}
-
-	for modelName := range modelNames {
+	for _, modelName := range models {
 		// 查找或创建队列
 		queue, err := s.taskRepo.FindOrCreateQueue(ctx, model.AITaskTypeEmbedding, modelName)
 		if err != nil {
@@ -396,19 +286,29 @@ func (s *aiService) processQueueImages() {
 
 // processQueue 处理单个队列
 func (s *aiService) processQueue(ctx context.Context, queue *model.AIQueue) {
-	// 验证 ModelName 可以获取 client
-	_, _, err := s.getModelClientByName(ctx, queue.ModelName)
-	if err != nil {
-		logger.Error("获取模型客户端失败", zap.String("model_name", queue.ModelName), zap.Error(err))
-		return
-	}
-
 	// 获取待处理的图片
 	taskImages, err := s.taskRepo.GetPendingTaskImages(ctx, queue.ID, 10)
 	if err != nil {
 		logger.Error("获取队列图片失败", zap.Error(err))
 		return
 	}
+
+	// 验证 ModelName 可以获取 client
+	_, _, err = s.loadBalancer.GetClientByName(ctx, queue.ModelName)
+	if err != nil {
+		logger.Error("获取模型客户端失败", zap.String("model_name", queue.ModelName), zap.Error(err))
+		// 将所有待处理图片标记为失败
+		errMsg := fmt.Sprintf("模型客户端不可用: %v", err)
+		for _, taskImage := range taskImages {
+			s.failTaskImage(ctx, taskImage, errMsg)
+		}
+		return
+	}
+
+	logger.Info("开始处理队列图片",
+		zap.Int64("queue_id", queue.ID),
+		zap.String("model_name", queue.ModelName),
+		zap.Int("image_count", len(taskImages)))
 
 	for _, taskImage := range taskImages {
 		select {
@@ -417,19 +317,12 @@ func (s *aiService) processQueue(ctx context.Context, queue *model.AIQueue) {
 		default:
 		}
 
-		// 每次处理图片时重新获取 client，实现请求级负载均衡
-		client, modelConfig, err := s.getModelClientByName(ctx, queue.ModelName)
-		if err != nil {
-			s.failTaskImage(ctx, taskImage, err.Error())
-			continue
-		}
-
-		s.processTaskImage(ctx, queue, taskImage, client, modelConfig)
+		s.processTaskImage(ctx, queue, taskImage)
 	}
 }
 
 // processTaskImage 处理单张图片
-func (s *aiService) processTaskImage(ctx context.Context, queue *model.AIQueue, taskImage *model.AITaskImage, client llms.ModelClient, modelConfig *model.ModelConfig) {
+func (s *aiService) processTaskImage(ctx context.Context, queue *model.AIQueue, taskImage *model.AITaskImage) {
 	// 更新状态为处理中
 	taskImage.Status = model.AITaskImageStatusProcessing
 	_ = s.taskRepo.UpdateTaskImage(ctx, taskImage)
@@ -447,7 +340,7 @@ func (s *aiService) processTaskImage(ctx context.Context, queue *model.AIQueue, 
 	var err error
 	switch queue.TaskType {
 	case model.AITaskTypeEmbedding:
-		err = s.processImageEmbedding(ctx, image, client, modelConfig)
+		err = s.processImageEmbeddingWithRetry(ctx, queue.ModelName, image)
 	case model.AITaskTypeDescription:
 		err = fmt.Errorf("描述生成功能尚未实现")
 	default:
@@ -459,6 +352,13 @@ func (s *aiService) processTaskImage(ctx context.Context, queue *model.AIQueue, 
 	} else {
 		s.completeTaskImage(ctx, taskImage)
 	}
+}
+
+// processImageEmbeddingWithRetry 处理图片嵌入（带重试，尝试所有提供商）
+func (s *aiService) processImageEmbeddingWithRetry(ctx context.Context, modelName string, image *model.Image) error {
+	return s.loadBalancer.TryAllProviders(ctx, modelName, func(client llms.ModelClient, modelConfig *model.ModelConfig) error {
+		return s.processImageEmbedding(ctx, image, client, modelConfig)
+	})
 }
 
 // processImageEmbedding 处理图片嵌入
@@ -515,7 +415,7 @@ func (s *aiService) processImageEmbedding(ctx context.Context, image *model.Imag
 // SemanticSearch 语义搜索
 func (s *aiService) SemanticSearch(ctx context.Context, query string, modelName string, limit int) ([]*model.Image, error) {
 	// 通过 ModelName 获取 client（支持负载均衡）
-	client, modelConfig, err := s.getModelClientByName(ctx, modelName)
+	client, modelConfig, err := s.loadBalancer.GetClientByName(ctx, modelName)
 	if err != nil {
 		return nil, err
 	}
@@ -552,6 +452,9 @@ func (s *aiService) failTaskImage(ctx context.Context, taskImage *model.AITaskIm
 	if err != nil {
 		logger.Error("操作数据库失败", zap.Error(err))
 	}
+
+	// 通知状态变化
+	s.notifyStatusChange(ctx)
 }
 
 func (s *aiService) completeTaskImage(ctx context.Context, taskImage *model.AITaskImage) {
@@ -559,5 +462,21 @@ func (s *aiService) completeTaskImage(ctx context.Context, taskImage *model.AITa
 	err := s.taskRepo.RemoveTaskImage(ctx, taskImage.ID)
 	if err != nil {
 		logger.Error("删除任务图片关联失败", zap.Error(err))
+	}
+
+	// 通知状态变化
+	s.notifyStatusChange(ctx)
+}
+
+// notifyStatusChange 通知队列状态变化
+func (s *aiService) notifyStatusChange(ctx context.Context) {
+	if s.notifier == nil {
+		return
+	}
+
+	// 获取最新状态并推送
+	status, err := s.GetQueueStatus(ctx)
+	if err == nil && status != nil {
+		s.notifier.NotifyAIQueueStatus(status)
 	}
 }

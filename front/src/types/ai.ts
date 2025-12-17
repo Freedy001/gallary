@@ -57,8 +57,8 @@ export interface AIQueueDetail {
 export interface AITaskImageInfo {
   id: number
   image_id: number
-  image_path: string
-  thumbnail?: string
+  imageName?: string
+  thumbnailurl?: string
   status: 'pending' | 'processing' | 'failed'
   error?: string
   created_at: string

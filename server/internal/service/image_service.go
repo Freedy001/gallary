@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"gallary/server/internal/repository"
+	"gallary/server/internal/websocket"
 	"io"
 	"math"
 	"mime/multipart"
@@ -77,15 +78,19 @@ type imageService struct {
 	albumRepo repository.AlbumRepository
 	storage   *storage.StorageManager
 	cfg       *config.Config
+	notifier  websocket.Notifier
+	aiService AIService
 }
 
 // NewImageService 创建图片服务实例
-func NewImageService(repo repository.ImageRepository, albumRepo repository.AlbumRepository, storage *storage.StorageManager, cfg *config.Config) ImageService {
+func NewImageService(repo repository.ImageRepository, albumRepo repository.AlbumRepository, storage *storage.StorageManager, cfg *config.Config, notifier websocket.Notifier, aiService AIService) ImageService {
 	return &imageService{
 		repo:      repo,
 		albumRepo: albumRepo,
 		storage:   storage,
 		cfg:       cfg,
+		notifier:  notifier,
+		aiService: aiService,
 	}
 }
 
@@ -252,6 +257,8 @@ func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHea
 		zap.String("hash", image.FileHash),
 		zap.String("original_name", image.OriginalName))
 
+	// 广播图片总数更新
+	s.notifyCount(ctx)
 	return s.storage.ToVO(image), nil
 }
 
@@ -362,7 +369,14 @@ func (s *imageService) Delete(ctx context.Context, id int64) error {
 		zap.String("storage_path", image.StoragePath))
 
 	// 仅从数据库逻辑删除记录，不删除本地文件
-	return s.repo.Delete(ctx, id)
+	err = s.repo.Delete(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// 广播图片总数更新
+	s.notifyCount(ctx)
+	return nil
 }
 
 // DeleteBatch 批量删除图片（逻辑删除，不删除本地文件）
@@ -378,7 +392,14 @@ func (s *imageService) DeleteBatch(ctx context.Context, ids []int64) error {
 		zap.Any("ids", ids))
 
 	// 仅从数据库批量逻辑删除记录，不删除本地文件
-	return s.repo.DeleteBatch(ctx, ids)
+	err = s.repo.DeleteBatch(ctx, ids)
+	if err != nil {
+		return err
+	}
+
+	// 广播图片总数更新
+	s.notifyCount(ctx)
+	return nil
 }
 
 // Search 搜索图片
@@ -389,6 +410,21 @@ func (s *imageService) Search(ctx context.Context, params *repository.SearchPara
 	if params.PageSize < 1 || params.PageSize > 100 {
 		params.PageSize = 20
 	}
+
+	// 如果有语义搜索查询词，使用语义搜索
+	if params.SemanticQuery != "" && s.aiService != nil {
+		// 使用语义搜索
+		images, err := s.aiService.SemanticSearch(ctx, params.SemanticQuery, params.ModelName, params.PageSize)
+		if err != nil {
+			return nil, 0, fmt.Errorf("语义搜索失败: %w", err)
+		}
+
+		// 转换为 VO 列表
+		vos := s.storage.ToVOList(images)
+		return vos, int64(len(vos)), nil
+	}
+
+	// 普通搜索
 	images, total, err := s.repo.Search(ctx, params)
 	if err != nil {
 		return nil, 0, err
@@ -745,7 +781,23 @@ func (s *imageService) RestoreImages(ctx context.Context, ids []int64) error {
 		zap.Int("count", len(ids)),
 		zap.Any("ids", ids))
 
-	return s.repo.RestoreBatch(ctx, ids)
+	err := s.repo.RestoreBatch(ctx, ids)
+	if err != nil {
+		return err
+	}
+
+	s.notifyCount(ctx)
+	return nil
+}
+
+func (s *imageService) notifyCount(ctx context.Context) {
+	// 广播图片总数更新
+	if s.notifier != nil {
+		total, err := s.repo.Count(ctx)
+		if err == nil {
+			s.notifier.NotifyImageCount(total)
+		}
+	}
 }
 
 // PermanentlyDelete 彻底删除图片（包括物理文件）
