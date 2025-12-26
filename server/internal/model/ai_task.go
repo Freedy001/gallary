@@ -19,9 +19,8 @@ const (
 
 // AI 任务图片状态常量
 const (
-	AITaskImageStatusPending    = "pending"    // 待处理
-	AITaskImageStatusProcessing = "processing" // 处理中
-	AITaskImageStatusFailed     = "failed"     // 失败
+	AITaskImageStatusPending = "pending" // 待处理
+	AITaskImageStatusFailed  = "failed"  // 失败
 )
 
 // AIQueue AI 队列（永久存在，一个模型名称一个队列）
@@ -59,7 +58,7 @@ type AITaskImage struct {
 	TaskID    int64     `gorm:"not null;index" json:"task_id"`                         // 关联的队列 ID
 	ImageID   int64     `gorm:"not null;uniqueIndex:idx_task_image" json:"image_id"`   // 图片 ID
 	QueueKey  string    `gorm:"type:varchar(200);uniqueIndex:idx_task_image" json:"-"` // 队列标识（用于去重）
-	Status    string    `gorm:"type:varchar(20);default:pending;index" json:"status"`  // pending, processing, failed
+	Status    string    `gorm:"type:varchar(20);default:pending;index" json:"status"`  // pending, failed
 	Error     *string   `gorm:"type:text" json:"error,omitempty"`                      // 错误信息
 	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
 	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
@@ -78,22 +77,20 @@ func (*AITaskImage) TableName() string {
 
 // AIQueueStatus AI 队列状态汇总（前端展示）
 type AIQueueStatus struct {
-	Queues          []AIQueueInfo `json:"queues"`           // 所有队列信息
-	TotalPending    int           `json:"total_pending"`    // 总待处理数
-	TotalProcessing int           `json:"total_processing"` // 总处理中数
-	TotalFailed     int           `json:"total_failed"`     // 总失败数
+	Queues       []AIQueueInfo `json:"queues"`        // 所有队列信息
+	TotalPending int           `json:"total_pending"` // 总待处理数
+	TotalFailed  int           `json:"total_failed"`  // 总失败数
 }
 
 // AIQueueInfo 单个队列信息（前端展示）
 type AIQueueInfo struct {
-	ID              int64  `json:"id"`
-	QueueKey        string `json:"queue_key"`
-	TaskType        string `json:"task_type"`
-	ModelName       string `json:"model_name,omitempty"`
-	Status          string `json:"status"` // idle, processing
-	PendingCount    int    `json:"pending_count"`
-	ProcessingCount int    `json:"processing_count"`
-	FailedCount     int    `json:"failed_count"`
+	ID           int64  `json:"id"`
+	QueueKey     string `json:"queue_key"`
+	TaskType     string `json:"task_type"`
+	ModelName    string `json:"model_name,omitempty"`
+	Status       string `json:"status"` // idle, processing
+	PendingCount int    `json:"pending_count"`
+	FailedCount  int    `json:"failed_count"`
 }
 
 // AIQueueDetail 队列详情（含失败图片列表）

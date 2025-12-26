@@ -31,6 +31,10 @@ type AliyunMultimodalEmbedding struct {
 	manager    *storage.StorageManager
 }
 
+func (c *AliyunMultimodalEmbedding) UpdateConfig(config *model.ModelConfig) {
+	c.config = config
+}
+
 // NewAliyunMultimodalEmbedding 创建阿里云客户端
 func NewAliyunMultimodalEmbedding(config *model.ModelConfig, httpClient *http.Client, manager *storage.StorageManager) *AliyunMultimodalEmbedding {
 	return &AliyunMultimodalEmbedding{
@@ -55,15 +59,15 @@ func (c *AliyunMultimodalEmbedding) SupportsEmbeddingWithAesthetics() bool {
 }
 
 // Embedding 计算嵌入向量
-func (c *AliyunMultimodalEmbedding) Embedding(ctx context.Context, image *model.Image, text string) ([]float32, error) {
+func (c *AliyunMultimodalEmbedding) Embedding(ctx context.Context, imageData []byte, text string) ([]float32, error) {
 	contents := make([]map[string]string, 0)
 
-	if image != nil {
-		imageData, err := c.getImageBase64(image)
+	if len(imageData) > 0 {
+		base64Data, err := c.prepareImageBase64(imageData)
 		if err != nil {
-			return nil, fmt.Errorf("获取图片数据失败: %v", err)
+			return nil, fmt.Errorf("处理图片数据失败: %v", err)
 		}
-		contents = append(contents, map[string]string{"image": imageData})
+		contents = append(contents, map[string]string{"image": base64Data})
 	}
 
 	if text != "" {
@@ -78,8 +82,8 @@ func (c *AliyunMultimodalEmbedding) Embedding(ctx context.Context, image *model.
 }
 
 // EmbeddingWithAesthetics 阿里云不支持美学评分，仅返回嵌入向量
-func (c *AliyunMultimodalEmbedding) EmbeddingWithAesthetics(ctx context.Context, image *model.Image) ([]float32, float64, error) {
-	embedding, err := c.Embedding(ctx, image, "")
+func (c *AliyunMultimodalEmbedding) EmbeddingWithAesthetics(ctx context.Context, imageData []byte) ([]float32, float64, error) {
+	embedding, err := c.Embedding(ctx, imageData, "")
 	return embedding, 0, err
 }
 
@@ -165,20 +169,9 @@ func (c *AliyunMultimodalEmbedding) callMultimodalEmbedding(ctx context.Context,
 	return response.Output.Embeddings[0].Embedding, nil
 }
 
-// getImageBase64 从存储读取图片并转换为 Base64 Data URL
+// prepareImageBase64 处理图片数据并转换为 Base64 Data URL
 // 如果图片过大，会自动压缩以满足阿里云 API 限制（Base64 后 < 3MB）
-func (c *AliyunMultimodalEmbedding) getImageBase64(img *model.Image) (string, error) {
-	reader, err := c.manager.Download(context.Background(), img.StorageId, img.StoragePath)
-	if err != nil {
-		return "", err
-	}
-	defer reader.Close()
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return "", err
-	}
-
+func (c *AliyunMultimodalEmbedding) prepareImageBase64(data []byte) (string, error) {
 	// 阿里云 multimodal-embedding-v1 要求图片 ≤3MB
 	// Base64 编码会增加约 33% 的大小，所以原始数据应该 < 2.25MB
 	// 为安全起见，我们将阈值设为 2MB
@@ -194,7 +187,6 @@ func (c *AliyunMultimodalEmbedding) getImageBase64(img *model.Image) (string, er
 	} else {
 		// 图片过大，需要压缩
 		logger.Info("图片过大，进行压缩",
-			zap.Int64("image_id", img.ID),
 			zap.Int("original_size", len(data)))
 
 		compressedData, err := c.compressImage(data, maxOriginalSize)
@@ -203,7 +195,6 @@ func (c *AliyunMultimodalEmbedding) getImageBase64(img *model.Image) (string, er
 		}
 
 		logger.Info("图片压缩完成",
-			zap.Int64("image_id", img.ID),
 			zap.Int("compressed_size", len(compressedData)))
 
 		imageData = compressedData

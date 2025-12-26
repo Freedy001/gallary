@@ -1,6 +1,8 @@
 package model
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"reflect"
 	"strconv"
@@ -373,6 +375,24 @@ type ModelConfig struct {
 	APIKey       string   `json:"api_key"`
 	Enabled      bool     `json:"enabled"`
 	ExtraConfig  string   `json:"extra_config"`
+}
+
+func (m *ModelConfig) Hash() string {
+	// 创建一个字符串切片，包含所有需要参与哈希计算的字段
+	fields := []string{
+		m.ID,
+		string(m.Provider),
+		m.ApiModelName,
+		m.Endpoint,
+		m.APIKey,
+		m.ExtraConfig,
+	}
+	// 将所有字段连接成一个字符串
+	combined := strings.Join(fields, "|")
+
+	h := sha1.Sum([]byte(combined))
+	// 将哈希值转换为十六进制字符串并返回
+	return hex.EncodeToString(h[:])
 }
 
 // AIPo AI 配置 PO

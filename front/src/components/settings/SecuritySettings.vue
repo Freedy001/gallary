@@ -136,11 +136,11 @@ async function loadSettings() {
 
 async function handleUpdatePassword() {
   if (form.newPassword.length < 6) {
-    await dialogStore.alert({ title: '错误', message: '密码长度至少为6位', type: 'error' })
+    dialogStore.alert({ title: '错误', message: '密码长度至少为6位', type: 'error' })
     return
   }
   if (form.newPassword !== form.confirmPassword) {
-    await dialogStore.alert({ title: '错误', message: '两次输入的密码不一致', type: 'error' })
+    dialogStore.alert({ title: '错误', message: '两次输入的密码不一致', type: 'error' })
     return
   }
 
@@ -150,14 +150,14 @@ async function handleUpdatePassword() {
       old_password: form.oldPassword,
       new_password: form.newPassword,
     })
-    await dialogStore.alert({ title: '成功', message: '密码更新成功', type: 'success' })
+    dialogStore.alert({ title: '成功', message: '密码更新成功', type: 'success' })
     form.oldPassword = ''
     form.newPassword = ''
     form.confirmPassword = ''
     passwordSet.value = true
     await router.push('/login')
   } catch (error: any) {
-    await dialogStore.alert({ title: '错误', message: error.message || '更新密码失败', type: 'error' })
+    dialogStore.alert({ title: '错误', message: error.message || '更新密码失败', type: 'error' })
   } finally {
     saving.value = false
   }
@@ -179,7 +179,7 @@ async function handleLogout() {
     authStore.logout()
     await router.push('/login')
   } catch (error: any) {
-    await dialogStore.alert({
+    dialogStore.alert({
       title: '错误',
       message: error.message || '退出登录失败',
       type: 'error'

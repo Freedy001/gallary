@@ -250,7 +250,7 @@ async function handleSubmit() {
     emit('created', code)
   } catch (error) {
     console.error('Create share failed:', error)
-    await dialogStore.alert({ title: '错误', message: '创建分享失败', type: 'error' })
+    dialogStore.alert({ title: '错误', message: '创建分享失败', type: 'error' })
   } finally {
     loading.value = false
   }

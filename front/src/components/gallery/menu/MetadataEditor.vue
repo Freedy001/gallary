@@ -17,38 +17,39 @@
         />
       </div>
 
+      <!-- 拍摄时间 -->
+      <div>
+        <label class="block text-sm font-medium text-white/80 mb-2">拍摄时间</label>
+        <div class="relative">
+          <input
+              v-model="form.taken_at"
+              type="datetime-local"
+              class="glass-input datetime-input w-full"
+              placeholder="选择拍摄时间"
+          />
+          <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-white/40">
+            <!-- 这里可以放一个日历图标，如果原生图标不可见的话 -->
+          </div>
+        </div>
+      </div>
+
       <!-- Location and Map -->
       <div class="space-y-4">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div class="relative">
-            <label class="block text-sm font-medium text-white/80 mb-2">地点名称 (搜索)</label>
-            <input
-                id="location-input"
-                v-model="form.location_name"
-                @input="onLocationInput"
-                type="text"
-                class="glass-input"
-                placeholder="输入关键字搜索或填写地点"
-                autocomplete="off"
-            />
-            <!-- Custom Suggestions List -->
-            <ul v-if="showSuggestions && suggestions.length > 0"
-                class="absolute z-50 w-full mt-1 bg-[#18181b]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl max-h-60 overflow-y-auto ring-1 ring-black/50">
-              <li
-                  v-for="(item, index) in suggestions"
-                  :key="index"
-                  @click="selectSuggestion(item)"
-                  class="px-4 py-3 text-sm text-gray-200 hover:text-white hover:bg-white/10 cursor-pointer transition-colors duration-150 border-b border-white/5 last:border-0"
-              >
-                <div class="font-medium">{{ item.name }}</div>
-                <div class="text-xs text-white/50 truncate" v-if="item.district || item.address">
-                  {{ item.district }}{{ item.address && typeof item.address === 'string' ? ' - ' + item.address : '' }}
-                </div>
-              </li>
-            </ul>
+          <!-- 使用新的 LocationPicker 组件 -->
+          <div class="col-span-2 sm:col-span-2">
+             <LocationPicker
+               v-model="form.location_name"
+               v-model:latitude="form.latitude"
+               v-model:longitude="form.longitude"
+               label="地点名称"
+               :show-map="true"
+             />
           </div>
-          <div>
-            <label class="block text-sm font-medium text-white/80 mb-2">经纬度</label>
+
+          <!-- 显示经纬度 (只读) -->
+          <div class="col-span-2 sm:col-span-2">
+            <label class="block text-sm font-medium text-white/80 mb-2">经纬度 (自动获取)</label>
             <div class="flex space-x-2">
               <input
                   v-model.number="form.latitude"
@@ -69,24 +70,77 @@
             </div>
           </div>
         </div>
-
-        <!-- Map Container -->
-        <div id="amap-container" class="w-full h-64 rounded-xl border border-white/10 relative overflow-hidden">
-          <div v-if="!amapConfigured"
-               class="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm text-white/70 text-sm p-4 text-center z-10">
-            请在 .env 文件中配置 VITE_AMAP_KEY 和 VITE_AMAP_SECURITY_KEY
-          </div>
-        </div>
       </div>
 
+      <!-- 标签选择器 -->
       <div>
-        <label class="block text-sm font-medium text-white/80 mb-2">标签 (逗号分隔)</label>
-        <input
-            v-model="tagsInput"
-            type="text"
-            class="glass-input"
-            placeholder="风景, 2023"
-        />
+        <label class="block text-sm font-medium text-white/80 mb-2">标签</label>
+
+        <!-- 已选标签展示 -->
+        <div v-if="selectedTags.length > 0" class="flex flex-wrap gap-2 mb-2">
+          <span
+              v-for="tag in selectedTags"
+              :key="tag.id || tag.name"
+              class="tag-badge"
+              :style="tag.color ? { backgroundColor: tag.color + '33', borderColor: tag.color } : {}"
+          >
+            {{ tag.name }}
+            <button
+                type="button"
+                @click="removeTag(tag)"
+                class="ml-1 hover:text-red-400 transition-colors"
+            >
+              <XMarkIcon class="h-3 w-3"/>
+            </button>
+          </span>
+        </div>
+
+        <!-- 标签输入和下拉选择 -->
+        <div class="relative">
+          <input
+              v-model="tagSearchQuery"
+              type="text"
+              class="glass-input"
+              placeholder="搜索或创建标签..."
+              @focus="showTagDropdown = true"
+              @input="onTagInput"
+              @keydown.enter.prevent="handleTagEnter"
+              @keydown.escape="showTagDropdown = false"
+          />
+
+          <!-- 下拉菜单 -->
+          <div
+              v-if="showTagDropdown && (filteredTags.length > 0 || tagSearchQuery.trim())"
+              class="tag-dropdown"
+          >
+            <!-- 现有标签列表 -->
+            <div
+                v-for="tag in filteredTags"
+                :key="tag.id"
+                class="tag-option"
+                @click="selectTag(tag)"
+            >
+              <span
+                  class="tag-color-dot"
+                  :style="{ backgroundColor: tag.color || '#6366f1' }"
+              ></span>
+              {{ tag.name }}
+            </div>
+
+
+            <!-- 无结果提示 -->
+            <div v-if="filteredTags.length === 0" class="tag-no-result">
+              {{ tagSearchQuery.trim() ? '未找到匹配的标签' : '暂无标签' }}
+            </div>
+          </div>
+        </div>
+
+        <!-- 点击外部关闭下拉 -->
+        <div
+            v-if="showTagDropdown"
+            class="fixed inset-0 z-40"
+            @click="showTagDropdown = false"
+        ></div>
       </div>
 
       <!-- Metadata Key-Value Pairs -->
@@ -148,14 +202,12 @@
 </template>
 
 <script setup lang="ts">
-import {ref, computed, watch, shallowRef, nextTick, onUnmounted} from 'vue'
+import {ref, computed, watch} from 'vue'
 import Modal from '@/components/common/Modal.vue'
+import LocationPicker from '@/components/common/LocationPicker.vue'
 import {XMarkIcon} from '@heroicons/vue/24/outline'
-import type {Image, UpdateMetadataRequest, MetadataUpdate} from '@/types'
+import type {Image, UpdateMetadataRequest, MetadataUpdate, Tag} from '@/types'
 import {imageApi} from '@/api/image.ts'
-import AMapLoader from '@amap/amap-jsapi-loader'
-import {useDebounceFn} from '@vueuse/core'
-import {onClickOutside} from '@vueuse/core'
 
 const props = defineProps<{
   modelValue: boolean
@@ -169,24 +221,16 @@ const emit = defineEmits<{
 }>()
 
 const loading = ref(false)
-const tagsInput = ref('')
-let map: AMap.Map | null = null
-let marker: AMap.Marker | null = null
-let autoComplete = shallowRef<any>(null)
-const amapConfigured = computed(() => !!import.meta.env.VITE_AMAP_KEY)
 
-// Custom suggestions state
-const suggestions = ref<any[]>([])
-const showSuggestions = ref(false)
-const locationInputRef = ref(null)
-
-// Click outside to close suggestions
-onClickOutside(locationInputRef, () => {
-  showSuggestions.value = false
-})
+// 标签相关状态
+const allTags = ref<Tag[]>([])
+const selectedTags = ref<Tag[]>([])
+const tagSearchQuery = ref('')
+const showTagDropdown = ref(false)
 
 interface FormState {
   original_name?: string
+  taken_at?: string
   location_name?: string
   latitude?: number
   longitude?: number
@@ -200,13 +244,71 @@ const form = ref<FormState>({
 const isSingleMode = computed(() => props.imageIds.length === 1)
 const title = computed(() => isSingleMode.value ? '编辑图片元数据' : `批量编辑 ${props.imageIds.length} 张图片`)
 
+// 标签过滤和检测
+const filteredTags = computed(() => {
+  const query = tagSearchQuery.value.toLowerCase().trim()
+  const selectedIds = new Set(selectedTags.value.map(t => t.id))
+
+  return allTags.value.filter(tag =>
+      !selectedIds.has(tag.id) &&
+      (query === '' || tag.name.toLowerCase().includes(query))
+  )
+})
+
+// 加载所有标签
+const loadTags = async () => {
+  try {
+    const res = await imageApi.getTags()
+    if (res.data) {
+      allTags.value = res.data
+    }
+  } catch (e) {
+    console.error('Failed to load tags', e)
+  }
+}
+
+// 选择已有标签
+const selectTag = (tag: Tag) => {
+  if (!selectedTags.value.some(t => t.id === tag.id)) {
+    selectedTags.value.push(tag)
+  }
+  tagSearchQuery.value = ''
+  showTagDropdown.value = false
+}
+
+// 移除标签
+const removeTag = (tag: Tag) => {
+  selectedTags.value = selectedTags.value.filter(t => t.id !== tag.id)
+}
+
+// 处理输入
+const onTagInput = () => {
+  showTagDropdown.value = true
+}
+
+// 处理回车键
+const handleTagEnter = () => {
+  const query = tagSearchQuery.value.trim()
+  if (!query) return
+
+  // 如果有匹配的标签，选择第一个
+  const firstMatch = filteredTags.value[0]
+  if (firstMatch) {
+    selectTag(firstMatch)
+  }
+}
+
 // Reset form when opening
 watch(() => props.modelValue, async (val) => {
   if (val) {
+    // 加载标签列表
+    await loadTags()
+
     if (isSingleMode.value && props.initialData) {
       // Pre-fill for single image
       form.value = {
         original_name: props.initialData.original_name,
+        taken_at: props.initialData.taken_at ? formatDatetimeLocal(props.initialData.taken_at) : undefined,
         location_name: props.initialData.location_name || undefined,
         latitude: props.initialData.latitude || undefined,
         longitude: props.initialData.longitude || undefined,
@@ -216,148 +318,29 @@ watch(() => props.modelValue, async (val) => {
           value_type: m.value_type
         })) || []
       }
-      tagsInput.value = props.initialData.tags?.map(t => t.name).join(', ') || ''
+      // 设置已选标签
+      selectedTags.value = props.initialData.tags ? [...props.initialData.tags] : []
     } else {
       // Empty for batch edit
       form.value = {
         metadata: []
       }
-      tagsInput.value = ''
+      selectedTags.value = []
     }
-
-    suggestions.value = []
-    showSuggestions.value = false
-
-    await nextTick()
-    if (amapConfigured.value) {
-      initMap()
-    }
-  } else {
-    destroyMap()
+    tagSearchQuery.value = ''
+    showTagDropdown.value = false
   }
 })
 
-const initMap = () => {
-  (window as any)._AMapSecurityConfig = {
-    securityJsCode: import.meta.env.VITE_AMAP_SECURITY_KEY,
-  };
-
-  AMapLoader.load({
-    key: import.meta.env.VITE_AMAP_KEY,
-    version: "2.0",
-    plugins: ['AMap.AutoComplete', 'AMap.PlaceSearch', 'AMap.Geocoder'],
-  }).then((AMap) => {
-    // Init map
-    const hasLocation = form.value.longitude && form.value.latitude
-    const center = hasLocation
-        ? [form.value.longitude, form.value.latitude]
-        : [116.397428, 39.90923]; // Default to Beijing
-
-    map = new AMap.Map("amap-container", {
-      viewMode: "3D",
-      zoom: hasLocation ? 16 : 11,
-      center: center,
-      mapStyle: "amap://styles/dark", // Obsidian theme compatible
-    });
-
-    // Init marker if exists
-    if (hasLocation) {
-      addMarker(new AMap.LngLat(form.value.longitude, form.value.latitude), AMap)
-    }
-
-    // Click to pick location
-    (map as AMap.Map).on('click', (e: any) => {
-      updateLocationFromLngLat(e.lnglat, AMap);
-      showSuggestions.value = false;
-    });
-
-    // AutoComplete - NOT linked to input anymore
-    autoComplete.value = new AMap.AutoComplete({});
-
-  }).catch(e => {
-    console.error('AMap load failed', e);
-  })
-}
-
-// Debounced search input handler
-const onLocationInput = useDebounceFn(() => {
-  if (!form.value.location_name || !autoComplete.value) {
-    suggestions.value = []
-    showSuggestions.value = false
-    return
-  }
-
-  autoComplete.value.search(form.value.location_name, (status: string, result: any) => {
-    if (status === 'complete' && result.tips) {
-      suggestions.value = result.tips;
-      showSuggestions.value = true;
-    } else {
-      suggestions.value = [];
-      showSuggestions.value = false;
-    }
-  })
-}, 300)
-
-const selectSuggestion = (item: any) => {
-  form.value.location_name = item.name;
-  showSuggestions.value = false;
-
-  if (item.location && item.location.lng && item.location.lat) {
-    // We have location directly
-    updateFormLocation(item.location.lng, item.location.lat);
-
-    // Update map
-    if (map) {
-      map.setZoomAndCenter(16, [item.location.lng, item.location.lat]);
-
-      // Ensure AMap is loaded before adding marker (it should be if map exists)
-      // We need the AMap constructor which is not globally available easily here unless stored
-      // But we can use the map instance's constructor or just assume window.AMap if loaded via loader
-      // Or cleaner: store AMap constructor in a ref or just use map context
-      // For now, assuming window.AMap is available after load
-      if ((window as any).AMap) {
-        addMarker(item.location, (window as any).AMap);
-      }
-    }
-  }
-}
-
-const updateLocationFromLngLat = (lnglat: any, AMap: any) => {
-  updateFormLocation(lnglat.lng, lnglat.lat);
-  addMarker(lnglat, AMap);
-
-  // Reverse geocoding to get name
-  const geocoder = new AMap.Geocoder();
-  geocoder.getAddress(lnglat, (status: string, result: any) => {
-    if (status === 'complete' && result.regeocode) {
-      form.value.location_name = result.regeocode.formattedAddress;
-    }
-  });
-}
-
-const addMarker = (lnglat: any, AMap: any) => {
-  if (marker) {
-    marker.setPosition(lnglat);
-  } else {
-    marker = new AMap.Marker({
-      position: lnglat,
-      map: map
-    });
-  }
-}
-
-const updateFormLocation = (lng: number, lat: number) => {
-  form.value.longitude = lng;
-  form.value.latitude = lat;
-}
-
-const destroyMap = () => {
-  if (map) {
-    map.destroy();
-    map = null;
-    marker = null;
-    autoComplete.value = null;
-  }
+// 将 ISO 8601 日期时间格式转换为 datetime-local 输入所需的格式
+const formatDatetimeLocal = (isoString: string): string => {
+  const date = new Date(isoString)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
 const addMetadataField = () => {
@@ -379,7 +362,13 @@ const save = async () => {
     const data: UpdateMetadataRequest = {
       image_ids: props.imageIds,
       ...form.value,
-      tags: tagsInput.value.split(/[,，]/).map(t => t.trim()).filter(t => t),
+      // 将选中的标签转换为名称数组
+      tags: selectedTags.value.map(t => t.name),
+    }
+
+    // 将 datetime-local 格式转换为 ISO 8601 格式
+    if (data.taken_at) {
+      data.taken_at = new Date(data.taken_at).toISOString()
     }
 
     // Filter out empty metadata
@@ -395,10 +384,6 @@ const save = async () => {
     loading.value = false
   }
 }
-
-onUnmounted(() => {
-  destroyMap()
-})
 </script>
 
 <style scoped>
@@ -422,6 +407,63 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.25);
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.05);
+}
+
+/* datetime-local 输入框特殊样式 */
+.datetime-input {
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.datetime-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  position: absolute;
+  right: 12px;
+  height: 20px;
+  width: 20px;
+}
+
+.datetime-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.datetime-input::-webkit-datetime-edit {
+  padding: 0;
+}
+
+.datetime-input::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+.datetime-input::-webkit-datetime-edit-text {
+  color: rgba(255, 255, 255, 0.6);
+  padding: 0 2px;
+}
+
+.datetime-input::-webkit-datetime-edit-month-field,
+.datetime-input::-webkit-datetime-edit-day-field,
+.datetime-input::-webkit-datetime-edit-year-field,
+.datetime-input::-webkit-datetime-edit-hour-field,
+.datetime-input::-webkit-datetime-edit-minute-field {
+  color: white;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.datetime-input::-webkit-datetime-edit-month-field:focus,
+.datetime-input::-webkit-datetime-edit-day-field:focus,
+.datetime-input::-webkit-datetime-edit-year-field:focus,
+.datetime-input::-webkit-datetime-edit-hour-field:focus,
+.datetime-input::-webkit-datetime-edit-minute-field:focus {
+  background: rgba(59, 130, 246, 0.3);
+  color: white;
+  outline: none;
 }
 
 .glass-button-primary {
@@ -461,5 +503,79 @@ onUnmounted(() => {
 .glass-button-secondary:hover {
   background: rgba(255, 255, 255, 0.12);
   color: white;
+}
+
+/* 标签选择器样式 */
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 16px;
+  font-size: 13px;
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.tag-badge:hover {
+  background: rgba(99, 102, 241, 0.3);
+}
+
+.tag-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: rgba(30, 30, 40, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.tag-option {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+}
+
+.tag-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tag-option:first-child {
+  border-radius: 11px 11px 0 0;
+}
+
+.tag-option:last-child {
+  border-radius: 0 0 11px 11px;
+}
+
+.tag-option:only-child {
+  border-radius: 11px;
+}
+
+.tag-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.tag-no-result {
+  padding: 12px 14px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  text-align: center;
 }
 </style>

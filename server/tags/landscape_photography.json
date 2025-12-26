@@ -1,0 +1,1125 @@
+{
+  "name": "风光摄影",
+  "name_en": "Landscape Photography",
+  "description": "风光摄影完整分类体系 - 包含地质学精确性与航拍术语",
+  "categories": {
+    "scene_types": {
+      "name": "场景类型",
+      "name_en": "Scene Types",
+      "tags": [
+        {
+          "name": "山地景观",
+          "name_en": "Mountain Landscape",
+          "vector_description": "Mountain landscape, mountains, alpine, peak, summit, snow mountain, mountain peak, mountain ridge, valley, canyon"
+        },
+        {
+          "name": "海洋海岸",
+          "name_en": "Seascape/Coast",
+          "vector_description": "Seascape, coast, ocean, beach, shoreline, reef, waves, coastline, cliff coast"
+        },
+        {
+          "name": "森林林地",
+          "name_en": "Forest/Woodland",
+          "vector_description": "Forest, woodland, woods, trees, jungle, primeval forest, bamboo forest, mangrove, coniferous forest, broadleaf forest"
+        },
+        {
+          "name": "沙漠荒漠",
+          "name_en": "Desert",
+          "vector_description": "Desert, dunes, arid, gobi, sand dune, rock desert, salt desert, desert plain"
+        },
+        {
+          "name": "草原平原",
+          "name_en": "Grassland/Plains",
+          "vector_description": "Grassland, plains, prairie, meadow, steppe, alpine meadow, wetland grassland, moorland"
+        },
+        {
+          "name": "湖泊河流",
+          "name_en": "Lakes/Rivers",
+          "vector_description": "Lakes, rivers, waterscape, stream, lake, river, creek, waterfall, wetland, pond"
+        },
+        {
+          "name": "城市景观",
+          "name_en": "Cityscape",
+          "vector_description": "Cityscape, urban, skyline, architecture, city, skyline view, street scene, architectural photography, night cityscape"
+        },
+        {
+          "name": "田园风光",
+          "name_en": "Rural/Pastoral",
+          "vector_description": "Rural, pastoral, countryside, farmland, farm fields, terraced fields, village, idyllic"
+        },
+        {
+          "name": "极地冰川",
+          "name_en": "Polar/Glacier",
+          "vector_description": "Polar, glacier, ice, arctic, antarctic, iceberg, ice field, aurora region"
+        },
+        {
+          "name": "峡谷",
+          "name_en": "Canyon",
+          "vector_description": "Canyon, gorge, ravine, rock canyon, river canyon"
+        },
+        {
+          "name": "开阔视野",
+          "name_en": "Vista/Panoramic View",
+          "vector_description": "Vista, panoramic view, overlook, wide open view, distant landscape"
+        }
+      ]
+    },
+    "geological_features": {
+      "name": "地质特征",
+      "name_en": "Geological Features",
+      "subcategories": {
+        "tectonic_mountainous": {
+          "name": "构造与山地地貌",
+          "name_en": "Tectonic & Mountainous Landforms",
+          "tags": [
+            {
+              "name": "山脉",
+              "name_en": "Mountain",
+              "vector_description": "Mountain, mountain range, peak, summit"
+            },
+            {
+              "name": "山谷",
+              "name_en": "Valley",
+              "vector_description": "Valley, mountain valley, depression between mountains"
+            },
+            {
+              "name": "悬崖",
+              "name_en": "Cliff",
+              "vector_description": "Cliff, precipice, steep rock face"
+            },
+            {
+              "name": "刃脊",
+              "name_en": "Arête",
+              "vector_description": "Arête, sharp mountain ridge, knife-edge ridge"
+            },
+            {
+              "name": "冰斗",
+              "name_en": "Cirque",
+              "vector_description": "Cirque, glacial cirque, amphitheater-shaped valley"
+            },
+            {
+              "name": "冰碛",
+              "name_en": "Moraine",
+              "vector_description": "Moraine, glacial deposits, glacial debris"
+            },
+            {
+              "name": "孤丘",
+              "name_en": "Butte",
+              "vector_description": "Butte, isolated hill with steep sides, flat-topped hill"
+            },
+            {
+              "name": "平顶山",
+              "name_en": "Mesa",
+              "vector_description": "Mesa, flat-topped highland, table mountain"
+            },
+            {
+              "name": "高原",
+              "name_en": "Plateau",
+              "vector_description": "Plateau, elevated flat land, tableland"
+            },
+            {
+              "name": "破火山口",
+              "name_en": "Caldera",
+              "vector_description": "Caldera, volcanic crater, collapsed volcano"
+            },
+            {
+              "name": "喷气孔",
+              "name_en": "Fumarole",
+              "vector_description": "Fumarole, volcanic vent, steam vent"
+            },
+            {
+              "name": "熔岩原",
+              "name_en": "Lava Field",
+              "vector_description": "Lava field, volcanic lava plain, solidified lava"
+            },
+            {
+              "name": "柱状玄武岩",
+              "name_en": "Basalt Columns",
+              "vector_description": "Basalt columns, columnar basalt, hexagonal rock formations"
+            },
+            {
+              "name": "恶地",
+              "name_en": "Badlands",
+              "vector_description": "Badlands, heavily eroded dry terrain, barren landscape"
+            },
+            {
+              "name": "峡谷",
+              "name_en": "Canyon",
+              "vector_description": "Canyon, deep gorge, river-carved valley"
+            },
+            {
+              "name": "深谷",
+              "name_en": "Gorge",
+              "vector_description": "Gorge, narrow deep valley, ravine with steep walls"
+            },
+            {
+              "name": "沟壑",
+              "name_en": "Ravine",
+              "vector_description": "Ravine, small narrow steep-sided valley"
+            }
+          ]
+        },
+        "coastal_fluvial": {
+          "name": "海岸与流水地貌",
+          "name_en": "Coastal & Fluvial Landforms",
+          "tags": [
+            {
+              "name": "海滩",
+              "name_en": "Beach",
+              "vector_description": "Beach, sandy shore, coastline, seashore"
+            },
+            {
+              "name": "河流",
+              "name_en": "River",
+              "vector_description": "River, flowing water, stream, waterway"
+            },
+            {
+              "name": "湖泊",
+              "name_en": "Lake",
+              "vector_description": "Lake, body of water, pond, reservoir"
+            },
+            {
+              "name": "河口",
+              "name_en": "Estuary",
+              "vector_description": "Estuary, river mouth, tidal inlet"
+            },
+            {
+              "name": "三角洲",
+              "name_en": "Delta",
+              "vector_description": "Delta, river delta, sediment deposit at river mouth"
+            },
+            {
+              "name": "牛轭湖",
+              "name_en": "Oxbow Lake",
+              "vector_description": "Oxbow lake, curved lake, cut-off river meander"
+            },
+            {
+              "name": "曲流",
+              "name_en": "Meander",
+              "vector_description": "Meander, river bend, winding river curve"
+            },
+            {
+              "name": "峡湾",
+              "name_en": "Fjord",
+              "vector_description": "Fjord, glacial inlet, narrow sea inlet with steep cliffs"
+            },
+            {
+              "name": "溺谷",
+              "name_en": "Ria",
+              "vector_description": "Ria, drowned river valley, coastal inlet"
+            },
+            {
+              "name": "海蚀柱",
+              "name_en": "Sea Stack",
+              "vector_description": "Sea stack, coastal rock pillar, isolated rock tower in sea"
+            },
+            {
+              "name": "天然拱门",
+              "name_en": "Natural Arch",
+              "vector_description": "Natural arch, rock arch, stone arch formation"
+            },
+            {
+              "name": "岬角",
+              "name_en": "Headland",
+              "vector_description": "Headland, promontory, cape, coastal cliff"
+            },
+            {
+              "name": "沙嘴",
+              "name_en": "Spit",
+              "vector_description": "Spit, sand spit, coastal sandbar"
+            },
+            {
+              "name": "泻湖",
+              "name_en": "Lagoon",
+              "vector_description": "Lagoon, shallow coastal water, enclosed bay"
+            },
+            {
+              "name": "天坑",
+              "name_en": "Cenote",
+              "vector_description": "Cenote, sinkhole, natural pit with water"
+            },
+            {
+              "name": "喀斯特地貌",
+              "name_en": "Karst",
+              "vector_description": "Karst, limestone terrain, dissolved rock landscape"
+            },
+            {
+              "name": "瀑布",
+              "name_en": "Waterfall",
+              "vector_description": "Waterfall, falling water, cascade, cataract"
+            },
+            {
+              "name": "急流",
+              "name_en": "Rapids",
+              "vector_description": "Rapids, fast-flowing water, river rapids, white water"
+            }
+          ]
+        },
+        "aeolian_desert": {
+          "name": "风成与沙漠地貌",
+          "name_en": "Aeolian & Desert Features",
+          "tags": [
+            {
+              "name": "沙漠",
+              "name_en": "Desert",
+              "vector_description": "Desert, arid land, barren landscape"
+            },
+            {
+              "name": "沙",
+              "name_en": "Sand",
+              "vector_description": "Sand, sandy terrain, sand grains"
+            },
+            {
+              "name": "沙丘",
+              "name_en": "Dune",
+              "vector_description": "Dune, sand dune, wind-formed sand hill"
+            },
+            {
+              "name": "星形沙丘",
+              "name_en": "Star Dune",
+              "vector_description": "Star dune, pyramidal dune, multi-armed sand dune"
+            },
+            {
+              "name": "新月形沙丘",
+              "name_en": "Barchan Dune",
+              "vector_description": "Barchan dune, crescent dune, curved sand dune"
+            },
+            {
+              "name": "沙海",
+              "name_en": "Erg",
+              "vector_description": "Erg, sand sea, vast sandy desert"
+            },
+            {
+              "name": "绿洲",
+              "name_en": "Oasis",
+              "vector_description": "Oasis, desert spring, fertile spot in desert"
+            },
+            {
+              "name": "盐沼/干盐湖",
+              "name_en": "Salt Flat/Playa",
+              "vector_description": "Salt flat, playa, dried salt lake, salt pan"
+            },
+            {
+              "name": "风棱石",
+              "name_en": "Ventifact",
+              "vector_description": "Ventifact, wind-eroded rock, wind-sculpted stone"
+            },
+            {
+              "name": "雅丹地貌",
+              "name_en": "Yardang",
+              "vector_description": "Yardang, wind-eroded ridge, streamlined rock formation"
+            }
+          ]
+        },
+        "volcanic": {
+          "name": "火山地貌",
+          "name_en": "Volcanic Landforms",
+          "tags": [
+            {
+              "name": "火山",
+              "name_en": "Volcano",
+              "vector_description": "Volcano, volcanic mountain, active volcano, dormant volcano"
+            },
+            {
+              "name": "火山口",
+              "name_en": "Crater",
+              "vector_description": "Crater, volcanic crater, bowl-shaped depression"
+            },
+            {
+              "name": "火山湖",
+              "name_en": "Volcanic Lake",
+              "vector_description": "Volcanic lake, crater lake, lake in volcano"
+            },
+            {
+              "name": "熔岩",
+              "name_en": "Lava",
+              "vector_description": "Lava, molten rock, volcanic flow"
+            },
+            {
+              "name": "地热",
+              "name_en": "Geothermal",
+              "vector_description": "Geothermal, thermal activity, hot earth features"
+            },
+            {
+              "name": "温泉",
+              "name_en": "Hot Spring",
+              "vector_description": "Hot spring, thermal spring, natural hot water"
+            },
+            {
+              "name": "间歇泉",
+              "name_en": "Geyser",
+              "vector_description": "Geyser, erupting hot spring, periodic water spout"
+            }
+          ]
+        },
+        "glacial": {
+          "name": "冰川地貌",
+          "name_en": "Glacial Landforms",
+          "tags": [
+            {
+              "name": "冰川",
+              "name_en": "Glacier",
+              "vector_description": "Glacier, ice river, moving ice mass"
+            },
+            {
+              "name": "冰山",
+              "name_en": "Iceberg",
+              "vector_description": "Iceberg, floating ice, ice mass in water"
+            },
+            {
+              "name": "冰原",
+              "name_en": "Ice Field",
+              "vector_description": "Ice field, ice sheet, vast ice expanse"
+            },
+            {
+              "name": "冰川谷",
+              "name_en": "Glacial Valley",
+              "vector_description": "Glacial valley, U-shaped valley, glacier-carved valley"
+            },
+            {
+              "name": "终碛",
+              "name_en": "Terminal Moraine",
+              "vector_description": "Terminal moraine, end moraine, glacial deposit ridge"
+            },
+            {
+              "name": "冰川湖",
+              "name_en": "Glacial Lake",
+              "vector_description": "Glacial lake, glacier-formed lake, meltwater lake"
+            }
+          ]
+        }
+      }
+    },
+    "aerial_drone": {
+      "name": "航拍与无人机摄影",
+      "name_en": "Aerial & Drone Photography",
+      "subcategories": {
+        "aerial_angles": {
+          "name": "航拍角度",
+          "name_en": "Aerial Angles",
+          "tags": [
+            {
+              "name": "垂直俯视/上帝视角",
+              "name_en": "Top-Down / Bird's Eye View / Nadir",
+              "vector_description": "Top-down, bird's eye view, nadir, flat lay, map view, texture, pattern, abstract aerial, camera pointing straight down 90 degrees"
+            },
+            {
+              "name": "高倾斜角",
+              "name_en": "High Oblique",
+              "vector_description": "High oblique, establishing shot, vista, horizon line, wide aerial, camera at 45 degrees including horizon"
+            },
+            {
+              "name": "低空/近距航拍",
+              "name_en": "Low Altitude / Proximity",
+              "vector_description": "Low altitude, proximity, immersive, chase view, fly-through, drone flying close to objects"
+            },
+            {
+              "name": "环绕拍摄",
+              "name_en": "Orbital",
+              "vector_description": "Orbital, orbiting shot, circling around subject"
+            },
+            {
+              "name": "揭示镜头",
+              "name_en": "Reveal Shot",
+              "vector_description": "Reveal shot, pullback reveal, flying backward to show panorama"
+            }
+          ]
+        },
+        "drone_composition": {
+          "name": "无人机构图模式",
+          "name_en": "Drone Compositional Patterns",
+          "tags": [
+            {
+              "name": "分割线",
+              "name_en": "Dividing Lines",
+              "vector_description": "Dividing lines, symmetry, road trip, contrast, border, strong geometric division like road through forest"
+            },
+            {
+              "name": "肌理与重复",
+              "name_en": "Texture & Repetition",
+              "vector_description": "Texture and repetition, forest canopy, waves, agricultural patterns, urban grid, repeating patterns from above"
+            },
+            {
+              "name": "比例与孤立",
+              "name_en": "Scale & Isolation",
+              "vector_description": "Scale and isolation, tiny person, scale comparison, vastness, man vs nature, small subject in large landscape"
+            },
+            {
+              "name": "抽象航拍",
+              "name_en": "Abstract Aerial",
+              "vector_description": "Abstract aerial, texture, negative space, color block, geometric pattern, unrecognizable from above"
+            },
+            {
+              "name": "几何",
+              "name_en": "Geometric",
+              "vector_description": "Geometric, lines, shapes, patterns, symmetry from aerial perspective"
+            }
+          ]
+        },
+        "aerial_perspectives": {
+          "name": "航拍视角标签",
+          "name_en": "Aerial Perspective Tags",
+          "tags": [
+            {
+              "name": "无人机",
+              "name_en": "Drone",
+              "vector_description": "Drone photography, UAV shot, quadcopter aerial"
+            },
+            {
+              "name": "上帝视角",
+              "name_en": "Bird's Eye",
+              "vector_description": "Bird's eye view, overhead view, looking straight down"
+            },
+            {
+              "name": "倾斜视角",
+              "name_en": "Oblique",
+              "vector_description": "Oblique view, angled aerial, tilted perspective"
+            },
+            {
+              "name": "全景",
+              "name_en": "Panorama",
+              "vector_description": "Panorama, wide view, sweeping landscape, panoramic shot"
+            },
+            {
+              "name": "卫星视角",
+              "name_en": "Satellite View",
+              "vector_description": "Satellite view, high altitude, space perspective"
+            },
+            {
+              "name": "垂直构图",
+              "name_en": "Vertical Composition",
+              "vector_description": "Vertical composition, portrait orientation aerial"
+            },
+            {
+              "name": "图案",
+              "name_en": "Pattern",
+              "vector_description": "Pattern, repeating elements, visual rhythm from above"
+            },
+            {
+              "name": "对称",
+              "name_en": "Symmetry",
+              "vector_description": "Symmetry, mirror image, balanced composition"
+            },
+            {
+              "name": "极简风光",
+              "name_en": "Minimalist Landscape",
+              "vector_description": "Minimalist landscape, simple composition, clean aerial, minimal elements"
+            }
+          ]
+        }
+      }
+    },
+    "atmospheric_ephemeral": {
+      "name": "氛围与瞬态条件",
+      "name_en": "Atmospheric & Ephemeral Conditions",
+      "subcategories": {
+        "time_of_day": {
+          "name": "时段",
+          "name_en": "Time of Day",
+          "tags": [
+            {
+              "name": "黄金时刻",
+              "name_en": "Golden Hour",
+              "vector_description": "Golden hour, warm light, after sunrise, before sunset, golden tones"
+            },
+            {
+              "name": "蓝色时刻",
+              "name_en": "Blue Hour",
+              "vector_description": "Blue hour, cool tones, before sunrise, after sunset, blue light"
+            },
+            {
+              "name": "暮光",
+              "name_en": "Twilight",
+              "vector_description": "Twilight, dusk, dawn, transitional light"
+            },
+            {
+              "name": "正午",
+              "name_en": "Midday",
+              "vector_description": "Midday, harsh light, overhead sun, strong shadows"
+            },
+            {
+              "name": "夜间",
+              "name_en": "Nocturnal/Night",
+              "vector_description": "Night, nocturnal, dark, nighttime photography"
+            },
+            {
+              "name": "黎明",
+              "name_en": "Dawn",
+              "vector_description": "Dawn, sunrise, early morning, first light"
+            },
+            {
+              "name": "黄昏",
+              "name_en": "Dusk",
+              "vector_description": "Dusk, sunset, evening, last light"
+            },
+            {
+              "name": "民用曙暮光",
+              "name_en": "Civil Twilight",
+              "vector_description": "Civil twilight, sun just below horizon, bright twilight"
+            },
+            {
+              "name": "航海曙暮光",
+              "name_en": "Nautical Twilight",
+              "vector_description": "Nautical twilight, moderate darkness, horizon visible"
+            },
+            {
+              "name": "天文曙暮光",
+              "name_en": "Astronomical Twilight",
+              "vector_description": "Astronomical twilight, near darkness, stars visible"
+            }
+          ]
+        },
+        "weather_events": {
+          "name": "气象事件",
+          "name_en": "Weather Events",
+          "tags": [
+            {
+              "name": "风暴前锋",
+              "name_en": "Storm Front",
+              "vector_description": "Storm front, approaching storm, dramatic clouds, weather system"
+            },
+            {
+              "name": "积雨云",
+              "name_en": "Cumulonimbus",
+              "vector_description": "Cumulonimbus, thundercloud, storm cloud, towering cloud"
+            },
+            {
+              "name": "闪电",
+              "name_en": "Lightning",
+              "vector_description": "Lightning, electrical storm, thunder and lightning, bolt"
+            },
+            {
+              "name": "彩虹",
+              "name_en": "Rainbow",
+              "vector_description": "Rainbow, arc of colors, after rain, light refraction"
+            },
+            {
+              "name": "雾",
+              "name_en": "Fog",
+              "vector_description": "Fog, thick mist, low visibility, foggy atmosphere"
+            },
+            {
+              "name": "霭",
+              "name_en": "Mist",
+              "vector_description": "Mist, light fog, haze, atmospheric moisture"
+            },
+            {
+              "name": "霾",
+              "name_en": "Haze",
+              "vector_description": "Haze, atmospheric haze, distant blur, reduced visibility"
+            },
+            {
+              "name": "暴风雪",
+              "name_en": "Snowstorm",
+              "vector_description": "Snowstorm, blizzard, heavy snow, winter storm"
+            },
+            {
+              "name": "季风",
+              "name_en": "Monsoon",
+              "vector_description": "Monsoon, seasonal rain, heavy rainfall, tropical storm"
+            },
+            {
+              "name": "雨",
+              "name_en": "Rain",
+              "vector_description": "Rain, rainfall, rainy weather, precipitation"
+            },
+            {
+              "name": "雪",
+              "name_en": "Snow",
+              "vector_description": "Snow, snowfall, winter, snowy landscape"
+            },
+            {
+              "name": "霜",
+              "name_en": "Frost",
+              "vector_description": "Frost, frozen dew, ice crystals, cold morning"
+            },
+            {
+              "name": "戏剧性天空",
+              "name_en": "Dramatic Sky",
+              "vector_description": "Dramatic sky, impressive clouds, striking atmosphere"
+            },
+            {
+              "name": "多云",
+              "name_en": "Cloudy",
+              "vector_description": "Cloudy, cloud cover, overcast sky"
+            },
+            {
+              "name": "阴天",
+              "name_en": "Overcast",
+              "vector_description": "Overcast, grey sky, flat light, diffused"
+            },
+            {
+              "name": "晴朗",
+              "name_en": "Clear",
+              "vector_description": "Clear, blue sky, no clouds, perfect visibility"
+            }
+          ]
+        },
+        "astrophotography": {
+          "name": "天文摄影",
+          "name_en": "Astrophotography",
+          "tags": [
+            {
+              "name": "银河",
+              "name_en": "Milky Way",
+              "vector_description": "Milky Way, galaxy core, night sky, stars"
+            },
+            {
+              "name": "星轨",
+              "name_en": "Star Trails",
+              "vector_description": "Star trails, long exposure stars, circular star paths"
+            },
+            {
+              "name": "北极光",
+              "name_en": "Aurora Borealis",
+              "vector_description": "Aurora borealis, northern lights, polar lights, green sky"
+            },
+            {
+              "name": "南极光",
+              "name_en": "Aurora Australis",
+              "vector_description": "Aurora australis, southern lights, polar aurora"
+            },
+            {
+              "name": "月光",
+              "name_en": "Moonlit",
+              "vector_description": "Moonlit, moonlight, lunar illumination, night scene"
+            },
+            {
+              "name": "星空",
+              "name_en": "Starry",
+              "vector_description": "Starry, stars, night sky, celestial"
+            },
+            {
+              "name": "光污染",
+              "name_en": "Light Pollution",
+              "vector_description": "Light pollution, city glow, artificial sky brightness"
+            },
+            {
+              "name": "月亮",
+              "name_en": "Moon",
+              "vector_description": "Moon, lunar, moonrise, moon in landscape"
+            },
+            {
+              "name": "流星",
+              "name_en": "Meteor",
+              "vector_description": "Meteor, shooting star, meteor shower, falling star"
+            },
+            {
+              "name": "日/月食",
+              "name_en": "Eclipse",
+              "vector_description": "Eclipse, solar eclipse, lunar eclipse, celestial event"
+            }
+          ]
+        },
+        "atmospheric_conditions": {
+          "name": "大气条件",
+          "name_en": "Atmospheric Conditions",
+          "tags": [
+            {
+              "name": "晴朗",
+              "name_en": "Sunny",
+              "vector_description": "Sunny, bright sun, clear day, sunshine"
+            },
+            {
+              "name": "多云",
+              "name_en": "Cloudy",
+              "vector_description": "Cloudy, clouds, partly cloudy, cloud cover"
+            },
+            {
+              "name": "阴天",
+              "name_en": "Overcast",
+              "vector_description": "Overcast, grey, flat light, diffused lighting"
+            },
+            {
+              "name": "暴风雨",
+              "name_en": "Stormy",
+              "vector_description": "Stormy, storm, severe weather, dramatic conditions"
+            },
+            {
+              "name": "雨天",
+              "name_en": "Rainy",
+              "vector_description": "Rainy, rain, wet conditions, precipitation"
+            },
+            {
+              "name": "雪天",
+              "name_en": "Snowy",
+              "vector_description": "Snowy, snow covered, winter conditions, white landscape"
+            },
+            {
+              "name": "雾",
+              "name_en": "Foggy",
+              "vector_description": "Foggy, fog, misty conditions, low visibility"
+            },
+            {
+              "name": "霭",
+              "name_en": "Misty",
+              "vector_description": "Misty, mist, light fog, atmospheric"
+            },
+            {
+              "name": "霾",
+              "name_en": "Haze",
+              "vector_description": "Haze, hazy, reduced clarity, atmospheric particles"
+            },
+            {
+              "name": "情绪化",
+              "name_en": "Moody",
+              "vector_description": "Moody, atmospheric, emotional, dramatic mood"
+            }
+          ]
+        }
+      }
+    },
+    "lighting_conditions": {
+      "name": "光线条件",
+      "name_en": "Lighting Conditions",
+      "tags": [
+        {
+          "name": "黄金时刻",
+          "name_en": "Golden Hour",
+          "vector_description": "Golden hour, warm tones, soft shadows, golden light, early morning or late afternoon"
+        },
+        {
+          "name": "蓝调时刻",
+          "name_en": "Blue Hour",
+          "vector_description": "Blue hour, blue tones, cool light, soft light, before sunrise or after sunset"
+        },
+        {
+          "name": "日出",
+          "name_en": "Sunrise",
+          "vector_description": "Sunrise, morning glow, dawn light, horizon glow, first light of day"
+        },
+        {
+          "name": "日落",
+          "name_en": "Sunset",
+          "vector_description": "Sunset, evening glow, dusk light, afterglow, end of day light"
+        },
+        {
+          "name": "正午",
+          "name_en": "Midday",
+          "vector_description": "Midday, strong light, hard shadows, high contrast, overhead sun"
+        },
+        {
+          "name": "阴天",
+          "name_en": "Overcast",
+          "vector_description": "Overcast, soft light, low contrast, even lighting, cloudy conditions"
+        },
+        {
+          "name": "戏剧性光线",
+          "name_en": "Dramatic Light",
+          "vector_description": "Dramatic light, god rays, crepuscular rays, light beams, breaking through clouds"
+        },
+        {
+          "name": "逆光",
+          "name_en": "Backlight",
+          "vector_description": "Backlight, silhouette, rim light, lens flare, shooting into light"
+        },
+        {
+          "name": "侧光",
+          "name_en": "Side Light",
+          "vector_description": "Side light, texture, dimension, shadow contrast, light from the side"
+        },
+        {
+          "name": "顺光",
+          "name_en": "Front Light",
+          "vector_description": "Front light, even illumination, saturated colors, flat lighting"
+        }
+      ]
+    },
+    "natural_elements": {
+      "name": "自然元素",
+      "name_en": "Natural Elements",
+      "tags": [
+        {
+          "name": "水体",
+          "name_en": "Water",
+          "vector_description": "Water, ocean, lake, river, waterfall, stream, ice, water droplet"
+        },
+        {
+          "name": "天空",
+          "name_en": "Sky",
+          "vector_description": "Sky, blue sky, clouds, sunset glow, sunrise glow, starry sky"
+        },
+        {
+          "name": "岩石",
+          "name_en": "Rocks",
+          "vector_description": "Rocks, reef, boulders, rock layers, stone forest"
+        },
+        {
+          "name": "树木",
+          "name_en": "Trees",
+          "vector_description": "Trees, lone tree, forest, ancient tree, dead tree"
+        },
+        {
+          "name": "花草植被",
+          "name_en": "Flowers/Plants",
+          "vector_description": "Flowers and plants, wildflowers, grass, moss, shrubs, vegetation"
+        },
+        {
+          "name": "山峰山脊",
+          "name_en": "Mountains/Peaks",
+          "vector_description": "Mountains and peaks, snow mountain, summit, ridgeline"
+        },
+        {
+          "name": "倒影",
+          "name_en": "Reflections",
+          "vector_description": "Reflections, water reflection, mirror image, symmetry"
+        },
+        {
+          "name": "野生动物",
+          "name_en": "Wildlife",
+          "vector_description": "Wildlife, birds, mammals, insects, animals in nature"
+        }
+      ]
+    },
+    "composition_elements": {
+      "name": "构图元素",
+      "name_en": "Composition Elements",
+      "tags": [
+        {
+          "name": "引导线",
+          "name_en": "Leading Lines",
+          "vector_description": "Leading lines, roads, rivers, coastlines, fences, lines guiding eye"
+        },
+        {
+          "name": "前景兴趣点",
+          "name_en": "Foreground Interest",
+          "vector_description": "Foreground interest, rocks, flowers, wood, elements in front"
+        },
+        {
+          "name": "对称",
+          "name_en": "Symmetry",
+          "vector_description": "Symmetry, reflections, architecture, mirror image, balanced composition"
+        },
+        {
+          "name": "三分法",
+          "name_en": "Rule of Thirds",
+          "vector_description": "Rule of thirds, compositional grid, off-center subject"
+        },
+        {
+          "name": "框景",
+          "name_en": "Frame within Frame",
+          "vector_description": "Frame within frame, tree branches, cave, window, natural framing"
+        },
+        {
+          "name": "极简主义",
+          "name_en": "Minimalism",
+          "vector_description": "Minimalism, simple, negative space, single subject, clean composition"
+        },
+        {
+          "name": "分层",
+          "name_en": "Layers/Depth",
+          "vector_description": "Layers and depth, foreground-midground-background, visual depth"
+        },
+        {
+          "name": "剪影",
+          "name_en": "Silhouette",
+          "vector_description": "Silhouette, backlit, outline, black subject, shape against light"
+        },
+        {
+          "name": "负空间",
+          "name_en": "Negative Space",
+          "vector_description": "Negative space, empty space, breathing room, minimalist"
+        },
+        {
+          "name": "对角线",
+          "name_en": "Diagonal",
+          "vector_description": "Diagonal composition, angled lines, dynamic composition"
+        },
+        {
+          "name": "黄金比例",
+          "name_en": "Golden Ratio",
+          "vector_description": "Golden ratio, golden spiral, fibonacci composition"
+        }
+      ]
+    },
+    "color_themes": {
+      "name": "色彩主题",
+      "name_en": "Color Themes",
+      "tags": [
+        {
+          "name": "暖色调",
+          "name_en": "Warm Tones",
+          "vector_description": "Warm tones, orange, yellow, red, golden, warm color palette"
+        },
+        {
+          "name": "冷色调",
+          "name_en": "Cool Tones",
+          "vector_description": "Cool tones, blue, cyan, purple, cold color palette"
+        },
+        {
+          "name": "秋色",
+          "name_en": "Autumn Colors",
+          "vector_description": "Autumn colors, golden yellow, orange red, brown, fall foliage"
+        },
+        {
+          "name": "鲜艳色彩",
+          "name_en": "Vibrant Colors",
+          "vector_description": "Vibrant colors, high saturation, strong contrast, vivid"
+        },
+        {
+          "name": "柔和色彩",
+          "name_en": "Pastel Colors",
+          "vector_description": "Pastel colors, low saturation, soft, muted tones"
+        },
+        {
+          "name": "单色",
+          "name_en": "Monochrome",
+          "vector_description": "Monochrome, black and white, sepia, single color tone"
+        },
+        {
+          "name": "金色调",
+          "name_en": "Golden",
+          "vector_description": "Golden tones, gold color, warm golden light"
+        },
+        {
+          "name": "蓝调色彩",
+          "name_en": "Blue Hour Colors",
+          "vector_description": "Blue hour colors, cool blue tones, twilight palette"
+        }
+      ]
+    },
+    "seasons": {
+      "name": "季节",
+      "name_en": "Seasons",
+      "tags": [
+        {
+          "name": "春季",
+          "name_en": "Spring",
+          "vector_description": "Spring, cherry blossoms, new buds, spring rain, renewal, fresh green"
+        },
+        {
+          "name": "夏季",
+          "name_en": "Summer",
+          "vector_description": "Summer, lotus, beach, sunshine, warm, lush vegetation"
+        },
+        {
+          "name": "秋季",
+          "name_en": "Autumn/Fall",
+          "vector_description": "Autumn, fall, maple leaves, ginkgo, autumn colors, harvest"
+        },
+        {
+          "name": "冬季",
+          "name_en": "Winter",
+          "vector_description": "Winter, snow, ice, frost, cold, bare trees"
+        }
+      ]
+    },
+    "photography_techniques": {
+      "name": "拍摄技法",
+      "name_en": "Photography Techniques",
+      "tags": [
+        {
+          "name": "长曝光",
+          "name_en": "Long Exposure",
+          "vector_description": "Long exposure, flowing water, cloud movement, star trails, light painting, motion blur"
+        },
+        {
+          "name": "高动态范围",
+          "name_en": "HDR",
+          "vector_description": "HDR, high dynamic range, high contrast scene, detail preservation"
+        },
+        {
+          "name": "全景拼接",
+          "name_en": "Panorama",
+          "vector_description": "Panorama, panoramic stitch, ultra wide angle, large scene"
+        },
+        {
+          "name": "焦点堆叠",
+          "name_en": "Focus Stacking",
+          "vector_description": "Focus stacking, front to back sharpness, macro landscape, deep focus"
+        },
+        {
+          "name": "时间混合",
+          "name_en": "Time Blend",
+          "vector_description": "Time blend, day to night transition, blue hour blend, time lapse composite"
+        },
+        {
+          "name": "黑白",
+          "name_en": "Black and White",
+          "vector_description": "Black and white, monochrome, grayscale, B&W photography"
+        },
+        {
+          "name": "延时摄影",
+          "name_en": "Timelapse",
+          "vector_description": "Timelapse, time lapse, motion over time, sped up video"
+        },
+        {
+          "name": "中灰密度滤镜",
+          "name_en": "ND Filter",
+          "vector_description": "ND filter, neutral density, long exposure aid, light reduction"
+        },
+        {
+          "name": "渐变灰滤镜",
+          "name_en": "GND Filter",
+          "vector_description": "GND filter, graduated neutral density, sky exposure balance"
+        },
+        {
+          "name": "偏振镜",
+          "name_en": "Polarizer/CPL",
+          "vector_description": "Polarizer, CPL, circular polarizer, glare reduction, saturation boost"
+        },
+        {
+          "name": "相机移动拍摄",
+          "name_en": "ICM",
+          "vector_description": "ICM, intentional camera movement, motion blur art, abstract motion"
+        },
+        {
+          "name": "红外摄影",
+          "name_en": "Infrared Photography",
+          "vector_description": "Infrared photography, IR, false color, white foliage, surreal landscape"
+        }
+      ]
+    },
+    "photography_styles": {
+      "name": "摄影风格",
+      "name_en": "Photography Styles",
+      "tags": [
+        {
+          "name": "艺术风光",
+          "name_en": "Fine Art Landscape",
+          "vector_description": "Fine art landscape, artistic, gallery-worthy, creative interpretation"
+        },
+        {
+          "name": "纪实风光",
+          "name_en": "Documentary Landscape",
+          "vector_description": "Documentary landscape, realistic, truthful, unmanipulated"
+        },
+        {
+          "name": "抽象风光",
+          "name_en": "Abstract Landscape",
+          "vector_description": "Abstract landscape, non-representational, forms and colors, artistic abstraction"
+        },
+        {
+          "name": "微观风光",
+          "name_en": "Intimate Landscape",
+          "vector_description": "Intimate landscape, small scene, detail-focused, close-up nature"
+        },
+        {
+          "name": "史诗风光",
+          "name_en": "Epic Landscape",
+          "vector_description": "Epic landscape, grand scale, dramatic, awe-inspiring, majestic"
+        },
+        {
+          "name": "极简风光",
+          "name_en": "Minimalist Landscape",
+          "vector_description": "Minimalist landscape, simple, clean, few elements, negative space"
+        },
+        {
+          "name": "浪漫风光",
+          "name_en": "Romantic Landscape",
+          "vector_description": "Romantic landscape, dreamy, soft, emotional, evocative"
+        },
+        {
+          "name": "氛围风光",
+          "name_en": "Atmospheric Landscape",
+          "vector_description": "Atmospheric landscape, moody, fog, mist, weather-driven"
+        },
+        {
+          "name": "情绪风光",
+          "name_en": "Moody Landscape",
+          "vector_description": "Moody landscape, dark, dramatic, emotional, brooding"
+        }
+      ]
+    }
+  }
+}

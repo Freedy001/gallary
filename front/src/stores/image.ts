@@ -15,6 +15,10 @@ export const useImageStore = defineStore('image', () => {
   const currentSize = ref(20)
   const total = ref(0)
 
+  // Search state
+  const isSearchMode = ref(false)
+  const searchDescription = ref('')
+
   // Computed
   const selectedCount = computed(() => selectedImages.value.size)
   const selectedIds = computed(() => Array.from(selectedImages.value))
@@ -80,6 +84,11 @@ export const useImageStore = defineStore('image', () => {
     await fetchImages(1, pageSize)
   }
 
+  async function exitSearch() {
+    isSearchMode.value = false
+    searchDescription.value = ''
+    await refreshImages(async (page, size) => (await imageApi.getList(page, size)).data)
+  }
 
   async function deleteBatch(ids?: number[]) {
     try {
@@ -126,6 +135,8 @@ export const useImageStore = defineStore('image', () => {
     loading,
     currentPage,
     total,
+    isSearchMode,
+    searchDescription,
     // Computed
     selectedCount,
     selectedIds,
@@ -133,6 +144,7 @@ export const useImageStore = defineStore('image', () => {
     // Actions
     fetchImages,
     refreshImages,
+    exitSearch,
     deleteBatch,
     selectImage,
     toggleSelect,

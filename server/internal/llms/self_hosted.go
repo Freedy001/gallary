@@ -14,11 +14,26 @@ import (
 
 // ================== 自托管模型客户端 ==================
 
+// promptOptimizerConfig 提示词优化器配置（用于 API 请求）
+type promptOptimizerConfig struct {
+	Enabled      bool   `json:"enabled"`
+	SystemPrompt string `json:"system_prompt"`
+}
+
+// extraConfig 额外配置结构（用于解析 ExtraConfig 字段）
+type extraConfig struct {
+	PromptOptimizer *promptOptimizerConfig `json:"prompt_optimizer,omitempty"`
+}
+
 // SelfHostedClient 自托管模型客户端
 type SelfHostedClient struct {
 	config     *model.ModelConfig
 	httpClient *http.Client
 	manager    *storage.StorageManager
+}
+
+func (c *SelfHostedClient) UpdateConfig(config *model.ModelConfig) {
+	c.config = config
 }
 
 // NewSelfHostedClient 创建自托管模型客户端
@@ -45,15 +60,12 @@ func (c *SelfHostedClient) SupportsEmbeddingWithAesthetics() bool {
 }
 
 // Embedding 使用阿里云兼容格式计算嵌入向量
-func (c *SelfHostedClient) Embedding(ctx context.Context, image *model.Image, text string) ([]float32, error) {
+func (c *SelfHostedClient) Embedding(ctx context.Context, imageData []byte, text string) ([]float32, error) {
 	contents := make([]map[string]string, 0)
 
-	if image != nil {
-		imageData, err := c.getImageBase64(image)
-		if err != nil {
-			return nil, fmt.Errorf("获取图片数据失败: %v", err)
-		}
-		contents = append(contents, map[string]string{"image": imageData})
+	if len(imageData) > 0 {
+		base64Data := base64.StdEncoding.EncodeToString(imageData)
+		contents = append(contents, map[string]string{"image": base64Data})
 	}
 
 	if text != "" {
@@ -64,26 +76,29 @@ func (c *SelfHostedClient) Embedding(ctx context.Context, image *model.Image, te
 		return nil, fmt.Errorf("必须提供图片或文本")
 	}
 
-	return c.callMultimodalEmbedding(ctx, contents)
+	// 文本查询时传递提示词优化器配置
+	var promptOptimizer *promptOptimizerConfig
+	if text != "" {
+		promptOptimizer = c.getPromptOptimizerConfig()
+	}
+
+	return c.callMultimodalEmbedding(ctx, contents, promptOptimizer)
 }
 
 // EmbeddingWithAesthetics 同时计算嵌入和美学评分
 // 使用传统的 aesthetics API 以获取美学评分
-func (c *SelfHostedClient) EmbeddingWithAesthetics(ctx context.Context, image *model.Image) ([]float32, float64, error) {
-	if image == nil {
+func (c *SelfHostedClient) EmbeddingWithAesthetics(ctx context.Context, imageData []byte) ([]float32, float64, error) {
+	if len(imageData) == 0 {
 		return nil, 0, fmt.Errorf("必须提供图片")
 	}
 
-	imageData, err := c.getImageBase64(image)
-	if err != nil {
-		return nil, 0, fmt.Errorf("获取图片数据失败: %v", err)
-	}
+	base64Data := base64.StdEncoding.EncodeToString(imageData)
 
 	reqBody := struct {
 		Input            string `json:"input"`
 		ReturnEmbeddings bool   `json:"return_embeddings"`
 	}{
-		Input:            imageData,
+		Input:            base64Data,
 		ReturnEmbeddings: true,
 	}
 
@@ -135,16 +150,32 @@ func (c *SelfHostedClient) EmbeddingWithAesthetics(ctx context.Context, image *m
 	return response.Data[0].Embedding, response.Data[0].Score, nil
 }
 
+// getPromptOptimizerConfig 从 ExtraConfig 中解析提示词优化器配置
+func (c *SelfHostedClient) getPromptOptimizerConfig() *promptOptimizerConfig {
+	if c.config.ExtraConfig == "" {
+		return nil
+	}
+
+	var extra extraConfig
+	if err := json.Unmarshal([]byte(c.config.ExtraConfig), &extra); err != nil {
+		return nil
+	}
+
+	return extra.PromptOptimizer
+}
+
 // callMultimodalEmbedding 调用阿里云兼容的多模态嵌入 API
-func (c *SelfHostedClient) callMultimodalEmbedding(ctx context.Context, contents []map[string]string) ([]float32, error) {
+func (c *SelfHostedClient) callMultimodalEmbedding(ctx context.Context, contents []map[string]string, promptOptimizer *promptOptimizerConfig) ([]float32, error) {
 	// 构建阿里云兼容的请求格式
 	reqBody := struct {
 		Model string `json:"model"`
 		Input struct {
 			Contents []map[string]string `json:"contents"`
 		} `json:"input"`
+		PromptOptimizer *promptOptimizerConfig `json:"prompt_optimizer,omitempty"`
 	}{
-		Model: c.config.ApiModelName,
+		Model:           c.config.ApiModelName,
+		PromptOptimizer: promptOptimizer,
 	}
 	reqBody.Input.Contents = contents
 
@@ -200,22 +231,6 @@ func (c *SelfHostedClient) callMultimodalEmbedding(ctx context.Context, contents
 	}
 
 	return response.Output.Embeddings[0].Embedding, nil
-}
-
-// getImageBase64 从存储读取图片并转换为 Base64
-func (c *SelfHostedClient) getImageBase64(image *model.Image) (string, error) {
-	reader, err := c.manager.Download(context.Background(), image.StorageId, image.StoragePath)
-	if err != nil {
-		return "", err
-	}
-	defer reader.Close()
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return "", err
-	}
-
-	return base64.StdEncoding.EncodeToString(data), nil
 }
 
 // TestConnection 测试连接

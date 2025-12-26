@@ -3,6 +3,17 @@
 // Provider 模型提供商
 export type Provider = 'openAI' | 'selfHosted' | 'alyunMultimodalEmbedding'
 
+// 提示词优化器配置
+export interface PromptOptimizerConfig {
+  enabled: boolean
+  system_prompt: string
+}
+
+// 额外配置结构
+export interface ExtraConfig {
+  prompt_optimizer?: PromptOptimizerConfig
+}
+
 // 通用模型配置（与后端 ModelConfig 对应）
 export interface ModelConfig {
   id: string             // 唯一标识
@@ -28,7 +39,6 @@ export interface AIConfig {
 export interface AIQueueStatus {
   queues: AIQueueInfo[]      // 所有队列信息
   total_pending: number      // 总待处理数
-  total_processing: number   // 总处理中数
   total_failed: number       // 总失败数
 }
 
@@ -40,7 +50,6 @@ export interface AIQueueInfo {
   model_name?: string
   status: 'idle' | 'processing'   // 队列状态
   pending_count: number
-  processing_count: number
   failed_count: number
 }
 
@@ -59,7 +68,7 @@ export interface AITaskImageInfo {
   image_id: number
   imageName?: string
   thumbnailurl?: string
-  status: 'pending' | 'processing' | 'failed'
+  status: 'pending' | 'failed'
   error?: string
   created_at: string
 }
@@ -86,25 +95,7 @@ export const TaskTypeLabels: Record<string, string> = {
   description: 'AI 描述'
 }
 
-// 队列状态显示名称
-export const QueueStatusLabels: Record<string, string> = {
-  idle: '空闲',
-  processing: '处理中'
-}
-
-// 任务图片状态显示名称
-export const TaskImageStatusLabels: Record<string, string> = {
-  pending: '待处理',
-  processing: '处理中',
-  failed: '失败'
-}
-
 // ================== 辅助函数 ==================
-
-// 获取所有启用的模型
-export function getEnabledModels(config: AIConfig): ModelConfig[] {
-  return config.models.filter(model => model.enabled)
-}
 
 // 获取队列显示名称
 export function getQueueDisplayName(queue: AIQueueInfo): string {

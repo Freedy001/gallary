@@ -37,9 +37,9 @@ const routes: RouteRecordRaw[] = [
     meta: {requiresAuth: true},
   },
   {
-    path: '/gallery/albums/:id',
+    path: '/gallery/albums/detail',
     name: 'AlbumDetail',
-    component: () => import('@/views/AlbumDetailView.vue'),
+    component: () => import('@/components/album/AlbumDetailView.vue'),
     meta: {requiresAuth: true},
   },
   {

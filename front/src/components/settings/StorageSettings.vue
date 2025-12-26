@@ -231,13 +231,13 @@ function handleMigrationCompleted() {
 async function handleDefaultStorageChange() {
   try {
     await settingsApi.setDefaultStorage(form.storageId)
-    await dialogStore.alert({
+    dialogStore.alert({
       title: '成功',
       message: '默认存储已更新',
       type: 'success'
     })
   } catch (error: any) {
-    await dialogStore.alert({
+    dialogStore.alert({
       title: '错误',
       message: error.message || '设置默认存储失败',
       type: 'error'
@@ -254,13 +254,13 @@ async function handleAccountAdded(account: AliyunPanStorageConfig) {
       config: account,
     })
     await loadSettings()
-    await dialogStore.alert({
+    dialogStore.alert({
       title: '成功',
       message: '阿里云盘账号添加成功',
       type: 'success'
     })
   } catch (error: any) {
-    await dialogStore.alert({
+    dialogStore.alert({
       title: '错误',
       message: error.message || '添加账号失败',
       type: 'error'
@@ -272,13 +272,13 @@ async function handleAccountRemoved(id: StorageId) {
   try {
     await settingsApi.deleteStorage(id)
     await loadSettings()
-    await dialogStore.alert({
+    dialogStore.alert({
       title: '成功',
       message: '阿里云盘账号已删除',
       type: 'success'
     })
   } catch (error: any) {
-    await dialogStore.alert({
+    dialogStore.alert({
       title: '错误',
       message: error.message || '删除账号失败',
       type: 'error'
@@ -303,13 +303,13 @@ async function handleSave() {
         if (migrationProgressRef.value) {
           migrationProgressRef.value.refresh()
         }
-        await dialogStore.alert({
+        dialogStore.alert({
           title: '迁移已启动',
           message: '存储路径已变更，正在迁移文件...',
           type: 'info'
         })
       } else {
-        await dialogStore.alert({
+        dialogStore.alert({
           title: '成功',
           message: result.message || '存储配置更新成功',
           type: 'success'
@@ -318,7 +318,7 @@ async function handleSave() {
     } else if (editingType.value === 'aliyunpan' && form.aliyunpanGlobal) {
       // 保存全局配置
       await settingsApi.updateGlobalConfig(form.aliyunpanGlobal)
-      await dialogStore.alert({
+      dialogStore.alert({
         title: '成功',
         message: '阿里云盘全局配置更新成功',
         type: 'success'
@@ -326,13 +326,13 @@ async function handleSave() {
     }
   } catch (error: any) {
     if (error.response?.status === 423) {
-      await dialogStore.alert({
+      dialogStore.alert({
         title: '配置被锁定',
         message: '迁移正在进行中，请等待完成后再修改配置',
         type: 'warning'
       })
     } else {
-      await dialogStore.alert({
+      dialogStore.alert({
         title: '错误',
         message: error.message || '更新存储配置失败',
         type: 'error'

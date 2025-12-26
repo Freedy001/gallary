@@ -15,6 +15,10 @@ type OpenAIClient struct {
 	httpClient *http.Client
 }
 
+func (c *OpenAIClient) UpdateConfig(config *model.ModelConfig) {
+	c.config = config
+}
+
 // NewOpenAIClient 创建 OpenAI 兼容模型客户端
 func NewOpenAIClient(config *model.ModelConfig, httpClient *http.Client) *OpenAIClient {
 	return &OpenAIClient{
@@ -38,13 +42,13 @@ func (c *OpenAIClient) SupportsEmbeddingWithAesthetics() bool {
 }
 
 // Embedding 计算嵌入向量
-func (c *OpenAIClient) Embedding(ctx context.Context, image *model.Image, text string) ([]float32, error) {
-	return nil, fmt.Errorf("OpenAI 客户端不支持美学评分")
+func (c *OpenAIClient) Embedding(ctx context.Context, imageData []byte, text string) ([]float32, error) {
+	return nil, fmt.Errorf("OpenAI 客户端不支持嵌入")
 }
 
 // EmbeddingWithAesthetics OpenAI 客户端不支持同时计算
-func (c *OpenAIClient) EmbeddingWithAesthetics(ctx context.Context, imagePath *model.Image) ([]float32, float64, error) {
-	embedding, err := c.Embedding(ctx, imagePath, "")
+func (c *OpenAIClient) EmbeddingWithAesthetics(ctx context.Context, imageData []byte) ([]float32, float64, error) {
+	embedding, err := c.Embedding(ctx, imageData, "")
 	return embedding, 0, err
 }
 

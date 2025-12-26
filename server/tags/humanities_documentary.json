@@ -1,0 +1,347 @@
+{
+  "name": "人文与社会纪实摄影",
+  "name_en": "Humanities & Documentary Photography",
+  "description": "街头摄影、社会纪实与人道主义摄影的分类体系",
+  "categories": {
+    "street_photography": {
+      "name": "街头摄影",
+      "name_en": "Street Photography",
+      "subcategories": {
+        "street_subgenres": {
+          "name": "街头子流派",
+          "name_en": "Street Sub-Genres",
+          "tags": [
+            {
+              "name": "抓拍/坦率街头",
+              "name_en": "Candid Street",
+              "vector_description": "Candid street photography, observational, fly-on-the-wall, natural, unscripted, subject unaware, unposed"
+            },
+            {
+              "name": "街头肖像",
+              "name_en": "Street Portraiture",
+              "vector_description": "Street portraiture, stranger, encounter, eye contact, urban fashion, consented street portrait"
+            },
+            {
+              "name": "几何/图形街头",
+              "name_en": "Geometric/Graphic Street",
+              "vector_description": "Geometric graphic street photography, minimalist, abstract, shadows, architecture, focus on lines shapes and light"
+            },
+            {
+              "name": "闪光灯街头",
+              "name_en": "Flash Street",
+              "vector_description": "Flash street photography, hard flash, gritty, confrontational, high contrast, Bruce Gilden style, aggressive aesthetic"
+            },
+            {
+              "name": "夜间街头",
+              "name_en": "Night Street",
+              "vector_description": "Night street photography, neon, city lights, nightlife, urban night scenes"
+            },
+            {
+              "name": "决定性瞬间",
+              "name_en": "Decisive Moment",
+              "vector_description": "Decisive moment, instant, perfect timing, narrative, Henri Cartier-Bresson style, peak action capture"
+            }
+          ]
+        },
+        "compositional_elements": {
+          "name": "街头构图元素",
+          "name_en": "Street Compositional Elements",
+          "tags": [
+            {
+              "name": "并置",
+              "name_en": "Juxtaposition",
+              "vector_description": "Juxtaposition, visual irony, contrasting elements, old vs new, rich vs poor, youth vs age, advertisement vs reality, color match, visual pun"
+            },
+            {
+              "name": "反射与层叠",
+              "name_en": "Reflections & Layers",
+              "vector_description": "Reflections and layers, puddle reflection, shop window, double reflection, mirrored, distortion, through the glass, visual complexity"
+            },
+            {
+              "name": "阴影与剪影",
+              "name_en": "Shadows & Silhouettes",
+              "vector_description": "Shadows and silhouettes, chiaroscuro, silhouette, long shadows, deep blacks, mystery, anonymity, strong light hiding details"
+            },
+            {
+              "name": "隔离与拥挤",
+              "name_en": "Isolation vs Crowds",
+              "vector_description": "Isolation vs crowds, urban isolation, loneliness, solitude, bustling, chaos, commuters, rush hour"
+            }
+          ]
+        },
+        "urban_sociology": {
+          "name": "城市社会学标签",
+          "name_en": "Urban Sociology Tags",
+          "subcategories": {
+            "activities": {
+              "name": "活动",
+              "name_en": "Activities",
+              "tags": [
+                {
+                  "name": "通勤",
+                  "name_en": "Commuting",
+                  "vector_description": "Commuting, daily commute, traveling to work, public transport"
+                },
+                {
+                  "name": "等待",
+                  "name_en": "Waiting",
+                  "vector_description": "Waiting, standing by, anticipation in urban setting"
+                },
+                {
+                  "name": "吸烟",
+                  "name_en": "Smoking",
+                  "vector_description": "Smoking, cigarette, urban smoking scene"
+                },
+                {
+                  "name": "边走边吃",
+                  "name_en": "Eating on the go",
+                  "vector_description": "Eating on the go, street food, quick meal, urban eating"
+                },
+                {
+                  "name": "阅读",
+                  "name_en": "Reading",
+                  "vector_description": "Reading, book, newspaper, urban reader"
+                },
+                {
+                  "name": "手机干扰",
+                  "name_en": "Phone Distraction",
+                  "vector_description": "Phone distraction, smartphone usage, digital disconnect, absorbed in phone"
+                },
+                {
+                  "name": "街头表演者",
+                  "name_en": "Street Performer",
+                  "vector_description": "Street performer, busker, street musician, urban entertainment"
+                },
+                {
+                  "name": "小贩",
+                  "name_en": "Vendor",
+                  "vector_description": "Vendor, street vendor, hawker, street seller"
+                }
+              ]
+            },
+            "locations": {
+              "name": "地点",
+              "name_en": "Locations",
+              "tags": [
+                {
+                  "name": "地铁/捷运",
+                  "name_en": "Subway/Metro",
+                  "vector_description": "Subway, metro, underground train station, urban transit"
+                },
+                {
+                  "name": "人行横道",
+                  "name_en": "Crosswalk",
+                  "vector_description": "Crosswalk, pedestrian crossing, zebra crossing"
+                },
+                {
+                  "name": "公交站",
+                  "name_en": "Bus Stop",
+                  "vector_description": "Bus stop, waiting for bus, public transit stop"
+                },
+                {
+                  "name": "咖啡馆橱窗",
+                  "name_en": "Cafe Window",
+                  "vector_description": "Cafe window, coffee shop, window view, urban cafe scene"
+                },
+                {
+                  "name": "小巷",
+                  "name_en": "Alleyway",
+                  "vector_description": "Alleyway, back alley, narrow urban passage"
+                },
+                {
+                  "name": "公园",
+                  "name_en": "Public Park",
+                  "vector_description": "Public park, urban green space, city park"
+                },
+                {
+                  "name": "市场",
+                  "name_en": "Market",
+                  "vector_description": "Market, street market, bazaar, outdoor market"
+                },
+                {
+                  "name": "火车站",
+                  "name_en": "Train Station",
+                  "vector_description": "Train station, railway station, transit hub"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "social_documentary": {
+      "name": "社会纪实摄影",
+      "name_en": "Social Documentary Photography",
+      "subcategories": {
+        "thematic_classification": {
+          "name": "主题分类",
+          "name_en": "Thematic Classification",
+          "tags": [
+            {
+              "name": "冲突与危机",
+              "name_en": "Conflict & Crisis",
+              "vector_description": "Conflict and crisis, war, aftermath, refugee, displacement, destruction, peacekeeping, resistance, survival, active conflict, post-conflict, reconstruction"
+            },
+            {
+              "name": "迁徙与流离",
+              "name_en": "Migration & Displacement",
+              "vector_description": "Migration and displacement, border crossing, refugee camp, asylum seeker, diaspora, temporary shelter, belonging, exile"
+            },
+            {
+              "name": "劳动与经济",
+              "name_en": "Labor & Economy",
+              "vector_description": "Labor and economy, manual labor, agriculture, industry, gig economy, unemployment, artisan, marketplace, workers rights, economic inequality"
+            },
+            {
+              "name": "健康与援助",
+              "name_en": "Health & Aid",
+              "vector_description": "Health and aid, medical care, vaccination, malnutrition, food distribution, NGO, humanitarian aid, clinic, healing"
+            },
+            {
+              "name": "环境与气候",
+              "name_en": "Environment & Climate",
+              "vector_description": "Environment and climate, climate change, environmental damage, pollution, natural disaster"
+            },
+            {
+              "name": "社会正义",
+              "name_en": "Social Justice",
+              "vector_description": "Social justice, protest, movement, equality, civil rights, activism"
+            }
+          ]
+        },
+        "narrative_ethical": {
+          "name": "叙事与伦理关键词",
+          "name_en": "Narrative & Ethical Keywords",
+          "tags": [
+            {
+              "name": "韧性",
+              "name_en": "Resilience",
+              "vector_description": "Resilience, hope, determination, rebuilding, community support, dignity, strength in adversity"
+            },
+            {
+              "name": "危机中的日常生活",
+              "name_en": "Daily Life in Crisis",
+              "vector_description": "Daily life in crisis, normalcy in chaos, education, play, cooking, rituals, routine"
+            },
+            {
+              "name": "人类连接",
+              "name_en": "Human Connection",
+              "vector_description": "Human connection, empathy, solidarity, family bond, caregiving, shared meal"
+            },
+            {
+              "name": "尊严",
+              "name_en": "Dignity",
+              "vector_description": "Dignity, respect, empowerment, agency, human dignity"
+            },
+            {
+              "name": "幸存者",
+              "name_en": "Survivor",
+              "vector_description": "Survivor, survival, overcoming adversity, strength"
+            }
+          ]
+        }
+      }
+    },
+    "documentary_themes": {
+      "name": "社会与纪实主题",
+      "name_en": "Social & Documentary Themes",
+      "tags": [
+        {
+          "name": "日常生活",
+          "name_en": "Daily Life",
+          "vector_description": "Daily life, everyday routines, ordinary moments"
+        },
+        {
+          "name": "城市孤独",
+          "name_en": "Urban Isolation",
+          "vector_description": "Urban isolation, city loneliness, alone in crowd"
+        },
+        {
+          "name": "社区",
+          "name_en": "Community",
+          "vector_description": "Community, neighborhood, togetherness, collective"
+        },
+        {
+          "name": "冲突",
+          "name_en": "Conflict",
+          "vector_description": "Conflict, dispute, tension, confrontation"
+        },
+        {
+          "name": "难民",
+          "name_en": "Refugee",
+          "vector_description": "Refugee, displaced person, asylum seeker"
+        },
+        {
+          "name": "迁徙",
+          "name_en": "Migration",
+          "vector_description": "Migration, movement, relocation, journey"
+        },
+        {
+          "name": "劳动",
+          "name_en": "Labor",
+          "vector_description": "Labor, work, workers, working conditions"
+        },
+        {
+          "name": "贫困",
+          "name_en": "Poverty",
+          "vector_description": "Poverty, poor, hardship, deprivation"
+        },
+        {
+          "name": "财富",
+          "name_en": "Wealth",
+          "vector_description": "Wealth, affluence, prosperity, luxury"
+        },
+        {
+          "name": "士绅化",
+          "name_en": "Gentrification",
+          "vector_description": "Gentrification, urban renewal, neighborhood change"
+        },
+        {
+          "name": "庆典",
+          "name_en": "Celebration",
+          "vector_description": "Celebration, festival, ceremony, festivity"
+        },
+        {
+          "name": "仪式",
+          "name_en": "Ritual",
+          "vector_description": "Ritual, ceremony, traditional practice, rite"
+        },
+        {
+          "name": "抗议",
+          "name_en": "Protest",
+          "vector_description": "Protest, demonstration, rally, activism"
+        },
+        {
+          "name": "韧性",
+          "name_en": "Resilience",
+          "vector_description": "Resilience, perseverance, strength, recovery"
+        },
+        {
+          "name": "多样性",
+          "name_en": "Diversity",
+          "vector_description": "Diversity, variety, multiculturalism, difference"
+        },
+        {
+          "name": "包容性",
+          "name_en": "Inclusion",
+          "vector_description": "Inclusion, inclusive, accessibility, belonging"
+        },
+        {
+          "name": "代际",
+          "name_en": "Intergenerational",
+          "vector_description": "Intergenerational, multi-generational, young and old, generations together"
+        },
+        {
+          "name": "传统",
+          "name_en": "Tradition",
+          "vector_description": "Tradition, traditional, heritage, customs"
+        },
+        {
+          "name": "现代化",
+          "name_en": "Modernization",
+          "vector_description": "Modernization, modern, development, progress"
+        }
+      ]
+    }
+  }
+}

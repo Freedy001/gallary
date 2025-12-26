@@ -73,7 +73,6 @@ type SettingService interface {
 	IsMigrationRunning(ctx context.Context) bool
 
 	// AI 配置管理
-	GetAIConfig(ctx context.Context) (*model.AIPo, error)
 	UpdateAIConfig(ctx context.Context, config *model.AIPo) error
 }
 
@@ -85,10 +84,10 @@ type settingService struct {
 }
 
 // NewSettingService 创建设置服务实例
-func NewSettingService(repo repository.SettingRepository, cfg *internal.PlatformConfig) SettingService {
+func NewSettingService(repo repository.SettingRepository) SettingService {
 	return &settingService{
 		repo: repo,
-		cfg:  cfg,
+		cfg:  internal.PlatConfig,
 	}
 }
 
@@ -557,23 +556,6 @@ func (s *settingService) UpdateGlobalConfig(ctx context.Context, globalConfig *m
 
 // ==================== AI 配置管理 ====================
 
-// GetAIConfig 获取 AI 配置
-func (s *settingService) GetAIConfig(ctx context.Context) (*model.AIPo, error) {
-	settings, err := s.repo.GetByCategory(ctx, model.SettingCategoryAI)
-	if err != nil {
-		return nil, fmt.Errorf("获取 AI 配置失败: %w", err)
-	}
-
-	config := model.ToSettingPO[model.AIPo](settings)
-
-	// 确保返回非空切片
-	if config.Models == nil {
-		config.Models = []*model.ModelConfig{}
-	}
-
-	return &config, nil
-}
-
 // UpdateAIConfig 更新 AI 配置
 func (s *settingService) UpdateAIConfig(ctx context.Context, config *model.AIPo) error {
 	for _, m := range config.Models {
@@ -581,8 +563,8 @@ func (s *settingService) UpdateAIConfig(ctx context.Context, config *model.AIPo)
 			return fmt.Errorf("不支持的模型提供者: %s", m.Provider)
 		}
 		if m.Provider == model.SelfHosted {
-			m.ModelName = "google/siglip-so400m-patch14-384"
-			m.ApiModelName = "google/siglip-so400m-patch14-384"
+			m.ModelName = "Self Hosted"
+			m.ApiModelName = "Self Hosted"
 		}
 	}
 
@@ -590,7 +572,7 @@ func (s *settingService) UpdateAIConfig(ctx context.Context, config *model.AIPo)
 		return fmt.Errorf("保存 AI 配置失败: %w", err)
 	}
 
-	logger.Info("AI 配置已更新",
-		zap.Int("models_count", len(config.Models)))
+	s.cfg.AIPo = config
+	logger.Info("AI 配置已更新", zap.Int("models_count", len(config.Models)))
 	return nil
 }

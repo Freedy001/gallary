@@ -30,6 +30,9 @@ type UpdateMetadataRequest struct {
 	// 基本信息
 	OriginalName *string `json:"original_name,omitempty"`
 
+	// 拍摄时间
+	TakenAt *time.Time `json:"taken_at,omitempty"`
+
 	// 地理位置信息
 	LocationName *string  `json:"location_name,omitempty"`
 	Latitude     *float64 `json:"latitude,omitempty"`
@@ -56,7 +59,7 @@ type ImageService interface {
 	List(ctx context.Context, page, pageSize int) ([]*model.ImageVO, int64, error)
 	Delete(ctx context.Context, id int64) error
 	DeleteBatch(ctx context.Context, ids []int64) error
-	Search(ctx context.Context, params *repository.SearchParams) ([]*model.ImageVO, int64, error)
+	Search(ctx context.Context, params *model.SearchParams) ([]*model.ImageVO, int64, error)
 	Download(ctx context.Context, image *model.Image) (io.ReadCloser, error)
 	DownloadZipped(ctx context.Context, ids []int64, writer io.Writer) (string, error)
 	BatchUpdateMetadata(ctx context.Context, req *UpdateMetadataRequest) ([]int64, error)
@@ -71,6 +74,9 @@ type ImageService interface {
 	PermanentlyDelete(ctx context.Context, ids []int64) error
 	CleanupExpiredTrash(ctx context.Context) (int, error)
 	Repo() repository.ImageRepository
+
+	// 标签相关方法
+	GetAllNormalTags(ctx context.Context) ([]*model.Tag, error)
 }
 
 type imageService struct {
@@ -229,8 +235,7 @@ func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHea
 
 	// 设置EXIF数据
 	image.TakenAt = exifData.TakenAt
-	image.Latitude = exifData.Latitude
-	image.Longitude = exifData.Longitude
+	image.SetLocation(exifData.Latitude, exifData.Longitude) // 使用 SetLocation 设置 PostGIS 格式
 	image.CameraModel = exifData.CameraModel
 	image.CameraMake = exifData.CameraMake
 	image.Aperture = exifData.Aperture
@@ -245,7 +250,13 @@ func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHea
 		return nil, fmt.Errorf("保存图片记录失败: %w", err)
 	}
 
-	// 14. 如果指定了相册ID，添加到相册
+	// 14. 自动添加设备标签
+	if err := s.autoAddDeviceTags(ctx, image); err != nil {
+		// 添加标签失败，但图片已上传成功，记录错误但不回滚
+		logger.Warn("自动添加设备标签失败", zap.Error(err), zap.Int64("image_id", image.ID))
+	}
+
+	// 15. 如果指定了相册ID，添加到相册
 	if albumID != nil {
 		if err := s.albumRepo.AddImages(ctx, *albumID, []int64{image.ID}); err != nil {
 			// 添加相册失败，但图片已上传成功，记录错误但不回滚
@@ -403,7 +414,7 @@ func (s *imageService) DeleteBatch(ctx context.Context, ids []int64) error {
 }
 
 // Search 搜索图片
-func (s *imageService) Search(ctx context.Context, params *repository.SearchParams) ([]*model.ImageVO, int64, error) {
+func (s *imageService) Search(ctx context.Context, params *model.SearchParams) ([]*model.ImageVO, int64, error) {
 	if params.Page < 1 {
 		params.Page = 1
 	}
@@ -411,10 +422,44 @@ func (s *imageService) Search(ctx context.Context, params *repository.SearchPara
 		params.PageSize = 20
 	}
 
-	// 如果有语义搜索查询词，使用语义搜索
-	if params.SemanticQuery != "" && s.aiService != nil {
-		// 使用语义搜索
-		images, err := s.aiService.SemanticSearch(ctx, params.SemanticQuery, params.ModelName, params.PageSize)
+	// 文本语义搜索
+	if params.ModelName != "" {
+		if s.aiService == nil {
+			return nil, 0, fmt.Errorf("未配置 ai service")
+		}
+		// 检查是否有传统筛选条件
+		hasNormalFilter :=
+			params.StartDate != nil ||
+				params.EndDate != nil ||
+				len(params.Tags) > 0 ||
+				params.Latitude != nil ||
+				params.Longitude != nil
+
+		if hasNormalFilter {
+			// 1. 先执行传统筛选获取候选图片ID列表（限制候选数量防止性能问题）
+			candidateIDs, err := s.repo.SearchIDs(ctx, params, 1000)
+			if err != nil {
+				return nil, 0, fmt.Errorf("筛选候选图片失败: %w", err)
+			}
+
+			// 如果没有符合条件的图片，直接返回空结果
+			if len(candidateIDs) == 0 {
+				return []*model.ImageVO{}, 0, nil
+			}
+
+			// 2. 在候选ID范围内进行语义搜索排序
+			images, err := s.aiService.SemanticSearchWithinIDs(ctx, params.ImageData, params.Keyword, params.ModelName, candidateIDs, params.PageSize)
+			if err != nil {
+				return nil, 0, fmt.Errorf("语义搜索失败: %w", err)
+			}
+
+			// 转换为 VO 列表，总数为候选图片数量
+			vos := s.storage.ToVOList(images)
+			return vos, int64(len(candidateIDs)), nil
+		}
+
+		// 纯语义搜索（无传统筛选条件）
+		images, err := s.aiService.SemanticSearchWithinIDs(ctx, params.ImageData, params.Keyword, params.ModelName, nil, params.PageSize)
 		if err != nil {
 			return nil, 0, fmt.Errorf("语义搜索失败: %w", err)
 		}
@@ -566,9 +611,63 @@ func (s *imageService) updateImageMetadata(ctx context.Context, image *model.Ima
 	return nil
 }
 
-// updateImageTags 更新图片标签
+// autoAddDeviceTags 自动添加设备标签
+func (s *imageService) autoAddDeviceTags(ctx context.Context, image *model.Image) error {
+	var tagNames []string
+
+	// 添加相机品牌标签
+	if image.CameraMake != nil && *image.CameraMake != "" {
+		tagNames = append(tagNames, *image.CameraMake)
+	}
+
+	// 添加相机型号标签
+	if image.CameraModel != nil && *image.CameraModel != "" {
+		tagNames = append(tagNames, *image.CameraModel)
+	}
+
+	// 如果没有标签需要添加，直接返回
+	if len(tagNames) == 0 {
+		return nil
+	}
+
+	// 获取或创建标签，并标记为设备标签
+	var tagIDs []int64
+	for _, tagName := range tagNames {
+		// 查找现有标签
+		tag, err := s.repo.FindTagByName(ctx, tagName)
+		if err != nil {
+			return fmt.Errorf("查找标签失败 %s: %w", tagName, err)
+		}
+
+		if tag == nil {
+			// 创建新标签，类型设置为设备标签
+			tag = &model.Tag{
+				Name: tagName,
+				Type: model.TagTypeDevice,
+			}
+			if err := s.repo.CreateTag(ctx, tag); err != nil {
+				return fmt.Errorf("创建设备标签失败 %s: %w", tagName, err)
+			}
+		}
+
+		tagIDs = append(tagIDs, tag.ID)
+	}
+
+	// 添加图片标签关联（不覆盖现有标签）
+	if err := s.repo.AddImageTags(ctx, image.ID, tagIDs); err != nil {
+		return fmt.Errorf("添加图片设备标签关联失败: %w", err)
+	}
+
+	logger.Info("自动添加设备标签成功",
+		zap.Int64("image_id", image.ID),
+		zap.Strings("tags", tagNames))
+
+	return nil
+}
+
+// updateImageTags 更新图片标签（只允许使用现有标签）
 func (s *imageService) updateImageTags(ctx context.Context, image *model.Image, tagNames []string) error {
-	// 获取或创建标签
+	// 获取现有标签
 	var tagIDs []int64
 	for _, tagName := range tagNames {
 		if tagName == "" {
@@ -582,14 +681,9 @@ func (s *imageService) updateImageTags(ctx context.Context, image *model.Image, 
 		}
 
 		if tag == nil {
-			// 创建新标签
-			tag = &model.Tag{
-				Name: tagName,
-				Type: model.TagTypeNormal,
-			}
-			if err := s.repo.CreateTag(ctx, tag); err != nil {
-				return fmt.Errorf("创建标签失败 %s: %w", tagName, err)
-			}
+			// 标签不存在，跳过（不再创建新标签）
+			logger.Warn("标签不存在，跳过", zap.String("tag_name", tagName))
+			continue
 		}
 
 		tagIDs = append(tagIDs, tag.ID)
@@ -621,32 +715,44 @@ func (s *imageService) BatchUpdateMetadata(ctx context.Context, req *UpdateMetad
 			image.OriginalName = *req.OriginalName
 		}
 
-		// 3. 更新地理位置信息
+		// 3. 更新拍摄时间
+		if req.TakenAt != nil {
+			image.TakenAt = req.TakenAt
+		}
+
+		// 4. 更新地理位置信息
 		if req.LocationName != nil {
 			image.LocationName = req.LocationName
 		}
-		if req.Latitude != nil {
-			image.Latitude = req.Latitude
-		}
-		if req.Longitude != nil {
-			image.Longitude = req.Longitude
+		if req.Latitude != nil || req.Longitude != nil {
+			// 获取当前经纬度
+			currentLat, currentLng := image.GetLatLng()
+			newLat := currentLat
+			newLng := currentLng
+			if req.Latitude != nil {
+				newLat = req.Latitude
+			}
+			if req.Longitude != nil {
+				newLng = req.Longitude
+			}
+			image.SetLocation(newLat, newLng)
 		}
 
-		// 4. 更新自定义元数据
+		// 5. 更新自定义元数据
 		if req.Metadata != nil {
 			if err := s.updateImageMetadata(ctx, image, req.Metadata); err != nil {
 				return nil, fmt.Errorf("更新自定义元数据失败: %w", err)
 			}
 		}
 
-		// 5. 更新标签信息
+		// 6. 更新标签信息
 		if req.Tags != nil {
 			if err := s.updateImageTags(ctx, image, req.Tags); err != nil {
 				return nil, fmt.Errorf("更新标签失败: %w", err)
 			}
 		}
 
-		// 6. 保存更新
+		// 7. 保存更新
 		if err := s.repo.Update(ctx, image); err != nil {
 			return nil, fmt.Errorf("保存图片更新失败: %w", err)
 		}
@@ -901,4 +1007,9 @@ func (s *imageService) CleanupExpiredTrash(ctx context.Context) (int, error) {
 
 func (s *imageService) Repo() repository.ImageRepository {
 	return s.repo
+}
+
+// GetAllNormalTags 获取所有普通标签
+func (s *imageService) GetAllNormalTags(ctx context.Context) ([]*model.Tag, error) {
+	return s.repo.FindAllNormalTags(ctx)
 }

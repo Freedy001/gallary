@@ -6,14 +6,20 @@ type ImageVO struct {
 	// URL 相关（新增）
 	URL          string `json:"url"`                     // 原图访问URL
 	ThumbnailURL string `json:"thumbnail_url,omitempty"` // 缩略图访问URL
+	// 经纬度字段（从 location 解析）
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Longitude *float64 `json:"longitude,omitempty"`
 }
 
 // ToVO 将 Image 转换为 ImageVO
 func (img *Image) ToVO(url, thumbnailURL string) *ImageVO {
+	lat, lng := img.GetLatLng()
 	return &ImageVO{
 		Image:        *img,
 		URL:          url,
 		ThumbnailURL: thumbnailURL,
+		Latitude:     lat,
+		Longitude:    lng,
 	}
 }
 

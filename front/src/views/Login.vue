@@ -167,7 +167,7 @@ async function handleSubmit() {
     error.value = errorMessage
 
     // 显示错误对话框
-    await dialogStore.alert({
+    dialogStore.alert({
       title: '登录失败',
       message: errorMessage,
       type: 'error'

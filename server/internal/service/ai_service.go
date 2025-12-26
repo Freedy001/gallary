@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gallary/server/internal/llms"
 	"gallary/server/internal/websocket"
+	"io"
 	"sync"
 	"time"
 
@@ -35,7 +36,11 @@ type AIService interface {
 	StopProcessor()
 
 	// 搜索
-	SemanticSearch(ctx context.Context, query string, modelName string, limit int) ([]*model.Image, error)
+	// 图片搜索（以图搜图，支持图片+文本混合查询）
+	SemanticSearchWithinIDs(ctx context.Context, imageData []byte, text string, modelName string, candidateIDs []int64, limit int) ([]*model.Image, error)
+
+	// 获取可用的嵌入模型列表
+	GetEmbeddingModels(ctx context.Context) ([]string, error)
 }
 
 type aiService struct {
@@ -67,7 +72,7 @@ func NewAIService(
 		embeddingRepo:  embeddingRepo,
 		imageRepo:      imageRepo,
 		settingService: settingService,
-		loadBalancer:   llms.NewModelLoadBalancer(settingService.GetAIConfig, settingService.GetStorageManager()),
+		loadBalancer:   llms.NewModelLoadBalancer(settingService.GetStorageManager()),
 		notifier:       notifier,
 	}
 }
@@ -76,7 +81,7 @@ func NewAIService(
 
 // TestConnection 测试连接
 func (s *aiService) TestConnection(ctx context.Context, id string) error {
-	client, _, err := s.loadBalancer.GetClientByID(ctx, id)
+	client, _, err := s.loadBalancer.GetClientByID(id)
 	if err != nil {
 		return err
 	}
@@ -99,7 +104,7 @@ func (s *aiService) GetQueueDetail(ctx context.Context, queueID int64, page, pag
 	}
 
 	// 获取队列统计
-	pending, processing, failed, err := s.taskRepo.GetQueueStats(ctx, queueID)
+	pending, _, failed, err := s.taskRepo.GetQueueStats(ctx, queueID)
 	if err != nil {
 		return nil, err
 	}
@@ -120,14 +125,13 @@ func (s *aiService) GetQueueDetail(ctx context.Context, queueID int64, page, pag
 
 	return &model.AIQueueDetail{
 		Queue: model.AIQueueInfo{
-			ID:              queue.ID,
-			QueueKey:        queue.QueueKey,
-			TaskType:        queue.TaskType,
-			ModelName:       queue.ModelName,
-			Status:          queue.Status,
-			PendingCount:    pending,
-			ProcessingCount: processing,
-			FailedCount:     failed,
+			ID:           queue.ID,
+			QueueKey:     queue.QueueKey,
+			TaskType:     queue.TaskType,
+			ModelName:    queue.ModelName,
+			Status:       queue.Status,
+			PendingCount: pending,
+			FailedCount:  failed,
 		},
 		FailedImages: imageInfos,
 		TotalFailed:  totalFailed,
@@ -208,15 +212,50 @@ func (s *aiService) processLoop(processor func()) {
 
 // syncQueueImages 同步队列图片（检测未处理的图片并添加到队列）
 // 按 ModelName 分组，为每个唯一的 ModelName 创建一个队列
+// 同时清理已删除模型对应的队列
 func (s *aiService) syncQueueImages() {
 	ctx := context.Background()
 
-	models, err := s.loadBalancer.GetAllEmbeddingModels(ctx)
+	// 获取所有可用的嵌入模型
+	models, err := s.loadBalancer.GetAllEmbeddingModels()
 	if err != nil {
 		logger.Error("获取 AI 配置失败", zap.Error(err))
 		return
 	}
 
+	// 将可用模型放入 map 便于查找
+	validModels := make(map[string]bool)
+	for _, modelName := range models {
+		validModels[modelName] = true
+	}
+
+	// 获取所有现有队列
+	allQueues, err := s.taskRepo.GetAllQueues(ctx)
+	if err != nil {
+		logger.Error("获取所有队列失败", zap.Error(err))
+	} else {
+		// 清理已删除模型对应的队列
+		for _, queue := range allQueues {
+			if !validModels[queue.ModelName] {
+				logger.Info("检测到无效模型队列，准备清理",
+					zap.String("model_name", queue.ModelName),
+					zap.Int64("queue_id", queue.ID))
+
+				if err := s.taskRepo.DeleteQueueWithImages(ctx, queue.ID); err != nil {
+					logger.Error("删除队列失败",
+						zap.String("model_name", queue.ModelName),
+						zap.Int64("queue_id", queue.ID),
+						zap.Error(err))
+				} else {
+					logger.Info("成功删除无效模型队列",
+						zap.String("model_name", queue.ModelName),
+						zap.Int64("queue_id", queue.ID))
+				}
+			}
+		}
+	}
+
+	// 为每个可用模型同步图片
 	for _, modelName := range models {
 		// 查找或创建队列
 		queue, err := s.taskRepo.FindOrCreateQueue(ctx, model.AITaskTypeEmbedding, modelName)
@@ -276,11 +315,11 @@ func (s *aiService) processQueueImages() {
 	s.processQueue(ctx, queue)
 
 	// 检查队列是否还有待处理图片
-	pending, processing, _, err := s.taskRepo.GetQueueStats(ctx, queue.ID)
-	if err == nil && pending == 0 && processing == 0 {
+	pending, _, _, err := s.taskRepo.GetQueueStats(ctx, queue.ID)
+	if err == nil && pending == 0 {
 		// 队列空闲
 		queue.Status = model.AIQueueStatusIdle
-		s.taskRepo.UpdateQueue(ctx, queue)
+		_ = s.taskRepo.UpdateQueue(ctx, queue)
 	}
 }
 
@@ -294,7 +333,7 @@ func (s *aiService) processQueue(ctx context.Context, queue *model.AIQueue) {
 	}
 
 	// 验证 ModelName 可以获取 client
-	_, _, err = s.loadBalancer.GetClientByName(ctx, queue.ModelName)
+	_, _, err = s.loadBalancer.GetClientByName(queue.ModelName)
 	if err != nil {
 		logger.Error("获取模型客户端失败", zap.String("model_name", queue.ModelName), zap.Error(err))
 		// 将所有待处理图片标记为失败
@@ -323,10 +362,6 @@ func (s *aiService) processQueue(ctx context.Context, queue *model.AIQueue) {
 
 // processTaskImage 处理单张图片
 func (s *aiService) processTaskImage(ctx context.Context, queue *model.AIQueue, taskImage *model.AITaskImage) {
-	// 更新状态为处理中
-	taskImage.Status = model.AITaskImageStatusProcessing
-	_ = s.taskRepo.UpdateTaskImage(ctx, taskImage)
-
 	image := taskImage.Image
 	if image == nil {
 		image, _ = s.imageRepo.FindByID(ctx, taskImage.ImageID)
@@ -356,7 +391,7 @@ func (s *aiService) processTaskImage(ctx context.Context, queue *model.AIQueue, 
 
 // processImageEmbeddingWithRetry 处理图片嵌入（带重试，尝试所有提供商）
 func (s *aiService) processImageEmbeddingWithRetry(ctx context.Context, modelName string, image *model.Image) error {
-	return s.loadBalancer.TryAllProviders(ctx, modelName, func(client llms.ModelClient, modelConfig *model.ModelConfig) error {
+	return s.loadBalancer.TryAllProviders(modelName, func(client llms.ModelClient, modelConfig *model.ModelConfig) error {
 		return s.processImageEmbedding(ctx, image, client, modelConfig)
 	})
 }
@@ -367,9 +402,15 @@ func (s *aiService) processImageEmbedding(ctx context.Context, image *model.Imag
 		return fmt.Errorf("模型 %s 不支持嵌入", modelConfig.ModelName)
 	}
 
+	// 从存储读取图片数据
+	imageData, err := s.readImageData(ctx, image)
+	if err != nil {
+		return fmt.Errorf("读取图片数据失败: %v", err)
+	}
+
 	// 检查是否支持同时计算（自托管模型）
 	if client.SupportsEmbeddingWithAesthetics() {
-		embedding, score, err := client.EmbeddingWithAesthetics(ctx, image)
+		embedding, score, err := client.EmbeddingWithAesthetics(ctx, imageData)
 		if err != nil {
 			return err
 		}
@@ -393,7 +434,7 @@ func (s *aiService) processImageEmbedding(ctx context.Context, image *model.Imag
 	}
 
 	// 普通嵌入处理
-	embedding, err := client.Embedding(ctx, image, "")
+	embedding, err := client.Embedding(ctx, imageData, "")
 	if err != nil {
 		return err
 	}
@@ -410,24 +451,40 @@ func (s *aiService) processImageEmbedding(ctx context.Context, image *model.Imag
 	return s.embeddingRepo.Save(ctx, embeddingModel)
 }
 
+// readImageData 从存储读取图片数据
+func (s *aiService) readImageData(ctx context.Context, image *model.Image) ([]byte, error) {
+	storageManager := s.settingService.GetStorageManager()
+	reader, err := storageManager.Download(ctx, image.StorageId, image.StoragePath)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	return io.ReadAll(reader)
+}
+
 // ================== 语义搜索 ==================
 
-// SemanticSearch 语义搜索
-func (s *aiService) SemanticSearch(ctx context.Context, query string, modelName string, limit int) ([]*model.Image, error) {
+// ImageSearchWithinIDs 通过图片（可选文本）进行语义搜索
+func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byte, text string, modelName string, candidateIDs []int64, limit int) ([]*model.Image, error) {
+	if candidateIDs != nil && len(candidateIDs) == 0 {
+		return []*model.Image{}, nil
+	}
+
 	// 通过 ModelName 获取 client（支持负载均衡）
-	client, modelConfig, err := s.loadBalancer.GetClientByName(ctx, modelName)
+	client, modelConfig, err := s.loadBalancer.GetClientByName(modelName)
 	if err != nil {
 		return nil, err
 	}
 
-	// 获取查询向量
-	queryEmbedding, err := client.Embedding(ctx, nil, query)
+	// 获取查询向量（图片+文本混合）
+	queryEmbedding, err := client.Embedding(ctx, imageData, text)
 	if err != nil {
 		return nil, fmt.Errorf("生成查询向量失败: %v", err)
 	}
 
-	// 执行向量搜索（使用 ModelName 而不是 ModelID）
-	results, err := s.embeddingRepo.VectorSearchByModelName(ctx, modelConfig.ModelName, queryEmbedding, limit)
+	// 在指定ID范围内执行向量搜索
+	results, err := s.embeddingRepo.VectorSearchWithinIDs(ctx, modelConfig.ModelName, queryEmbedding, candidateIDs, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -435,7 +492,7 @@ func (s *aiService) SemanticSearch(ctx context.Context, query string, modelName 
 	// 提取图片
 	images := make([]*model.Image, len(results))
 	for i, r := range results {
-		images[i] = r.Image
+		images[i] = r.Embedding.Image
 	}
 
 	return images, nil
@@ -479,4 +536,9 @@ func (s *aiService) notifyStatusChange(ctx context.Context) {
 	if err == nil && status != nil {
 		s.notifier.NotifyAIQueueStatus(status)
 	}
+}
+
+// GetEmbeddingModels 获取可用的嵌入模型列表
+func (s *aiService) GetEmbeddingModels(ctx context.Context) ([]string, error) {
+	return s.loadBalancer.GetAllEmbeddingModels()
 }

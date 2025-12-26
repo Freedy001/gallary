@@ -12,6 +12,7 @@ type TagType string
 const (
 	TagTypeNormal TagType = "normal" // 普通标签
 	TagTypeAlbum  TagType = "album"  // 相册
+	TagTypeDevice TagType = "device" // 设备标签
 )
 
 // AlbumMetadata 相册元数据

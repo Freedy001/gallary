@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"gallary/server/internal"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -8,7 +9,6 @@ import (
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 
-	"gallary/server/internal/middleware"
 	ws "gallary/server/internal/websocket"
 	"gallary/server/pkg/logger"
 )
@@ -25,14 +25,14 @@ var upgrader = websocket.Upgrader{
 // WebSocketHandler WebSocket 处理器
 type WebSocketHandler struct {
 	hub      *ws.Hub
-	adminCfg *middleware.AdminConfig
+	adminCfg *internal.PlatformConfig
 }
 
 // NewWebSocketHandler 创建 WebSocket 处理器
-func NewWebSocketHandler(hub *ws.Hub, adminCfg *middleware.AdminConfig) *WebSocketHandler {
+func NewWebSocketHandler(hub *ws.Hub) *WebSocketHandler {
 	return &WebSocketHandler{
 		hub:      hub,
-		adminCfg: adminCfg,
+		adminCfg: internal.PlatConfig,
 	}
 }
 

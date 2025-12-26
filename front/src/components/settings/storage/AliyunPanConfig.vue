@@ -290,7 +290,7 @@ async function generateQRCode() {
     qrCode.value.message = resp.data.message
     startPolling()
   } catch (error: any) {
-    await dialogStore.alert({
+    dialogStore.alert({
       title: '错误',
       message: error.message || '生成二维码失败',
       type: 'error'

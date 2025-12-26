@@ -148,7 +148,7 @@ export const settingsApi = {
 
   // 更新阿里云盘全局配置
   updateGlobalConfig: (config: AliyunPanGlobalConfig) =>
-    http.put<{ message: string }>('/api/settings/storage/global', config),
+    http.put<{ message: string }>('/api/settings/storage/alyunpan/global', config),
 
   // 更新清理配置
   updateCleanup: (config: CleanupConfig) =>

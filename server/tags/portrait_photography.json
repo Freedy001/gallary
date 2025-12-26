@@ -1,0 +1,975 @@
+{
+  "name": "人像摄影",
+  "name_en": "Portrait Photography",
+  "description": "人像摄影的完整分类体系，包含流派、光影、姿态与情感维度",
+  "categories": {
+    "portrait_genres": {
+      "name": "人像流派",
+      "name_en": "Portrait Genres",
+      "subcategories": {
+        "traditional_studio": {
+          "name": "传统与影棚肖像",
+          "name_en": "Traditional & Studio Portraiture",
+          "tags": [
+            {
+              "name": "经典/传统肖像",
+              "name_en": "Classic/Traditional Portrait",
+              "vector_description": "Classic traditional portrait, formal portrait, timeless, head and shoulders, formal wear, canvas backdrop, Rembrandt lighting, eternal feeling, similarity, idealized expression, standard lighting ratio 1:3 or 1:4"
+            },
+            {
+              "name": "企业/职业头像",
+              "name_en": "Corporate/Headshot",
+              "vector_description": "Corporate headshot, business portrait, LinkedIn photo, professional portrait, business attire, professional confidence, neutral background, personal branding, standard corporate, creative professional"
+            },
+            {
+              "name": "魅力摄影",
+              "name_en": "Glamour Photography",
+              "vector_description": "Glamour photography, glamorous, fashion glamour, overall appeal, seductive pose, stylized clothing, high-end retouching, sexy, elegant, fashionable"
+            },
+            {
+              "name": "美妆摄影",
+              "name_en": "Beauty Photography",
+              "vector_description": "Beauty photography, cosmetic photography, high-end retouching, skin texture, makeup artistry, macro beauty, ring light, focus on specific body parts, showcasing cosmetic effects, flawless"
+            },
+            {
+              "name": "私房摄影",
+              "name_en": "Boudoir Photography",
+              "vector_description": "Boudoir photography, intimate portrait, sensuality, lingerie, lace, soft focus, female empowerment, private space, intimate, sensual"
+            },
+            {
+              "name": "影棚肖像",
+              "name_en": "Studio Portrait",
+              "vector_description": "Studio portrait, controlled lighting, solid color background, professional lighting setup, controllable light, clean background"
+            }
+          ]
+        },
+        "environmental_lifestyle": {
+          "name": "环境与生活方式肖像",
+          "name_en": "Environmental & Lifestyle Portraiture",
+          "tags": [
+            {
+              "name": "环境肖像",
+              "name_en": "Environmental Portrait",
+              "vector_description": "Environmental portrait, contextual portrait, workshop, artist studio, contextual storytelling, wide-angle composition, environment reveals identity, location as narrative"
+            },
+            {
+              "name": "生活方式摄影",
+              "name_en": "Lifestyle Photography",
+              "vector_description": "Lifestyle photography, daily life, authenticity, interaction, well-being, leisure, carefully curated candid, idealized life, natural feeling, no filter aesthetic, messy aesthetic, anti-perfectionism"
+            },
+            {
+              "name": "抓拍",
+              "name_en": "Candid",
+              "vector_description": "Candid photography, spontaneous, natural, unposed, real moments, authentic emotions, spontaneity"
+            }
+          ]
+        },
+        "conceptual_fine_art": {
+          "name": "概念与纯艺术肖像",
+          "name_en": "Conceptual & Fine Art Portraiture",
+          "tags": [
+            {
+              "name": "纯艺术肖像",
+              "name_en": "Fine Art Portrait",
+              "vector_description": "Fine art portrait, artistic portrait, painterly, abstract, creative blur, surrealism, moody, double exposure, slow shutter, tilt-shift, artistic vision priority, non-realistic representation"
+            },
+            {
+              "name": "超现实与合成",
+              "name_en": "Surreal & Composite",
+              "vector_description": "Surreal composite photography, fantasy, levitation, composite image, dreamscape, digital art, visual metaphor, heavy post-processing, non-physical reality"
+            },
+            {
+              "name": "概念摄影",
+              "name_en": "Conceptual Photography",
+              "vector_description": "Conceptual photography, symbolic, metaphorical, narrative, expressing ideas, visual metaphor"
+            }
+          ]
+        },
+        "special_occasions": {
+          "name": "特殊场合肖像",
+          "name_en": "Special Occasion Portraits",
+          "tags": [
+            {
+              "name": "家庭照",
+              "name_en": "Family Portrait",
+              "vector_description": "Family portrait, family photo, family bond, multi-generational, warm, togetherness"
+            },
+            {
+              "name": "群像",
+              "name_en": "Group Portrait",
+              "vector_description": "Group portrait, team photo, group photo, organization, collective"
+            },
+            {
+              "name": "新生儿摄影",
+              "name_en": "Newborn Photography",
+              "vector_description": "Newborn photography, baby photo, soft, innocent, intimate, prop styling"
+            },
+            {
+              "name": "孕期摄影",
+              "name_en": "Maternity Photography",
+              "vector_description": "Maternity photography, pregnancy photo, expectation, motherhood, elegance, life"
+            },
+            {
+              "name": "情侣摄影",
+              "name_en": "Couple Portrait",
+              "vector_description": "Couple portrait, engagement, love, intimacy, interaction, romantic"
+            },
+            {
+              "name": "婚礼摄影",
+              "name_en": "Wedding Photography",
+              "vector_description": "Wedding photography, bridal, wedding, bride, celebration, ceremony"
+            },
+            {
+              "name": "毕业照",
+              "name_en": "Graduation Portrait",
+              "vector_description": "Graduation portrait, academic, achievement, milestone"
+            }
+          ]
+        }
+      }
+    },
+    "lighting_taxonomy": {
+      "name": "光影分类",
+      "name_en": "Lighting Taxonomy",
+      "subcategories": {
+        "classical_patterns": {
+          "name": "经典光影模式",
+          "name_en": "Classical Lighting Patterns",
+          "tags": [
+            {
+              "name": "环形光",
+              "name_en": "Loop Lighting",
+              "vector_description": "Loop lighting, flattering, standard studio light, approachable, open, nose shadow forms small loop on cheek, affable, professional mood"
+            },
+            {
+              "name": "伦勃朗光",
+              "name_en": "Rembrandt Lighting",
+              "vector_description": "Rembrandt lighting, dramatic, painterly, classic, moody, triangle of light, nose shadow connects with cheek shadow, inverted triangle light patch on lit side, dramatic artistic mood"
+            },
+            {
+              "name": "分割光",
+              "name_en": "Split Lighting",
+              "vector_description": "Split lighting, high contrast, mystery, villainous, masculine, intense, light source at 90 degrees, face divided into light and dark halves, mysterious powerful mood"
+            },
+            {
+              "name": "蝴蝶光/派拉蒙光",
+              "name_en": "Butterfly/Paramount Lighting",
+              "vector_description": "Butterfly lighting, Paramount lighting, glamour, feminine, high cheekbones, fashion, vintage Hollywood, light source from above front, butterfly-shaped shadow under nose, elegant fashionable mood"
+            },
+            {
+              "name": "宽光",
+              "name_en": "Broad Lighting",
+              "vector_description": "Broad lighting, widening, open face, less dramatic, lit side of face toward camera, open bright mood"
+            },
+            {
+              "name": "窄光",
+              "name_en": "Short Lighting",
+              "vector_description": "Short lighting, slimming, sculptural, dramatic, narrowing, shadow side of face toward camera, dimensional mysterious mood"
+            },
+            {
+              "name": "贝壳光",
+              "name_en": "Clamshell Lighting",
+              "vector_description": "Clamshell lighting, beauty, cosmetic, wrinkle-reduction, soft, two light sources from above and below, eliminates most shadows, soft youthful mood"
+            }
+          ]
+        },
+        "atmospheric_mood": {
+          "name": "氛围与情绪照明",
+          "name_en": "Atmospheric & Mood Lighting",
+          "tags": [
+            {
+              "name": "高调",
+              "name_en": "High-Key",
+              "vector_description": "High-key lighting, optimistic, clinical, heavenly, pure, commercial, predominantly bright tones, overexposed background, low lighting ratio, bright positive mood"
+            },
+            {
+              "name": "低调",
+              "name_en": "Low-Key",
+              "vector_description": "Low-key lighting, noir, mystery, melancholy, serious, gothic, predominantly dark tones, high contrast, emphasized contours, mysterious deep mood"
+            },
+            {
+              "name": "空灵/梦幻",
+              "name_en": "Ethereal/Dreamy",
+              "vector_description": "Ethereal dreamy lighting, hazy, pastel, romantic, soft focus, bloom, soft diffused light with backlight or lens flare, very shallow depth of field, dreamy romantic mood"
+            },
+            {
+              "name": "电影感",
+              "name_en": "Cinematic",
+              "vector_description": "Cinematic lighting, storytelling, film look, dramatic shadows, color graded, practical light sources, specific color grading, anamorphic widescreen feel, narrative immersive mood"
+            },
+            {
+              "name": "霓虹/赛博朋克",
+              "name_en": "Neon/Cyberpunk",
+              "vector_description": "Neon cyberpunk lighting, futuristic, vibrant, nightlife, artificial light, blue and pink, colored gels or city night lights, high saturation blue red purple, future vibrant mood"
+            },
+            {
+              "name": "黄金时刻光",
+              "name_en": "Golden Hour Light",
+              "vector_description": "Golden hour light, warm, soft, golden, warm romantic mood"
+            },
+            {
+              "name": "自然光",
+              "name_en": "Natural Light",
+              "vector_description": "Natural light, window light, outdoor, soft, natural authentic mood"
+            },
+            {
+              "name": "轮廓光/逆光",
+              "name_en": "Rim Light/Backlight",
+              "vector_description": "Rim light backlight, outline, halo, separation, dramatic dimensional mood"
+            },
+            {
+              "name": "硬光",
+              "name_en": "Hard Light",
+              "vector_description": "Hard light, sharp shadows, high contrast, dramatic, intense sharp mood"
+            },
+            {
+              "name": "柔光",
+              "name_en": "Soft Light",
+              "vector_description": "Soft light, soft shadows, diffused, flattering, soft gentle mood"
+            }
+          ]
+        },
+        "light_source_type": {
+          "name": "光源类型",
+          "name_en": "Light Source Type",
+          "tags": [
+            {
+              "name": "影棚闪光灯",
+              "name_en": "Studio Strobe",
+              "vector_description": "Studio strobe, flash, professional studio flash lighting"
+            },
+            {
+              "name": "常亮光",
+              "name_en": "Continuous Light",
+              "vector_description": "Continuous light, LED, constant light source for photography"
+            },
+            {
+              "name": "环形灯",
+              "name_en": "Ring Light",
+              "vector_description": "Ring light, ring flash, circular light creating even illumination"
+            },
+            {
+              "name": "柔光箱",
+              "name_en": "Softbox",
+              "vector_description": "Softbox, diffused light modifier for soft even lighting"
+            },
+            {
+              "name": "雷达罩",
+              "name_en": "Beauty Dish",
+              "vector_description": "Beauty dish, focused yet soft light modifier for beauty photography"
+            },
+            {
+              "name": "反光伞",
+              "name_en": "Umbrella",
+              "vector_description": "Umbrella, reflective or shoot-through light modifier"
+            },
+            {
+              "name": "实景光源",
+              "name_en": "Practical Lights",
+              "vector_description": "Practical lights, on-location light sources, ambient lighting"
+            }
+          ]
+        }
+      }
+    },
+    "posing_composition": {
+      "name": "姿态与构图",
+      "name_en": "Posing & Composition",
+      "subcategories": {
+        "body_language": {
+          "name": "肢体语言与体态",
+          "name_en": "Body Language & Posture",
+          "tags": [
+            {
+              "name": "权力姿态",
+              "name_en": "Power Pose",
+              "vector_description": "Power pose, hands on hips, feet apart, confident, dominant, confident authoritative mood"
+            },
+            {
+              "name": "休闲倚靠",
+              "name_en": "Casual Lean",
+              "vector_description": "Casual lean, leaning against wall, weight on one leg, crossed ankles, relaxed, casual relaxed mood"
+            },
+            {
+              "name": "封闭体态",
+              "name_en": "Closed Posture",
+              "vector_description": "Closed posture, crossed arms, arms folded, hunched shoulders, defensive, cold, defensive serious mood"
+            },
+            {
+              "name": "开放体态",
+              "name_en": "Open Posture",
+              "vector_description": "Open posture, arms naturally down, palms visible, welcoming, honest, trustworthy, friendly sincere mood"
+            },
+            {
+              "name": "前倾坐姿",
+              "name_en": "Perched Sitting",
+              "vector_description": "Perched sitting, sitting on edge of chair, leaning forward, engaged, alert, listening, focused positive mood"
+            },
+            {
+              "name": "后仰放松",
+              "name_en": "Reclined Sitting",
+              "vector_description": "Reclined sitting, leaning back in chair, relaxed, casual, relaxed confident mood"
+            },
+            {
+              "name": "盘腿",
+              "name_en": "Cross-Legged",
+              "vector_description": "Cross-legged, informal, yoga, meditation, relaxed natural mood"
+            },
+            {
+              "name": "思考者姿态",
+              "name_en": "The Thinker",
+              "vector_description": "The thinker pose, hand on chin, contemplative, pensive, intellectual, contemplative wise mood"
+            },
+            {
+              "name": "站姿",
+              "name_en": "Standing",
+              "vector_description": "Standing pose, upright, standing portrait position"
+            },
+            {
+              "name": "坐姿",
+              "name_en": "Sitting",
+              "vector_description": "Sitting pose, seated, sitting portrait position"
+            },
+            {
+              "name": "躺卧",
+              "name_en": "Reclining",
+              "vector_description": "Reclining pose, lying down, reclined portrait position"
+            }
+          ]
+        },
+        "hand_placement": {
+          "name": "手部位置",
+          "name_en": "Hand Placement",
+          "tags": [
+            {
+              "name": "手插口袋",
+              "name_en": "Hands in Pockets",
+              "vector_description": "Hands in pockets, casual confident mood"
+            },
+            {
+              "name": "抚摸脸庞",
+              "name_en": "Framing Face",
+              "vector_description": "Framing face, hand lightly touching cheek or hair, soft elegant mood"
+            },
+            {
+              "name": "双手紧扣",
+              "name_en": "Clasped Hands",
+              "vector_description": "Clasped hands, professional restrained mood"
+            },
+            {
+              "name": "双臂交叉",
+              "name_en": "Arms Crossed",
+              "vector_description": "Arms crossed, confident or defensive mood"
+            }
+          ]
+        },
+        "camera_angles": {
+          "name": "拍摄角度",
+          "name_en": "Camera Angles",
+          "tags": [
+            {
+              "name": "视平线",
+              "name_en": "Eye Level",
+              "vector_description": "Eye level angle, neutral, connection, trust, equal perspective, establishes equal connection"
+            },
+            {
+              "name": "高角度/俯拍",
+              "name_en": "High Angle",
+              "vector_description": "High angle, looking down, vulnerability, submissiveness, cute, selfie-style, camera looking down"
+            },
+            {
+              "name": "低角度/仰拍",
+              "name_en": "Low Angle",
+              "vector_description": "Low angle, looking up, dominance, power, heroic, monumental, camera looking up"
+            },
+            {
+              "name": "荷兰角/倾斜构图",
+              "name_en": "Dutch Angle",
+              "vector_description": "Dutch angle, tilted composition, disorientation, dynamic, unstable, artistic, tilted horizon"
+            }
+          ]
+        },
+        "framing_crops": {
+          "name": "景别裁剪",
+          "name_en": "Framing Crops",
+          "tags": [
+            {
+              "name": "极特写",
+              "name_en": "Extreme Close-up",
+              "vector_description": "Extreme close-up, ECU, detail shot, only eyes or mouth"
+            },
+            {
+              "name": "头像",
+              "name_en": "Headshot",
+              "vector_description": "Headshot, head shot, head and neck framing"
+            },
+            {
+              "name": "头肩像",
+              "name_en": "Head and Shoulders",
+              "vector_description": "Head and shoulders, bust shot, head to shoulders framing"
+            },
+            {
+              "name": "半身像",
+              "name_en": "Waist Up",
+              "vector_description": "Waist up, mid shot, waist and above framing"
+            },
+            {
+              "name": "七分身",
+              "name_en": "Three-Quarter",
+              "vector_description": "Three-quarter shot, 3/4 shot, above knees framing"
+            },
+            {
+              "name": "全身像",
+              "name_en": "Full Body",
+              "vector_description": "Full body, full length, complete body in frame"
+            },
+            {
+              "name": "侧面",
+              "name_en": "Profile",
+              "vector_description": "Profile view, 90 degree side angle"
+            },
+            {
+              "name": "七分面",
+              "name_en": "Three-Quarter View",
+              "vector_description": "Three-quarter view, 45 degree face angle"
+            },
+            {
+              "name": "直视镜头",
+              "name_en": "Looking at Camera",
+              "vector_description": "Looking at camera, eye contact, direct gaze"
+            },
+            {
+              "name": "看向别处",
+              "name_en": "Looking Away",
+              "vector_description": "Looking away, gaze away, averted gaze"
+            }
+          ]
+        }
+      }
+    },
+    "subject_attributes": {
+      "name": "主体属性",
+      "name_en": "Subject Attributes",
+      "subcategories": {
+        "demographics": {
+          "name": "人口统计元数据",
+          "name_en": "Demographics Metadata",
+          "subcategories": {
+            "age_groups": {
+              "name": "年龄组",
+              "name_en": "Age Groups",
+              "tags": [
+                {
+                  "name": "婴儿",
+                  "name_en": "Infant",
+                  "vector_description": "Infant, baby, 0-12 months old"
+                },
+                {
+                  "name": "学步儿",
+                  "name_en": "Toddler",
+                  "vector_description": "Toddler, 1-3 years old"
+                },
+                {
+                  "name": "学龄前",
+                  "name_en": "Preschooler",
+                  "vector_description": "Preschooler, 3-5 years old"
+                },
+                {
+                  "name": "儿童",
+                  "name_en": "Child",
+                  "vector_description": "Child, kid, 6-12 years old"
+                },
+                {
+                  "name": "青少年",
+                  "name_en": "Adolescent/Teen",
+                  "vector_description": "Adolescent, teenager, teen, 13-19 years old"
+                },
+                {
+                  "name": "青年",
+                  "name_en": "Young Adult",
+                  "vector_description": "Young adult, 20-29 years old"
+                },
+                {
+                  "name": "成年人",
+                  "name_en": "Adult",
+                  "vector_description": "Adult, 30-59 years old"
+                },
+                {
+                  "name": "中老年/成熟",
+                  "name_en": "Senior/Mature Adult",
+                  "vector_description": "Senior, mature adult, 60+ years old"
+                },
+                {
+                  "name": "老年人",
+                  "name_en": "Elderly",
+                  "vector_description": "Elderly, 75+ years old"
+                }
+              ]
+            },
+            "gender": {
+              "name": "性别",
+              "name_en": "Gender",
+              "tags": [
+                {
+                  "name": "男性",
+                  "name_en": "Male",
+                  "vector_description": "Male, man, masculine"
+                },
+                {
+                  "name": "女性",
+                  "name_en": "Female",
+                  "vector_description": "Female, woman, feminine"
+                },
+                {
+                  "name": "非二元性别",
+                  "name_en": "Non-Binary",
+                  "vector_description": "Non-binary, gender non-conforming"
+                },
+                {
+                  "name": "中性",
+                  "name_en": "Androgynous",
+                  "vector_description": "Androgynous, gender neutral appearance"
+                }
+              ]
+            },
+            "ethnicity": {
+              "name": "族裔",
+              "name_en": "Ethnicity",
+              "tags": [
+                {
+                  "name": "白人/高加索",
+                  "name_en": "Caucasian/White",
+                  "vector_description": "Caucasian, white, European descent"
+                },
+                {
+                  "name": "黑人/非洲裔",
+                  "name_en": "Black/African Descent",
+                  "vector_description": "Black, African descent, African American"
+                },
+                {
+                  "name": "东亚人",
+                  "name_en": "East Asian",
+                  "vector_description": "East Asian, Chinese, Japanese, Korean descent"
+                },
+                {
+                  "name": "南亚人",
+                  "name_en": "South Asian",
+                  "vector_description": "South Asian, Indian, Pakistani, Bangladeshi descent"
+                },
+                {
+                  "name": "东南亚人",
+                  "name_en": "Southeast Asian",
+                  "vector_description": "Southeast Asian, Vietnamese, Thai, Filipino descent"
+                },
+                {
+                  "name": "拉美裔",
+                  "name_en": "Hispanic/Latinx",
+                  "vector_description": "Hispanic, Latinx, Latin American descent"
+                },
+                {
+                  "name": "中东裔",
+                  "name_en": "Middle Eastern",
+                  "vector_description": "Middle Eastern, Arab descent"
+                },
+                {
+                  "name": "原住民",
+                  "name_en": "Indigenous",
+                  "vector_description": "Indigenous, native, aboriginal"
+                },
+                {
+                  "name": "多种族",
+                  "name_en": "Multiracial",
+                  "vector_description": "Multiracial, mixed race, biracial"
+                }
+              ]
+            },
+            "family_roles": {
+              "name": "家庭角色",
+              "name_en": "Family Roles",
+              "tags": [
+                {
+                  "name": "父母",
+                  "name_en": "Parent",
+                  "vector_description": "Parent, mother, father"
+                },
+                {
+                  "name": "兄弟姐妹",
+                  "name_en": "Sibling",
+                  "vector_description": "Sibling, brother, sister"
+                },
+                {
+                  "name": "祖父母",
+                  "name_en": "Grandparent",
+                  "vector_description": "Grandparent, grandmother, grandfather"
+                },
+                {
+                  "name": "大家庭",
+                  "name_en": "Extended Family",
+                  "vector_description": "Extended family, relatives, family gathering"
+                },
+                {
+                  "name": "单亲",
+                  "name_en": "Single Parent",
+                  "vector_description": "Single parent, single mother, single father"
+                },
+                {
+                  "name": "同性伴侣",
+                  "name_en": "Same-Sex Couple",
+                  "vector_description": "Same-sex couple, LGBTQ family"
+                }
+              ]
+            }
+          }
+        },
+        "facial_expressions": {
+          "name": "面部表情与情感映射",
+          "name_en": "Facial Expressions & Emotional Mapping",
+          "subcategories": {
+            "joy_positivity": {
+              "name": "快乐/积极",
+              "name_en": "Joy/Positivity",
+              "tags": [
+                {
+                  "name": "狂喜",
+                  "name_en": "Ecstatic",
+                  "vector_description": "Ecstatic, extreme joy, euphoric expression"
+                },
+                {
+                  "name": "满足",
+                  "name_en": "Content",
+                  "vector_description": "Content, satisfied, peaceful expression"
+                },
+                {
+                  "name": "逗乐",
+                  "name_en": "Amused",
+                  "vector_description": "Amused, entertained, playful expression"
+                },
+                {
+                  "name": "傻笑",
+                  "name_en": "Smirk",
+                  "vector_description": "Smirk, knowing smile, slight grin"
+                },
+                {
+                  "name": "露齿笑",
+                  "name_en": "Grin",
+                  "vector_description": "Grin, wide smile showing teeth"
+                },
+                {
+                  "name": "大笑",
+                  "name_en": "Laughing",
+                  "vector_description": "Laughing, laughter, joyful expression"
+                },
+                {
+                  "name": "容光焕发",
+                  "name_en": "Beaming",
+                  "vector_description": "Beaming, radiant, glowing with happiness"
+                },
+                {
+                  "name": "宁静",
+                  "name_en": "Serene",
+                  "vector_description": "Serene, calm, tranquil expression"
+                }
+              ]
+            },
+            "sadness_negativity": {
+              "name": "悲伤/消极",
+              "name_en": "Sadness/Negativity",
+              "tags": [
+                {
+                  "name": "悲痛",
+                  "name_en": "Grief",
+                  "vector_description": "Grief, grieving, deep sorrow expression"
+                },
+                {
+                  "name": "忧郁",
+                  "name_en": "Melancholic",
+                  "vector_description": "Melancholic, melancholy, sad pensive expression"
+                },
+                {
+                  "name": "含泪",
+                  "name_en": "Tearful",
+                  "vector_description": "Tearful, crying, tears in eyes"
+                },
+                {
+                  "name": "沮丧",
+                  "name_en": "Despondent",
+                  "vector_description": "Despondent, dejected, hopeless expression"
+                },
+                {
+                  "name": "孤独",
+                  "name_en": "Lonely",
+                  "vector_description": "Lonely, isolated, solitary expression"
+                },
+                {
+                  "name": "心碎",
+                  "name_en": "Heartbroken",
+                  "vector_description": "Heartbroken, devastated, emotionally hurt expression"
+                }
+              ]
+            },
+            "anger_aggression": {
+              "name": "愤怒/攻击性",
+              "name_en": "Anger/Aggression",
+              "tags": [
+                {
+                  "name": "暴怒",
+                  "name_en": "Furious",
+                  "vector_description": "Furious, enraged, intense anger expression"
+                },
+                {
+                  "name": "恼火",
+                  "name_en": "Annoyed",
+                  "vector_description": "Annoyed, irritated, mildly angry expression"
+                },
+                {
+                  "name": "严厉",
+                  "name_en": "Stern",
+                  "vector_description": "Stern, serious, strict expression"
+                },
+                {
+                  "name": "敌意",
+                  "name_en": "Hostile",
+                  "vector_description": "Hostile, antagonistic, unfriendly expression"
+                },
+                {
+                  "name": "怒视",
+                  "name_en": "Scowl",
+                  "vector_description": "Scowl, frowning, angry frown"
+                },
+                {
+                  "name": "尖叫",
+                  "name_en": "Screaming",
+                  "vector_description": "Screaming, shouting, yelling expression"
+                }
+              ]
+            },
+            "fear_anxiety": {
+              "name": "恐惧/焦虑",
+              "name_en": "Fear/Anxiety",
+              "tags": [
+                {
+                  "name": "惊恐",
+                  "name_en": "Terrified",
+                  "vector_description": "Terrified, extreme fear, terror expression"
+                },
+                {
+                  "name": "忧虑",
+                  "name_en": "Apprehensive",
+                  "vector_description": "Apprehensive, worried, anxious expression"
+                },
+                {
+                  "name": "震惊",
+                  "name_en": "Shocked",
+                  "vector_description": "Shocked, startled, stunned expression"
+                },
+                {
+                  "name": "恐慌",
+                  "name_en": "Panic",
+                  "vector_description": "Panic, panicked, frantic expression"
+                },
+                {
+                  "name": "不安",
+                  "name_en": "Uneasy",
+                  "vector_description": "Uneasy, uncomfortable, nervous expression"
+                },
+                {
+                  "name": "警惕",
+                  "name_en": "Wary",
+                  "vector_description": "Wary, cautious, vigilant expression"
+                }
+              ]
+            },
+            "surprise": {
+              "name": "惊讶",
+              "name_en": "Surprise",
+              "tags": [
+                {
+                  "name": "惊奇",
+                  "name_en": "Amazed",
+                  "vector_description": "Amazed, astonished, wonder expression"
+                },
+                {
+                  "name": "敬畏",
+                  "name_en": "Awestruck",
+                  "vector_description": "Awestruck, in awe, reverence expression"
+                },
+                {
+                  "name": "难以置信",
+                  "name_en": "Disbelief",
+                  "vector_description": "Disbelief, incredulous, unbelieving expression"
+                },
+                {
+                  "name": "瞪大眼睛",
+                  "name_en": "Wide-eyed",
+                  "vector_description": "Wide-eyed, eyes wide open, surprised look"
+                }
+              ]
+            },
+            "nuanced_complex": {
+              "name": "细腻/复杂情感",
+              "name_en": "Nuanced/Complex",
+              "tags": [
+                {
+                  "name": "怀旧",
+                  "name_en": "Nostalgic",
+                  "vector_description": "Nostalgic, reminiscent, longing for the past"
+                },
+                {
+                  "name": "沉思",
+                  "name_en": "Pensive",
+                  "vector_description": "Pensive, thoughtful, deep in thought"
+                },
+                {
+                  "name": "诱惑",
+                  "name_en": "Seductive",
+                  "vector_description": "Seductive, alluring, tempting expression"
+                },
+                {
+                  "name": "无聊",
+                  "name_en": "Bored",
+                  "vector_description": "Bored, uninterested, indifferent expression"
+                },
+                {
+                  "name": "怀疑",
+                  "name_en": "Skeptical",
+                  "vector_description": "Skeptical, doubtful, questioning expression"
+                },
+                {
+                  "name": "决心",
+                  "name_en": "Determination",
+                  "vector_description": "Determination, determined, resolute expression"
+                },
+                {
+                  "name": "坚忍",
+                  "name_en": "Stoic",
+                  "vector_description": "Stoic, unemotional, enduring expression"
+                },
+                {
+                  "name": "沉思的",
+                  "name_en": "Contemplative",
+                  "vector_description": "Contemplative, meditative, reflective expression"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "emotion_mood": {
+      "name": "情感与氛围",
+      "name_en": "Emotion & Mood",
+      "tags": [
+        {
+          "name": "快乐",
+          "name_en": "Joyful",
+          "vector_description": "Joyful, happy, cheerful mood in portrait"
+        },
+        {
+          "name": "忧郁",
+          "name_en": "Melancholic",
+          "vector_description": "Melancholic, sad, sorrowful mood in portrait"
+        },
+        {
+          "name": "沉思",
+          "name_en": "Pensive",
+          "vector_description": "Pensive, thoughtful, reflective mood in portrait"
+        },
+        {
+          "name": "严肃",
+          "name_en": "Serious",
+          "vector_description": "Serious, solemn, grave mood in portrait"
+        },
+        {
+          "name": "愤怒",
+          "name_en": "Angry",
+          "vector_description": "Angry, furious, rage mood in portrait"
+        },
+        {
+          "name": "惊讶",
+          "name_en": "Surprised",
+          "vector_description": "Surprised, shocked, astonished mood in portrait"
+        },
+        {
+          "name": "自信",
+          "name_en": "Confident",
+          "vector_description": "Confident, self-assured, bold mood in portrait"
+        },
+        {
+          "name": "脆弱",
+          "name_en": "Vulnerable",
+          "vector_description": "Vulnerable, fragile, exposed mood in portrait"
+        },
+        {
+          "name": "空灵",
+          "name_en": "Ethereal",
+          "vector_description": "Ethereal, otherworldly, dreamlike mood in portrait"
+        },
+        {
+          "name": "粗砺",
+          "name_en": "Gritty",
+          "vector_description": "Gritty, raw, rough mood in portrait"
+        },
+        {
+          "name": "神秘",
+          "name_en": "Mysterious",
+          "vector_description": "Mysterious, enigmatic, secretive mood in portrait"
+        },
+        {
+          "name": "浪漫",
+          "name_en": "Romantic",
+          "vector_description": "Romantic, loving, tender mood in portrait"
+        },
+        {
+          "name": "怀旧",
+          "name_en": "Nostalgic",
+          "vector_description": "Nostalgic, sentimental, reminiscent mood in portrait"
+        },
+        {
+          "name": "异想天开",
+          "name_en": "Whimsical",
+          "vector_description": "Whimsical, playful, fanciful mood in portrait"
+        },
+        {
+          "name": "紧张",
+          "name_en": "Tense",
+          "vector_description": "Tense, stressed, anxious mood in portrait"
+        },
+        {
+          "name": "宁静",
+          "name_en": "Peaceful",
+          "vector_description": "Peaceful, calm, tranquil mood in portrait"
+        },
+        {
+          "name": "活力",
+          "name_en": "Energetic",
+          "vector_description": "Energetic, dynamic, lively mood in portrait"
+        },
+        {
+          "name": "冷漠",
+          "name_en": "Apathetic",
+          "vector_description": "Apathetic, indifferent, emotionless mood in portrait"
+        },
+        {
+          "name": "希望",
+          "name_en": "Hopeful",
+          "vector_description": "Hopeful, optimistic, expectant mood in portrait"
+        },
+        {
+          "name": "戏剧性",
+          "name_en": "Dramatic",
+          "vector_description": "Dramatic, theatrical, intense mood in portrait"
+        },
+        {
+          "name": "亲密",
+          "name_en": "Intimate",
+          "vector_description": "Intimate, close, personal mood in portrait"
+        },
+        {
+          "name": "赋权",
+          "name_en": "Empowering",
+          "vector_description": "Empowering, inspiring, uplifting mood in portrait"
+        }
+      ]
+    }
+  }
+}

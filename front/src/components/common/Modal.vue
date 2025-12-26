@@ -33,7 +33,7 @@
             </div>
 
             <!-- 内容 -->
-            <div class="px-6 py-4">
+            <div class="px-6 py-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
               <slot />
             </div>
 
@@ -90,6 +90,26 @@ function handleClose() {
 </script>
 
 <style scoped>
+/* 自定义滚动条样式 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 /* 背景遮罩层动画 - 保持 backdrop-filter 稳定 */
 .modal-overlay-enter-active {
   transition: opacity 0.3s ease;

@@ -1,0 +1,49 @@
+{
+  "version": "2.0",
+  "description": "摄影标签库索引 - 用于图片智能标注",
+  "last_updated": "2025-01-09",
+  "tag_structure": {
+    "format": {
+      "name": "中文名称",
+      "name_en": "英文名称",
+      "vector_description": "用于生成向量的英文描述"
+    }
+  },
+  "categories": [
+    {
+      "id": "portrait_photography",
+      "name": "人像摄影",
+      "name_en": "Portrait Photography",
+      "file": "portrait_photography.json",
+      "description": "人像摄影的完整分类体系，包含流派、光影、姿态与情感维度"
+    },
+    {
+      "id": "humanities_documentary",
+      "name": "人文与社会纪实摄影",
+      "name_en": "Humanities & Documentary Photography",
+      "file": "humanities_documentary.json",
+      "description": "街头摄影、社会纪实与人道主义摄影的分类体系"
+    },
+    {
+      "id": "landscape_photography",
+      "name": "风光摄影",
+      "name_en": "Landscape Photography",
+      "file": "landscape_photography.json",
+      "description": "风光摄影完整分类体系，包含地质学精确性与航拍术语"
+    },
+    {
+      "id": "technical_metadata",
+      "name": "技术元数据",
+      "name_en": "Technical Metadata",
+      "file": "technical_metadata.json",
+      "description": "摄影技术相关的通用标签，包括相机参数、后期处理、图像格式"
+    },
+    {
+      "id": "ai_and_compliance",
+      "name": "AI与合规标签",
+      "name_en": "AI & Compliance Tags",
+      "file": "ai_and_compliance.json",
+      "description": "AI生成内容标识与图像使用的法律伦理标签"
+    }
+  ]
+}

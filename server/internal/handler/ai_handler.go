@@ -195,35 +195,20 @@ type SemanticSearchRequest struct {
 	Limit     int    `json:"limit"`                    // 返回结果数量
 }
 
-// SemanticSearch 语义搜索
+// GetEmbeddingModels 获取可用的嵌入模型列表
 //
-//	@Summary		语义搜索
-//	@Description	使用向量进行语义搜索
+//	@Summary		获取可用的嵌入模型列表
+//	@Description	获取所有已启用且支持嵌入功能的模型名称列表
 //	@Tags			AI
-//	@Accept			json
 //	@Produce		json
-//	@Param			request	body		SemanticSearchRequest						true	"搜索请求"
-//	@Success		200		{object}	utils.Response{data=[]model.Image}	"搜索成功"
-//	@Failure		400		{object}	utils.Response								"请求参数错误"
-//	@Failure		500		{object}	utils.Response								"搜索失败"
-//	@Router			/api/ai/search [post]
-func (h *AIHandler) SemanticSearch(c *gin.Context) {
-	var req SemanticSearchRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "请求参数错误: "+err.Error())
-		return
-	}
-
-	limit := req.Limit
-	if limit <= 0 || limit > 100 {
-		limit = 20
-	}
-
-	images, err := h.service.SemanticSearch(c.Request.Context(), req.Query, req.ModelName, limit)
+//	@Success		200	{object}	utils.Response{data=[]string}	"获取成功"
+//	@Failure		500	{object}	utils.Response					"获取失败"
+//	@Router			/api/ai/embedding-models [get]
+func (h *AIHandler) GetEmbeddingModels(c *gin.Context) {
+	models, err := h.service.GetEmbeddingModels(c.Request.Context())
 	if err != nil {
-		utils.InternalServerError(c, "语义搜索失败: "+err.Error())
+		utils.InternalServerError(c, "获取嵌入模型列表失败: "+err.Error())
 		return
 	}
-
-	utils.Success(c, images)
+	utils.Success(c, models)
 }

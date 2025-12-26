@@ -9,10 +9,6 @@ export const albumApi = {
     })
   },
 
-  // 获取相册详情
-  getDetail(id: number) {
-    return http.get<Album>(`/api/albums/${id}`)
-  },
 
   // 创建相册
   create(data: CreateAlbumRequest) {

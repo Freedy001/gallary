@@ -2,12 +2,32 @@
   <header class="relative z-30 flex h-20 w-full items-center justify-between border-b border-white/5 bg-transparent px-8 transition-all duration-300 backdrop-blur-sm">
     <!-- 左侧区域 -->
     <div v-if="!uiStore.isSelectionMode" class="w-96">
+      <!-- 搜索模式下的左侧 -->
+      <div v-if="imageStore.isSearchMode" class="flex items-center gap-4 animate-fade-in">
+        <div
+          @click="uiStore.openCommandPalette"
+          class="flex items-center gap-3 rounded-xl bg-gradient-to-r from-primary-500/20 to-pink-500/20 px-4 py-2.5 border border-primary-500/30 shadow-[0_0_15px_rgba(139,92,246,0.1)] cursor-pointer hover:bg-white/5 transition-colors group"
+        >
+          <MagnifyingGlassIcon class="h-4 w-4 text-primary-300" />
+          <span class="text-sm font-medium text-white truncate max-w-[200px]" :title="imageStore.searchDescription">
+            {{ imageStore.searchDescription }}
+          </span>
+          <button
+            @click.stop="imageStore.exitSearch"
+            class="ml-2 rounded-full p-1 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+            title="退出搜索"
+          >
+            <XMarkIcon class="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
       <!-- 自定义左侧内容插槽 -->
-      <slot name="left">
+      <slot v-else name="left">
         <!-- 默认：搜索按钮 -->
         <button
           @click="uiStore.openCommandPalette"
-          class="group flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-400 transition-all hover:border-primary-500/30 hover:bg-white/10 hover:text-white hover:shadow-[0_0_15px_rgba(139,92,246,0.1)]"
+          class="group flex w-75 items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-400 transition-all hover:border-primary-500/30 hover:bg-white/10 hover:text-white hover:shadow-[0_0_15px_rgba(139,92,246,0.1)]"
         >
           <MagnifyingGlassIcon class="h-5 w-5 text-gray-500 transition-colors group-hover:text-primary-400" />
           <span class="font-light tracking-wide">搜索影像记忆...</span>
@@ -71,20 +91,22 @@
 
       <!-- 正常模式下的操作按钮 -->
       <div v-else class="flex items-center gap-4">
-        <button
-          @click="enterSelectionMode"
-          class="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
-        >
-          选择
-        </button>
-        <!-- 上传按钮 -->
-        <button
-          @click="handleUploadClick"
-          class="relative flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-black transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95"
-        >
-          <ArrowUpTrayIcon class="h-4 w-4" />
-          <span>上传</span>
-        </button>
+        <slot name="actions">
+          <button
+            @click="enterSelectionMode"
+            class="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
+          >
+            选择
+          </button>
+          <!-- 上传按钮 -->
+          <button
+            @click="handleUploadClick"
+            class="relative flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-black transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:scale-105 active:scale-95"
+          >
+            <ArrowUpTrayIcon class="h-4 w-4" />
+            <span>上传</span>
+          </button>
+        </slot>
       </div>
 
       <input
@@ -130,6 +152,7 @@ import {
   Squares2X2Icon,
   Square3Stack3DIcon,
   TrashIcon,
+  XMarkIcon,
 } from '@heroicons/vue/24/outline'
 import { imageApi } from '@/api/image'
 

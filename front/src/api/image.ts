@@ -4,6 +4,7 @@ import type {
   Image,
   Pageable,
   SearchParams,
+  Tag,
   UpdateMetadataRequest,
 } from '@/types'
 
@@ -23,6 +24,11 @@ export const imageApi = {
     return http.get(`/api/images`, {
       params: {page, page_size: pageSize}
     })
+  },
+
+  // 获取标签列表
+  getTags(): Promise<ApiResponse<Tag[]>> {
+    return http.get('/api/tags')
   },
 
   // 删除图片
@@ -74,9 +80,26 @@ export const imageApi = {
     document.body.removeChild(form)
   },
 
-  // 搜索图片
-  search(params: SearchParams): Promise<ApiResponse<Pageable<Image>>> {
-    return http.get('/api/search', {params})
+  // 搜索图片（支持图片上传进行以图搜图）
+  search(params: SearchParams, file?: File): Promise<ApiResponse<Pageable<Image>>> {
+    if (file) {
+      // 有图片时使用 FormData（multipart/form-data）
+      const formData = new FormData()
+      formData.append('file', file)
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          if (Array.isArray(value)) {
+            value.forEach(v => formData.append(key, v.toString()))
+          } else {
+            formData.append(key, value.toString())
+          }
+        }
+      })
+      // 使用 upload 方法确保 Content-Type 为 multipart/form-data
+      return http.upload('/api/search', formData)
+    }
+    // 无图片保持原有 JSON 方式
+    return http.post('/api/search', params)
   },
 
   // 更新单个图片元数据

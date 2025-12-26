@@ -56,14 +56,13 @@ export const useDialogStore = defineStore('dialog', () => {
     }
   }
 
-  function alert(options: DialogOptions | string): Promise<boolean> {
+  function alert(options: DialogOptions | string) {
     const opts = typeof options === 'string' ? {title: '提示', message: options} : options
     notify({
       title: opts.title || '提示',
       message: opts.message,
       type: opts.type || 'info'
     })
-    return Promise.resolve(true)
   }
 
   function handleConfirm() {

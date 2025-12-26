@@ -15,14 +15,18 @@ type ModelClient interface {
 	SupportsEmbeddingWithAesthetics() bool
 
 	// Embedding 嵌入向量计算
-	Embedding(ctx context.Context, image *model.Image, text string) ([]float32, error)
+	// imageData: 图片二进制数据 (可为 nil)
+	// text: 文本内容 (可为空)
+	Embedding(ctx context.Context, imageData []byte, text string) ([]float32, error)
 	// EmbeddingWithAesthetics 同时计算嵌入和评分 (仅自托管模型支持)
-	EmbeddingWithAesthetics(ctx context.Context, image *model.Image) (embedding []float32, score float64, err error)
+	// imageData: 图片二进制数据 (必须提供)
+	EmbeddingWithAesthetics(ctx context.Context, imageData []byte) (embedding []float32, score float64, err error)
 
 	// TestConnection 连接测试
 	TestConnection(ctx context.Context) error
 	// GetConfig 获取模型配置
 	GetConfig() *model.ModelConfig
+	UpdateConfig(config *model.ModelConfig)
 }
 
 // ================== 客户端工厂 ==================

@@ -24,7 +24,8 @@ type ImageRepository interface {
 	Delete(ctx context.Context, id int64) error
 	DeleteBatch(ctx context.Context, ids []int64) error
 	FindByIDs(ctx context.Context, ids []int64) ([]*model.Image, error)
-	Search(ctx context.Context, params *SearchParams) ([]*model.Image, int64, error)
+	Search(ctx context.Context, params *model.SearchParams) ([]*model.Image, int64, error)
+	SearchIDs(ctx context.Context, params *model.SearchParams, limit int) ([]int64, error)
 	Restore(ctx context.Context, id int64) error // 恢复逻辑删除的记录
 
 	// 回收站相关方法
@@ -45,6 +46,8 @@ type ImageRepository interface {
 	FindTagByName(ctx context.Context, name string) (*model.Tag, error)
 	CreateTag(ctx context.Context, tag *model.Tag) error
 	UpdateImageTags(ctx context.Context, imageID int64, tagIDs []int64) error
+	AddImageTags(ctx context.Context, imageID int64, tagIDs []int64) error
+	FindAllNormalTags(ctx context.Context) ([]*model.Tag, error)
 
 	// 聚合相关
 	GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, gridSizeLat, gridSizeLng float64) ([]*model.ClusterResult, error)
@@ -55,20 +58,6 @@ type ImageRepository interface {
 	CountByStorageType(ctx context.Context, storageType string) (int, error)
 	ListByStorageType(ctx context.Context, storageType string, page, pageSize int) ([]*model.Image, int64, error)
 	UpdateStoragePath(ctx context.Context, imageID int64, storagePath string) error
-}
-
-// SearchParams 搜索参数
-type SearchParams struct {
-	Keyword       string
-	StartDate     *string
-	EndDate       *string
-	Tags          []int64
-	LocationName  string
-	CameraModel   string
-	Page          int
-	PageSize      int
-	SemanticQuery string // 语义搜索查询词
-	ModelName     string // 使用的模型名称
 }
 
 type imageRepository struct {
@@ -206,12 +195,75 @@ func (r *imageRepository) FindByIDs(ctx context.Context, ids []int64) ([]*model.
 }
 
 // Search 搜索图片
-func (r *imageRepository) Search(ctx context.Context, params *SearchParams) ([]*model.Image, int64, error) {
+func (r *imageRepository) Search(ctx context.Context, params *model.SearchParams) ([]*model.Image, int64, error) {
 	var images []*model.Image
 	var total int64
 
 	query := database.GetDB(ctx).Model(&model.Image{})
 
+	r.buildSearchCondition(params, query)
+
+	// 计算总数
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 分页查询
+	offset := (params.Page - 1) * params.PageSize
+
+	// 如果有经纬度搜索，使用 PostGIS ST_Distance 按真实地球距离排序
+	if params.Latitude != nil && params.Longitude != nil {
+		// 使用 geography 类型进行精确的距离计算（米为单位）
+		distanceExpr := fmt.Sprintf(
+			"ST_Distance(location::geography, ST_SetSRID(ST_MakePoint(%f, %f), 4326)::geography)",
+			*params.Longitude, *params.Latitude,
+		)
+		err := query.Preload("Tags").
+			Order(distanceExpr + " ASC").
+			Limit(params.PageSize).
+			Offset(offset).
+			Find(&images).Error
+
+		if err != nil {
+			return nil, 0, err
+		}
+	} else {
+		err := query.Preload("Tags").
+			Order("created_at DESC").
+			Limit(params.PageSize).
+			Offset(offset).
+			Find(&images).Error
+
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return images, total, nil
+}
+
+// SearchIDs 搜索图片并只返回ID列表（用于混合搜索的第一步筛选）
+func (r *imageRepository) SearchIDs(ctx context.Context, params *model.SearchParams, limit int) ([]int64, error) {
+	var ids []int64
+
+	query := database.GetDB(ctx).Model(&model.Image{}).Select("images.id")
+
+	r.buildSearchCondition(params, query)
+
+	// 限制数量并获取ID列表
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+
+	err := query.Order("created_at DESC").Pluck("id", &ids).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return ids, nil
+}
+
+func (r *imageRepository) buildSearchCondition(params *model.SearchParams, query *gorm.DB) {
 	// 关键词搜索（搜索文件名）
 	if params.Keyword != "" {
 		query = query.Where("original_name ILIKE ?", "%"+params.Keyword+"%")
@@ -221,18 +273,22 @@ func (r *imageRepository) Search(ctx context.Context, params *SearchParams) ([]*
 	if params.StartDate != nil {
 		query = query.Where("taken_at >= ?", *params.StartDate)
 	}
+
 	if params.EndDate != nil {
 		query = query.Where("taken_at <= ?", *params.EndDate)
 	}
 
-	// 地点搜索
-	if params.LocationName != "" {
-		query = query.Where("location_name ILIKE ?", "%"+params.LocationName+"%")
-	}
-
-	// 相机型号搜索
-	if params.CameraModel != "" {
-		query = query.Where("camera_model ILIKE ?", "%"+params.CameraModel+"%")
+	// 使用 PostGIS 进行经纬度范围搜索（基于中心点和半径）
+	if params.Latitude != nil && params.Longitude != nil {
+		radius := 10.0 // 默认 10 公里
+		if params.Radius != nil && *params.Radius > 0 {
+			radius = *params.Radius
+		}
+		radiusMeters := radius * 1000
+		query = query.Where(
+			"ST_DWithin(location::geography, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)",
+			*params.Longitude, *params.Latitude, radiusMeters,
+		)
 	}
 
 	// 标签搜索
@@ -241,25 +297,6 @@ func (r *imageRepository) Search(ctx context.Context, params *SearchParams) ([]*
 			Where("image_tags.tag_id IN ?", params.Tags).
 			Distinct("images.id")
 	}
-
-	// 计算总数
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	// 分页查询
-	offset := (params.Page - 1) * params.PageSize
-	err := query.Preload("Tags").
-		Order("created_at DESC").
-		Limit(params.PageSize).
-		Offset(offset).
-		Find(&images).Error
-
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return images, total, nil
 }
 
 // Restore 恢复逻辑删除的记录
@@ -341,11 +378,67 @@ func (r *imageRepository) UpdateImageTags(ctx context.Context, imageID int64, ta
 	})
 }
 
+// AddImageTags 添加图片标签关联（不删除现有标签）
+func (r *imageRepository) AddImageTags(ctx context.Context, imageID int64, tagIDs []int64) error {
+	if len(tagIDs) == 0 {
+		return nil
+	}
+
+	return database.GetDB(ctx).Transaction(func(tx *gorm.DB) error {
+		// 获取已存在的标签关联
+		var existingTags []model.ImageTag
+		if err := tx.Where("image_id = ?", imageID).Find(&existingTags).Error; err != nil {
+			return err
+		}
+
+		// 创建已存在标签ID的映射
+		existingTagIDs := make(map[int64]bool)
+		for _, tag := range existingTags {
+			existingTagIDs[tag.TagID] = true
+		}
+
+		// 只添加不存在的标签关联
+		var newImageTags []model.ImageTag
+		for _, tagID := range tagIDs {
+			if !existingTagIDs[tagID] {
+				newImageTags = append(newImageTags, model.ImageTag{
+					ImageID: imageID,
+					TagID:   tagID,
+				})
+			}
+		}
+
+		// 批量创建新的标签关联
+		if len(newImageTags) > 0 {
+			if err := tx.Create(&newImageTags).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
+// FindAllNormalTags 获取所有普通标签（非相册类型）
+func (r *imageRepository) FindAllNormalTags(ctx context.Context) ([]*model.Tag, error) {
+	var tags []*model.Tag
+	err := database.GetDB(ctx).
+		Where("type <> ?", model.TagTypeAlbum).
+		Order("name ASC").
+		Find(&tags).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tags, nil
+}
+
 // GetImagesWithLocation 获取带有地理位置的图片
 func (r *imageRepository) GetImagesWithLocation(ctx context.Context) ([]*model.Image, error) {
 	var images []*model.Image
 	err := database.GetDB(ctx).WithContext(ctx).
-		Where("latitude IS NOT NULL AND longitude IS NOT NULL").
+		Where("location IS NOT NULL").
 		Find(&images).Error
 
 	if err != nil {
@@ -371,19 +464,21 @@ func (r *imageRepository) GetClusters(ctx context.Context, minLat, maxLat, minLn
 	}
 	var raws []clusterRaw
 
-	// PostgreSQL 语法
+	// PostgreSQL 语法 - 使用 PostGIS 从 location 字段提取经纬度
 	// 确保只查询有坐标的图片
-	// 使用 SQL 注入安全的参数绑定
 	err := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).Raw(`
-		SELECT 
-			FLOOR(latitude / ?) as grid_index_lat, 
-			FLOOR(longitude / ?) as grid_index_lng, 
-			AVG(latitude) as lat, 
-			AVG(longitude) as lng, 
-			COUNT(*) as count, 
+		SELECT
+			FLOOR(ST_Y(location) / ?) as grid_index_lat,
+			FLOOR(ST_X(location) / ?) as grid_index_lng,
+			AVG(ST_Y(location)) as lat,
+			AVG(ST_X(location)) as lng,
+			COUNT(*) as count,
 			MAX(id) as cover_id
-		FROM images 
-		WHERE (latitude BETWEEN ? AND ?) AND (longitude BETWEEN ? AND ?)
+		FROM images
+		WHERE location IS NOT NULL
+		  AND ST_Y(location) BETWEEN ? AND ?
+		  AND ST_X(location) BETWEEN ? AND ?
+		  AND deleted_at IS NULL
 		GROUP BY grid_index_lat, grid_index_lng
 	`, gridSizeLat, gridSizeLng, minLat, maxLat, minLng, maxLng).Scan(&raws).Error
 
@@ -447,8 +542,9 @@ func (r *imageRepository) GetClusterImages(ctx context.Context, minLat, maxLat, 
 	var total int64
 
 	db := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).
-		Where("latitude >= ? AND latitude < ?", minLat, maxLat).
-		Where("longitude >= ? AND longitude < ?", minLng, maxLng)
+		Where("location IS NOT NULL").
+		Where("ST_Y(location) >= ? AND ST_Y(location) < ?", minLat, maxLat).
+		Where("ST_X(location) >= ? AND ST_X(location) < ?", minLng, maxLng)
 
 	// 获取总数
 	if err := db.Count(&total).Error; err != nil {
@@ -475,8 +571,8 @@ func (r *imageRepository) GetGeoBounds(ctx context.Context) (*model.GeoBounds, e
 	}
 
 	err := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).
-		Select("MIN(latitude) as min_lat, MAX(latitude) as max_lat, MIN(longitude) as min_lng, MAX(longitude) as max_lng, COUNT(*) as count").
-		Where("latitude IS NOT NULL AND longitude IS NOT NULL").
+		Select("MIN(ST_Y(location)) as min_lat, MAX(ST_Y(location)) as max_lat, MIN(ST_X(location)) as min_lng, MAX(ST_X(location)) as max_lng, COUNT(*) as count").
+		Where("location IS NOT NULL").
 		Scan(&result).Error
 
 	if err != nil {

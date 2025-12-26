@@ -1,0 +1,94 @@
+{
+  "name": "AI与合规标签",
+  "name_en": "AI & Compliance Tags",
+  "description": "AI生成内容标识与图像使用的法律伦理标签",
+  "categories": {
+    "ai_synthetic_content": {
+      "name": "AI与合成内容标识",
+      "name_en": "AI & Synthetic Content Tags",
+      "tags": [
+        {
+          "name": "AI生成",
+          "name_en": "AI Generated",
+          "vector_description": "AI generated, artificial intelligence created, machine generated, synthetic image"
+        },
+        {
+          "name": "合成媒体",
+          "name_en": "Synthetic Media",
+          "vector_description": "Synthetic media, computer generated, digitally created, artificial content"
+        },
+        {
+          "name": "虚拟模特",
+          "name_en": "Virtual Model",
+          "vector_description": "Virtual model, digital human, CGI person, computer generated model"
+        },
+        {
+          "name": "生成艺术",
+          "name_en": "Generative Art",
+          "vector_description": "Generative art, algorithm generated, procedural art, computational creativity"
+        },
+        {
+          "name": "真实摄影",
+          "name_en": "Real Photography",
+          "vector_description": "Real photography, authentic photo, camera captured, genuine photograph"
+        },
+        {
+          "name": "照片处理",
+          "name_en": "Photo Manipulation",
+          "vector_description": "Photo manipulation, digitally altered, edited photograph, retouched image"
+        },
+        {
+          "name": "计算机生成图像",
+          "name_en": "CGI",
+          "vector_description": "CGI, computer generated imagery, 3D rendered, digital rendering"
+        }
+      ]
+    },
+    "compliance_ethics": {
+      "name": "合规与伦理标签",
+      "name_en": "Compliance & Ethics Tags",
+      "tags": [
+        {
+          "name": "模特授权",
+          "name_en": "Model Release",
+          "vector_description": "Model release, subject consent, permission granted, legally released"
+        },
+        {
+          "name": "物业授权",
+          "name_en": "Property Release",
+          "vector_description": "Property release, location permission, venue consent, property rights cleared"
+        },
+        {
+          "name": "仅限编辑类",
+          "name_en": "Editorial Only",
+          "vector_description": "Editorial only, news use, journalistic, not for commercial use"
+        },
+        {
+          "name": "商业用途",
+          "name_en": "Commercial Use",
+          "vector_description": "Commercial use, advertising, marketing, business purposes allowed"
+        },
+        {
+          "name": "知情同意",
+          "name_en": "Informed Consent",
+          "vector_description": "Informed consent, aware participation, voluntary agreement, ethical documentation"
+        },
+        {
+          "name": "匿名化",
+          "name_en": "Anonymized",
+          "vector_description": "Anonymized, identity hidden, face obscured, privacy protected"
+        },
+        {
+          "name": "成人内容",
+          "name_en": "Mature Content",
+          "vector_description": "Mature content, adult only, age restricted, explicit material"
+        },
+        {
+          "name": "敏感内容",
+          "name_en": "Sensitive Content",
+          "vector_description": "Sensitive content, potentially disturbing, viewer discretion, triggering material"
+        }
+      ]
+    }
+  }
+}

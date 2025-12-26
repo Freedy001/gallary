@@ -18,8 +18,8 @@ type AuthHandler struct {
 }
 
 // NewAuthHandler 创建认证处理器实例
-func NewAuthHandler(cfg *internal.PlatformConfig) *AuthHandler {
-	return &AuthHandler{cfg: cfg}
+func NewAuthHandler() *AuthHandler {
+	return &AuthHandler{cfg: internal.PlatConfig}
 }
 
 // LoginRequest 登录请求

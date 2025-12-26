@@ -25,9 +25,9 @@ type EmbeddingRepository interface {
 	FindByImageIDs(ctx context.Context, imageIDs []int64, modelID string) ([]*model.ImageEmbedding, error)
 
 	// 向量搜索
-	VectorSearch(ctx context.Context, modelID string, embedding []float32, limit int) ([]*model.ImageEmbedding, error)
 	VectorSearchByModelName(ctx context.Context, modelName string, embedding []float32, limit int) ([]*model.ImageEmbedding, error)
 	VectorSearchWithDistance(ctx context.Context, modelID string, embedding []float32, limit int) ([]EmbeddingWithDistance, error)
+	VectorSearchWithinIDs(ctx context.Context, modelName string, embedding []float32, candidateIDs []int64, limit int) ([]EmbeddingWithDistance, error)
 
 	// 查询未处理的图片
 	FindImagesWithoutEmbedding(ctx context.Context, modelName string, limit int) ([]int64, error)
@@ -119,21 +119,6 @@ func (r *embeddingRepository) FindByImageIDs(ctx context.Context, imageIDs []int
 }
 
 // VectorSearch 向量相似性搜索
-func (r *embeddingRepository) VectorSearch(ctx context.Context, modelID string, embedding []float32, limit int) ([]*model.ImageEmbedding, error) {
-	var embeddings []*model.ImageEmbedding
-
-	// 构建向量字符串
-	vectorStr := floatsToVectorString(embedding)
-
-	err := database.GetDB(ctx).WithContext(ctx).
-		Where("model_id = ?", modelID).
-		Order(fmt.Sprintf("embedding <=> '%s'", vectorStr)).
-		Limit(limit).
-		Preload("Image").
-		Find(&embeddings).Error
-
-	return embeddings, err
-}
 
 // VectorSearchByModelName 根据模型名称进行向量相似性搜索
 func (r *embeddingRepository) VectorSearchByModelName(ctx context.Context, modelName string, embedding []float32, limit int) ([]*model.ImageEmbedding, error) {
@@ -164,8 +149,51 @@ func (r *embeddingRepository) VectorSearchWithDistance(ctx context.Context, mode
 	err := database.GetDB(ctx).WithContext(ctx).
 		Model(&model.ImageEmbedding{}).
 		Select("*, embedding <=> ? as distance", vectorStr).
-		Where("model_id = ?", modelID).
+		Where("model_name = ?", modelID).
 		Order("distance ASC").
+		Limit(limit).
+		Preload("Image").
+		Find(&results).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	embeddings := make([]EmbeddingWithDistance, len(results))
+	for i, r := range results {
+		e := r.ImageEmbedding
+		embeddings[i] = EmbeddingWithDistance{
+			Embedding: &e,
+			Distance:  r.Distance,
+		}
+	}
+
+	return embeddings, nil
+}
+
+// VectorSearchWithinIDs 在指定图片ID范围内进行向量相似性搜索
+func (r *embeddingRepository) VectorSearchWithinIDs(ctx context.Context, modelName string, embedding []float32, candidateIDs []int64, limit int) ([]EmbeddingWithDistance, error) {
+	if candidateIDs != nil && len(candidateIDs) == 0 {
+		return []EmbeddingWithDistance{}, nil
+	}
+
+	vectorStr := floatsToVectorString(embedding)
+
+	var results []struct {
+		model.ImageEmbedding
+		Distance float64 `gorm:"column:distance"`
+	}
+
+	db := database.GetDB(ctx).WithContext(ctx).
+		Model(&model.ImageEmbedding{}).
+		Select("*, embedding <=> ? as distance", vectorStr).
+		Where("model_name = ?", modelName)
+
+	if candidateIDs != nil {
+		db.Where("image_id IN ?", candidateIDs)
+	}
+
+	err := db.Order("distance ASC").
 		Limit(limit).
 		Preload("Image").
 		Find(&results).Error

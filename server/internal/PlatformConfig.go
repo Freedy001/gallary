@@ -5,8 +5,11 @@ import (
 	"gallary/server/internal/model"
 )
 
+var PlatConfig = &PlatformConfig{}
+
 type PlatformConfig struct {
 	*middleware.AdminConfig
 	*middleware.DynamicStaticConfig
 	*model.CleanupPO
+	*model.AIPo
 }

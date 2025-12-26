@@ -16,7 +16,6 @@ import (
 // AlbumService 相册服务接口
 type AlbumService interface {
 	Create(ctx context.Context, req *CreateAlbumRequest) (*model.AlbumVO, error)
-	GetByID(ctx context.Context, id int64) (*model.AlbumVO, error)
 	List(ctx context.Context, page, pageSize int) ([]*model.AlbumVO, int64, error)
 	Update(ctx context.Context, id int64, req *UpdateAlbumRequest) (*model.AlbumVO, error)
 	Delete(ctx context.Context, id int64) error
@@ -36,9 +35,10 @@ type CreateAlbumRequest struct {
 
 // UpdateAlbumRequest 更新相册请求
 type UpdateAlbumRequest struct {
-	Name        *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
-	SortOrder   *int    `json:"sort_order,omitempty"`
+	Name         *string `json:"name,omitempty"`
+	CoverImageID *int64  `json:"cover_image_id,omitempty"`
+	Description  *string `json:"description,omitempty"`
+	SortOrder    *int    `json:"sort_order,omitempty"`
 }
 
 type albumService struct {
@@ -73,16 +73,6 @@ func (s *albumService) Create(ctx context.Context, req *CreateAlbumRequest) (*mo
 
 	logger.Info("创建相册成功", zap.Int64("id", album.ID), zap.String("name", album.Name))
 	return album.ToAlbumVO(nil, 0), nil
-}
-
-// GetByID 根据ID获取相册
-func (s *albumService) GetByID(ctx context.Context, id int64) (*model.AlbumVO, error) {
-	album, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.toVO(ctx, album)
 }
 
 // List 获取相册列表
@@ -161,6 +151,9 @@ func (s *albumService) Update(ctx context.Context, id int64, req *UpdateAlbumReq
 		album.Metadata = &model.AlbumMetadata{}
 	}
 
+	if req.CoverImageID != nil {
+		album.Metadata.CoverImageID = req.CoverImageID
+	}
 	if req.Description != nil {
 		album.Metadata.Description = req.Description
 	}
@@ -195,10 +188,6 @@ func (s *albumService) GetImages(ctx context.Context, albumID int64, page, pageS
 	}
 
 	vos := s.storage.ToVOList(images)
-	if err != nil {
-		return nil, 0, err
-	}
-
 	return vos, total, nil
 }
 
@@ -252,11 +241,13 @@ func (s *albumService) toVO(ctx context.Context, album *model.Tag) (*model.Album
 		}
 	}
 
-	// 如果没有设置封面，使用第一张图片
+	// 如果没有设置封面，使用美学评分最高的图片，如果没有评分则使用第一张
 	if coverImage == nil && count > 0 {
-		images, _, err := s.repo.GetImages(ctx, album.ID, 1, 1)
-		if err == nil && len(images) > 0 {
-			coverImage = s.storage.ToVO(images[0])
+		firstImagesMap, err := s.repo.GetFirstImages(ctx, []int64{album.ID})
+		if err == nil {
+			if img, ok := firstImagesMap[album.ID]; ok {
+				coverImage = s.storage.ToVO(img)
+			}
 		}
 	}
 

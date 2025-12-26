@@ -75,34 +75,6 @@ func (h *AlbumHandler) List(c *gin.Context) {
 	utils.PageResponse(c, albums, total, page, pageSize)
 }
 
-// GetByID 获取相册详情
-//
-//	@Summary		获取相册详情
-//	@Description	根据ID获取相册详情
-//	@Tags			相册管理
-//	@Produce		json
-//	@Param			id	path		int										true	"相册ID"
-//	@Success		200	{object}	utils.Response{data=model.AlbumVO}		"相册详情"
-//	@Failure		400	{object}	utils.Response							"无效的相册ID"
-//	@Failure		404	{object}	utils.Response							"相册不存在"
-//	@Router			/api/albums/{id} [get]
-func (h *AlbumHandler) GetByID(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "无效的相册ID")
-		return
-	}
-
-	album, err := h.service.GetByID(c.Request.Context(), id)
-	if err != nil {
-		logger.Error("获取相册详情失败", zap.Error(err))
-		utils.NotFound(c, err.Error())
-		return
-	}
-
-	utils.Success(c, album)
-}
-
 // Update 更新相册
 //
 //	@Summary		更新相册

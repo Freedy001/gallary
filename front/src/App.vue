@@ -24,34 +24,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import { useNotificationStore } from '@/stores/notification'
 
 // 应用根组件
 const meteorCanvas = ref<HTMLCanvasElement | null>(null)
-const notificationStore = useNotificationStore()
 let ctx: CanvasRenderingContext2D | null = null
 let animationFrameId: number
 let meteors: Meteor[] = []
 let width = 0
 let height = 0
-
-// 初始化 WebSocket 连接
-// 检查是否已登录（有 token）
-const token = localStorage.getItem('auth_token')
-if (token) {
-  notificationStore.init()
-}
-
-// 监听 token 变化，实现登录/登出时的 WebSocket 连接管理
-watch(() => localStorage.getItem('auth_token'), (newToken) => {
-  if (newToken) {
-    notificationStore.init()
-  } else {
-    notificationStore.disconnect()
-  }
-})
 
 // 流星类定义
 class Meteor {

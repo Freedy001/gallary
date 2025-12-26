@@ -16,14 +16,10 @@
 
     <div class="space-y-6">
       <!-- 统计信息 -->
-      <div class="grid grid-cols-3 gap-4">
+      <div class="grid grid-cols-2 gap-4">
         <div class="glass-stat-card bg-yellow-500/10 border-yellow-500/20">
           <div class="text-3xl font-bold text-yellow-400 mb-1">{{ queue.pending_count }}</div>
           <div class="text-xs text-yellow-200/70 font-medium tracking-wider uppercase">待处理</div>
-        </div>
-        <div class="glass-stat-card bg-primary-500/10 border-primary-500/20">
-          <div class="text-3xl font-bold text-primary-400 mb-1">{{ queue.processing_count }}</div>
-          <div class="text-xs text-primary-200/70 font-medium tracking-wider uppercase">处理中</div>
         </div>
         <div class="glass-stat-card bg-red-500/10 border-red-500/20">
           <div class="text-3xl font-bold text-red-400 mb-1">{{ queue.failed_count }}</div>
@@ -159,7 +155,7 @@ const hasMore = ref(true)
 
 // 获取状态点样式
 function getStatusDotClass(): string {
-  if (props.queue.status === 'processing' || props.queue.processing_count > 0) {
+  if (props.queue.status === 'processing') {
     return 'bg-primary-500 animate-pulse'
   }
   if (props.queue.pending_count > 0) {

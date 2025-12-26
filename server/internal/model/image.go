@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -25,8 +26,7 @@ type Image struct {
 
 	// EXIF 元数据
 	TakenAt      *time.Time `gorm:"type:timestamp" json:"taken_at,omitempty"`
-	Latitude     *float64   `gorm:"type:decimal(10,8)" json:"latitude,omitempty"`
-	Longitude    *float64   `gorm:"type:decimal(11,8)" json:"longitude,omitempty"`
+	Location     *string    `gorm:"type:geometry(Point,4326)" json:"-"` // PostGIS GEOMETRY 类型，不直接序列化到 JSON
 	LocationName *string    `gorm:"type:varchar(255)" json:"location_name,omitempty"`
 	CameraModel  *string    `gorm:"type:varchar(100)" json:"camera_model,omitempty"`
 	CameraMake   *string    `gorm:"type:varchar(100)" json:"camera_make,omitempty"`
@@ -76,4 +76,51 @@ type GeoBounds struct {
 // TableName 指定表名
 func (*Image) TableName() string {
 	return "images"
+}
+
+// SetLocation 根据经纬度设置 Location 字段（用于写入数据库）
+func (img *Image) SetLocation(latitude, longitude *float64) {
+	if latitude != nil && longitude != nil {
+		loc := fmt.Sprintf("SRID=4326;POINT(%f %f)", *longitude, *latitude)
+		img.Location = &loc
+	} else {
+		img.Location = nil
+	}
+}
+
+// GetLatLng 从 Location 字段解析经纬度（用于 API 返回）
+// 返回 latitude, longitude
+func (img *Image) GetLatLng() (*float64, *float64) {
+	if img.Location == nil || *img.Location == "" {
+		return nil, nil
+	}
+
+	// Location 格式可能是 "SRID=4326;POINT(lng lat)" 或 "POINT(lng lat)" 或 "0101000020E6100000..." (WKB hex)
+	loc := *img.Location
+
+	// 尝试解析 WKT 格式: POINT(lng lat) 或 SRID=4326;POINT(lng lat)
+	var lng, lat float64
+	if n, _ := fmt.Sscanf(loc, "SRID=4326;POINT(%f %f)", &lng, &lat); n == 2 {
+		return &lat, &lng
+	}
+	if n, _ := fmt.Sscanf(loc, "POINT(%f %f)", &lng, &lat); n == 2 {
+		return &lat, &lng
+	}
+
+	return nil, nil
+}
+
+// SearchParams 搜索参数
+type SearchParams struct {
+	Keyword   string   `json:"keyword" form:"keyword"`
+	StartDate *string  `json:"start_date" form:"start_date"`
+	EndDate   *string  `json:"end_date" form:"end_date"`
+	Tags      []int64  `json:"tags" form:"tags"`
+	Page      int      `json:"page" form:"page"`
+	PageSize  int      `json:"page_size" form:"page_size"`
+	ModelName string   `json:"model_name" form:"model_name"` // 使用的模型名称
+	Latitude  *float64 `json:"latitude" form:"latitude"`     // 中心纬度
+	Longitude *float64 `json:"longitude" form:"longitude"`   // 中心经度
+	Radius    *float64 `json:"radius" form:"radius"`         // 搜索半径（公里），默认 10km
+	ImageData []byte   `json:"-" form:"-"`                   // 图片搜索数据（由 handler 处理文件上传）
 }

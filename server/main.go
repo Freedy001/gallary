@@ -50,12 +50,8 @@ func main() {
 		logger.Fatal("数据库迁移失败", zap.Error(err))
 	}
 
-	platformConfig := &internal.PlatformConfig{
-		AdminConfig: &middleware.AdminConfig{
-			JWTConfig: cfg.JWT,
-		},
-		DynamicStaticConfig: middleware.NewDynamicStaticConfig(),
-	}
+	internal.PlatConfig.AdminConfig = &middleware.AdminConfig{JWTConfig: cfg.JWT}
+	internal.PlatConfig.DynamicStaticConfig = middleware.NewDynamicStaticConfig()
 
 	// 创建 WebSocket Hub
 	wsHub := websocket.NewHub()
@@ -63,12 +59,12 @@ func main() {
 	// 创建通知器
 	notifier := websocket.NewNotifier(wsHub)
 
-	settingService, migrationService, imageService, shareService, albumService, aiService := initService(platformConfig, cfg, notifier)
+	settingService, migrationService, imageService, shareService, albumService, aiService := initService(cfg, notifier)
 
 	// 11. 设置路由
 	r := router.SetupRouter(
 		cfg,
-		handler.NewAuthHandler(platformConfig),
+		handler.NewAuthHandler(),
 		handler.NewImageHandler(imageService),
 		handler.NewShareHandler(shareService),
 		handler.NewAlbumHandler(albumService),
@@ -76,8 +72,7 @@ func main() {
 		handler.NewStorageHandler(settingService.GetStorageManager(), settingService),
 		handler.NewMigrationHandler(migrationService),
 		handler.NewAIHandler(aiService),
-		handler.NewWebSocketHandler(wsHub, platformConfig.AdminConfig),
-		platformConfig,
+		handler.NewWebSocketHandler(wsHub),
 	)
 
 	// 12. 启动 AI 处理器
@@ -85,7 +80,7 @@ func main() {
 	defer aiService.StopProcessor()
 
 	// 13. 启动回收站自动清理任务
-	stopCleanup := startTrashCleanupTask(imageService, platformConfig)
+	stopCleanup := startTrashCleanupTask(imageService)
 	defer stopCleanup()
 
 	// 13. 创建HTTP服务器
@@ -128,14 +123,14 @@ func main() {
 	logger.Info("服务器已关闭")
 }
 
-func initService(platformConfig *internal.PlatformConfig, cfg *config.Config, notifier websocket.Notifier) (service.SettingService, service.MigrationService, service.ImageService, service.ShareService, service.AlbumService, service.AIService) {
+func initService(cfg *config.Config, notifier websocket.Notifier) (service.SettingService, service.MigrationService, service.ImageService, service.ShareService, service.AlbumService, service.AIService) {
 	var err error
 	// 6. 初始化Repository层
 	imageRepo, shareRepo, settingRepo, migrationRepo, albumRepo := repository.NewImageRepository(), repository.NewShareRepository(), repository.NewSettingRepository(), repository.NewMigrationRepository(), repository.NewAlbumRepository()
 	aiTaskRepo, embeddingRepo := repository.NewAITaskRepository(), repository.NewEmbeddingRepository()
 
 	// 7. 初始化设置服务并加载数据库设置
-	settingService := service.NewSettingService(settingRepo, platformConfig)
+	settingService := service.NewSettingService(settingRepo)
 
 	// 7.1 初始化默认设置（使用代码默认值）
 	if err := settingService.InitializeDefaults(context.Background()); err != nil {
@@ -149,7 +144,7 @@ func initService(platformConfig *internal.PlatformConfig, cfg *config.Config, no
 	}
 
 	// 7.3 设置平台设置
-	initPlatformConfig(platformConfig, settingService)
+	initPlatformConfig(settingService)
 
 	// 8 初始化迁移服务
 	migrationService := service.NewMigrationService(
@@ -189,14 +184,14 @@ func initService(platformConfig *internal.PlatformConfig, cfg *config.Config, no
 	return settingService, migrationService, imageService, shareService, albumService, aiService
 }
 
-func initPlatformConfig(platformConfig *internal.PlatformConfig, settingService service.SettingService) {
+func initPlatformConfig(settingService service.SettingService) {
 	var err error
 	// 8.1 初始化动态静态文件配置
-	platformConfig.AdminConfig.Password, err = settingService.GetPassword(context.Background())
+	internal.PlatConfig.AdminConfig.Password, err = settingService.GetPassword(context.Background())
 	if err != nil {
 		logger.Fatal("获取账户信息失败", zap.Error(err))
 	}
-	platformConfig.AdminConfig.PasswordVersion, err = settingService.GetPasswordVersion(context.Background())
+	internal.PlatConfig.AdminConfig.PasswordVersion, err = settingService.GetPasswordVersion(context.Background())
 	if err != nil {
 		logger.Fatal("获取账户信息失败", zap.Error(err))
 	}
@@ -206,19 +201,27 @@ func initPlatformConfig(platformConfig *internal.PlatformConfig, settingService 
 		logger.Fatal("获取账户信息失败", zap.Error(err))
 	}
 	po := settings.(model.CleanupPO)
-	platformConfig.CleanupPO = &po
+	internal.PlatConfig.CleanupPO = &po
 
-	storage, err := settingService.GetSettingsByCategory(context.Background(), model.SettingCategoryStorage)
+	storageConfig, err := settingService.GetSettingsByCategory(context.Background(), model.SettingCategoryStorage)
 	if err != nil {
 		logger.Fatal("获取存储设置失败", zap.Error(err))
 	}
 
-	localConfig := storage.(service.StorageConfigDTO).LocalConfig
-	platformConfig.DynamicStaticConfig.Update(localConfig.BasePath)
+	localConfig := storageConfig.(service.StorageConfigDTO).LocalConfig
+	internal.PlatConfig.DynamicStaticConfig.Update(localConfig.BasePath)
+
+	aiConfig, err := settingService.GetSettingsByCategory(context.Background(), model.SettingCategoryAI)
+	if err != nil {
+		logger.Fatal("获取ai设置失败", zap.Error(err))
+	}
+	aiPo := aiConfig.(model.AIPo)
+	internal.PlatConfig.AIPo = &aiPo
 }
 
 // startTrashCleanupTask 启动回收站自动清理任务
-func startTrashCleanupTask(imageService service.ImageService, cfg *internal.PlatformConfig) func() {
+func startTrashCleanupTask(imageService service.ImageService) func() {
+	cfg := internal.PlatConfig
 	if cfg.TrashAutoDeleteDays <= 0 {
 		logger.Info("回收站自动清理已禁用")
 		return func() {}

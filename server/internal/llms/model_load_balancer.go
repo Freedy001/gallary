@@ -1,8 +1,8 @@
 package llms
 
 import (
-	"context"
 	"fmt"
+	"gallary/server/internal"
 	"gallary/server/internal/model"
 	"gallary/server/internal/storage"
 	"maps"
@@ -20,7 +20,6 @@ import (
 
 // ModelLoadBalancer 模型负载均衡器
 type ModelLoadBalancer struct {
-	configSupplier func(ctx context.Context) (*model.AIPo, error)
 	storageManager *storage.StorageManager
 	httpClient     *http.Client
 
@@ -34,9 +33,8 @@ type ModelLoadBalancer struct {
 }
 
 // NewModelLoadBalancer 创建模型负载均衡器
-func NewModelLoadBalancer(aiConfigSupplier func(ctx context.Context) (*model.AIPo, error), manager *storage.StorageManager) *ModelLoadBalancer {
+func NewModelLoadBalancer(manager *storage.StorageManager) *ModelLoadBalancer {
 	return &ModelLoadBalancer{
-		configSupplier:      aiConfigSupplier,
 		storageManager:      manager,
 		httpClient:          &http.Client{Timeout: 120 * time.Second},
 		modelClients:        make(map[string]ModelClient),
@@ -48,6 +46,9 @@ func NewModelLoadBalancer(aiConfigSupplier func(ctx context.Context) (*model.AIP
 func (lb *ModelLoadBalancer) getOrCreateClient(modelConfig *model.ModelConfig) ModelClient {
 	lb.modelMu.RLock()
 	if client, exists := lb.modelClients[modelConfig.ID]; exists {
+		if client.GetConfig().Hash() != modelConfig.Hash() {
+			client.UpdateConfig(modelConfig)
+		}
 		lb.modelMu.RUnlock()
 		return client
 	}
@@ -93,12 +94,8 @@ func (lb *ModelLoadBalancer) selectModelByRoundRobin(modelName string, models []
 	return models[idx]
 }
 
-func (lb *ModelLoadBalancer) GetAllEmbeddingModels(ctx context.Context) ([]string, error) {
-	config, err := lb.configSupplier(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func (lb *ModelLoadBalancer) GetAllEmbeddingModels() ([]string, error) {
+	config := internal.PlatConfig.AIPo
 	// 获取所有启用的模型
 	enabledModels := config.GetEnabledModels()
 	if len(enabledModels) == 0 {
@@ -120,11 +117,8 @@ func (lb *ModelLoadBalancer) GetAllEmbeddingModels(ctx context.Context) ([]strin
 }
 
 // GetClientByName 根据模型名称获取客户端（支持负载均衡）
-func (lb *ModelLoadBalancer) GetClientByName(ctx context.Context, modelName string) (ModelClient, *model.ModelConfig, error) {
-	config, err := lb.configSupplier(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
+func (lb *ModelLoadBalancer) GetClientByName(modelName string) (ModelClient, *model.ModelConfig, error) {
+	config := internal.PlatConfig.AIPo
 
 	// 获取该模型名称对应的所有启用的模型配置
 	models := config.FindModelsByName(modelName)
@@ -144,11 +138,8 @@ func (lb *ModelLoadBalancer) GetClientByName(ctx context.Context, modelName stri
 }
 
 // GetClientByID 根据模型ID获取客户端
-func (lb *ModelLoadBalancer) GetClientByID(ctx context.Context, modelID string) (ModelClient, *model.ModelConfig, error) {
-	config, err := lb.configSupplier(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
+func (lb *ModelLoadBalancer) GetClientByID(modelID string) (ModelClient, *model.ModelConfig, error) {
+	config := internal.PlatConfig.AIPo
 
 	// 查找模型配置
 	modelConfig := config.FindModelById(modelID)
@@ -165,11 +156,8 @@ func (lb *ModelLoadBalancer) GetClientByID(ctx context.Context, modelID string) 
 }
 
 // getAllEnabledModelsByName 获取指定模型名称的所有启用的模型配置
-func (lb *ModelLoadBalancer) getAllEnabledModelsByName(ctx context.Context, modelName string) ([]*model.ModelConfig, error) {
-	config, err := lb.configSupplier(ctx)
-	if err != nil {
-		return nil, err
-	}
+func (lb *ModelLoadBalancer) getAllEnabledModelsByName(modelName string) ([]*model.ModelConfig, error) {
+	config := internal.PlatConfig.AIPo
 
 	models := config.FindModelsByName(modelName)
 	if len(models) == 0 {
@@ -182,8 +170,8 @@ func (lb *ModelLoadBalancer) getAllEnabledModelsByName(ctx context.Context, mode
 // TryAllProviders 尝试所有提供商执行操作，如果都失败则返回错误
 // operation 是一个接受 client 和 modelConfig 的函数，返回错误表示失败
 // 使用负载均衡选择起始提供商，确保请求分散到不同的提供商
-func (lb *ModelLoadBalancer) TryAllProviders(ctx context.Context, modelName string, operation func(ModelClient, *model.ModelConfig) error) error {
-	models, err := lb.getAllEnabledModelsByName(ctx, modelName)
+func (lb *ModelLoadBalancer) TryAllProviders(modelName string, operation func(ModelClient, *model.ModelConfig) error) error {
+	models, err := lb.getAllEnabledModelsByName(modelName)
 	if err != nil {
 		return err
 	}

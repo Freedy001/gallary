@@ -17,7 +17,8 @@
         :class="[
           'relative w-full cursor-pointer rounded-lg bg-white/5 border border-white/10 py-2.5 pl-4 pr-10 text-left text-sm text-white shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500',
           isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10',
-          open ? 'border-primary-500 ring-1 ring-primary-500' : ''
+          open ? 'border-primary-500 ring-1 ring-primary-500' : '',
+          buttonClass
         ]"
       >
         <span class="block truncate">
@@ -36,6 +37,7 @@
       >
         <ListboxOptions
           class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-xl bg-[#1A1A1A] border border-white/10 py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm backdrop-blur-xl"
+          :class=" buttonClass"
         >
           <ListboxOption
             v-for="option in options"
@@ -52,14 +54,16 @@
                 'relative cursor-default select-none py-2.5 pl-10 pr-4 transition-colors'
               ]"
             >
-              <span
-                :class="[
-                  selected ? 'font-medium text-primary-400' : 'font-normal',
-                  'block truncate'
-                ]"
-              >
-                {{ option.label }}
-              </span>
+              <Tooltip :content="option.label" class="w-full" show-only-if-truncated>
+                <span
+                  :class="[
+                    selected ? 'font-medium text-primary-400' : 'font-normal',
+                    'block truncate'
+                  ]"
+                >
+                  {{ option.label }}
+                </span>
+              </Tooltip>
               <span
                 v-if="selected"
                 class="absolute inset-y-0 left-0 flex items-center pl-3 text-primary-500"
@@ -89,6 +93,7 @@ import {
   ListboxOption,
 } from '@headlessui/vue'
 import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/20/solid'
+import Tooltip from './Tooltip.vue'
 
 export interface SelectOption {
   label: string
@@ -103,6 +108,7 @@ const props = defineProps<{
   label?: string
   placeholder?: string
   disabled?: boolean
+  buttonClass?: string
 }>()
 
 const emit = defineEmits<{

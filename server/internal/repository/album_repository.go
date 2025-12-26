@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"gorm.io/gorm"
@@ -52,7 +53,7 @@ func (r *albumRepository) FindByID(ctx context.Context, id int64) (*model.Tag, e
 		First(&album).Error
 
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("相册不存在")
 		}
 		return nil, err
@@ -221,7 +222,7 @@ func (r *albumRepository) GetCoverImage(ctx context.Context, coverImageID int64)
 	var image model.Image
 	err := database.GetDB(ctx).WithContext(ctx).First(&image, coverImageID).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
 		return nil, err
@@ -230,25 +231,31 @@ func (r *albumRepository) GetCoverImage(ctx context.Context, coverImageID int64)
 }
 
 // GetFirstImages 批量获取相册的第一张图片（作为默认封面）
+// 优先选择美学评分最高的图片，如果没有评分则选择第一张
 func (r *albumRepository) GetFirstImages(ctx context.Context, albumIDs []int64) (map[int64]*model.Image, error) {
 	if len(albumIDs) == 0 {
 		return make(map[int64]*model.Image), nil
 	}
 
-	// 使用子查询获取每个相册的第一张图片
+	// 使用窗口函数获取每个相册的最佳图片（优先美学评分最高，其次最小 ID）
 	type firstImageResult struct {
 		TagID   int64
 		ImageID int64
 	}
 
 	var results []firstImageResult
-	subQuery := database.GetDB(ctx).WithContext(ctx).
-		Table("image_tags").
-		Select("tag_id, MIN(image_id) as image_id").
-		Where("tag_id IN ?", albumIDs).
-		Group("tag_id")
+	// 使用 DISTINCT ON 获取每个相册中评分最高的图片
+	// 按 tag_id 分组，然后按 ai_score 降序（NULL 排最后）、id 升序排序
+	err := database.GetDB(ctx).WithContext(ctx).
+		Raw(`
+			SELECT DISTINCT ON (tag_id) tag_id, image_id
+			FROM image_tags
+			JOIN images ON images.id = image_tags.image_id
+			WHERE image_tags.tag_id in ? AND images.deleted_at IS NULL
+			ORDER BY tag_id, images.ai_score DESC NULLS LAST, image_tags.id ASC
+		`, albumIDs).
+		Scan(&results).Error
 
-	err := subQuery.Scan(&results).Error
 	if err != nil {
 		return nil, err
 	}

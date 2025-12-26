@@ -1,0 +1,150 @@
+{
+  "name": "技术元数据",
+  "name_en": "Technical Metadata",
+  "description": "摄影技术相关的通用标签",
+  "categories": {
+    "camera_settings": {
+      "name": "相机参数",
+      "name_en": "Camera Settings",
+      "tags": [
+        {
+          "name": "广角",
+          "name_en": "Wide Angle",
+          "vector_description": "Wide angle lens, 14-35mm focal length, wide field of view, expansive perspective"
+        },
+        {
+          "name": "标准焦距",
+          "name_en": "Standard",
+          "vector_description": "Standard lens, 35-70mm focal length, natural perspective, normal view"
+        },
+        {
+          "name": "长焦",
+          "name_en": "Telephoto",
+          "vector_description": "Telephoto lens, 70-200mm+ focal length, compressed perspective, distant subjects"
+        },
+        {
+          "name": "小光圈",
+          "name_en": "Small Aperture",
+          "vector_description": "Small aperture, f/8-f/22, deep depth of field, sharp throughout"
+        },
+        {
+          "name": "大光圈",
+          "name_en": "Large Aperture",
+          "vector_description": "Large aperture, f/1.2-f/2.8, shallow depth of field, background blur"
+        },
+        {
+          "name": "低感光度",
+          "name_en": "Low ISO",
+          "vector_description": "Low ISO, ISO 50-400, clean image, minimal noise"
+        },
+        {
+          "name": "高感光度",
+          "name_en": "High ISO",
+          "vector_description": "High ISO, ISO 1600+, low light capable, possible grain"
+        },
+        {
+          "name": "浅景深",
+          "name_en": "Shallow DOF",
+          "vector_description": "Shallow depth of field, blurred background, subject isolation, bokeh"
+        },
+        {
+          "name": "深景深",
+          "name_en": "Deep DOF",
+          "vector_description": "Deep depth of field, everything in focus, front to back sharpness"
+        },
+        {
+          "name": "散景",
+          "name_en": "Bokeh",
+          "vector_description": "Bokeh, out of focus highlights, creamy blur, background blur quality"
+        },
+        {
+          "name": "锐利",
+          "name_en": "Sharp",
+          "vector_description": "Sharp, crisp, in focus, high detail, tack sharp"
+        },
+        {
+          "name": "柔焦",
+          "name_en": "Soft Focus",
+          "vector_description": "Soft focus, dreamy, slightly out of focus, diffused, glow effect"
+        }
+      ]
+    },
+    "post_processing": {
+      "name": "后期处理",
+      "name_en": "Post-Processing",
+      "tags": [
+        {
+          "name": "调色",
+          "name_en": "Color Grading",
+          "vector_description": "Color grading, color correction, mood through color, cinematic color"
+        },
+        {
+          "name": "修图",
+          "name_en": "Retouching",
+          "vector_description": "Retouching, skin smoothing, blemish removal, photo editing"
+        },
+        {
+          "name": "合成",
+          "name_en": "Composite",
+          "vector_description": "Composite, photo manipulation, combining images, digital compositing"
+        },
+        {
+          "name": "加深减淡",
+          "name_en": "Dodge & Burn",
+          "vector_description": "Dodge and burn, selective lightening and darkening, local contrast"
+        },
+        {
+          "name": "胶片模拟",
+          "name_en": "Film Emulation",
+          "vector_description": "Film emulation, film look, analog aesthetic, vintage color"
+        },
+        {
+          "name": "低饱和",
+          "name_en": "Desaturated",
+          "vector_description": "Desaturated, muted colors, low saturation, faded look"
+        },
+        {
+          "name": "交叉冲印",
+          "name_en": "Cross Process",
+          "vector_description": "Cross process, experimental color, unusual color shifts, alternative processing"
+        },
+        {
+          "name": "分离调色",
+          "name_en": "Split Toning",
+          "vector_description": "Split toning, different colors in highlights and shadows, tonal contrast"
+        }
+      ]
+    },
+    "image_format": {
+      "name": "图像格式",
+      "name_en": "Image Format",
+      "tags": [
+        {
+          "name": "横幅",
+          "name_en": "Horizontal/Landscape",
+          "vector_description": "Horizontal, landscape orientation, wider than tall, horizontal format"
+        },
+        {
+          "name": "竖幅",
+          "name_en": "Vertical/Portrait",
+          "vector_description": "Vertical, portrait orientation, taller than wide, vertical format"
+        },
+        {
+          "name": "方形",
+          "name_en": "Square",
+          "vector_description": "Square format, 1:1 aspect ratio, equal width and height"
+        },
+        {
+          "name": "全景比例",
+          "name_en": "Panoramic",
+          "vector_description": "Panoramic, wide aspect ratio, stretched horizontal, panorama format"
+        },
+        {
+          "name": "电影比例",
+          "name_en": "Cinematic Ratio",
+          "vector_description": "Cinematic ratio, 2.35:1, 16:9, widescreen, movie aspect ratio"
+        }
+      ]
+    }
+  }
+}

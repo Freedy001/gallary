@@ -38,6 +38,7 @@ export interface Image {
   shutter_speed: string | null
   iso: number | null
   focal_length: string | null
+  ai_score: number | null
   tags: Tag[]
   metadata: Metadata[]
   created_at: string
@@ -50,12 +51,15 @@ export interface SearchParams {
   start_date?: string
   end_date?: string
   location?: string
-  camera_model?: string
-  tags?: string
+  tags?: number[]  // 标签ID数组
   semantic_query?: string
   model_name?: string
   page?: number
   page_size?: number
+  // 经纬度搜索
+  latitude?: number
+  longitude?: number
+  radius?: number // 搜索半径（公里），默认 10km
 }
 
 export interface MetadataUpdate {
@@ -67,6 +71,7 @@ export interface MetadataUpdate {
 export interface UpdateMetadataRequest {
   image_ids: number[]
   original_name?: string
+  taken_at?: string
   location_name?: string
   latitude?: number
   longitude?: number

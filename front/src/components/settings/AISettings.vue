@@ -80,16 +80,12 @@
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-400 mb-1.5">提供商</label>
-              <select
+              <BaseSelect
                   v-model="model.provider"
-                  @change="onProviderChange(model)"
-                  class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm"
-              >
-                <option value="selfHosted">自托管模型</option>
-                <option value="openAI">OpenAI 兼容</option>
-                <option value="alyunMultimodalEmbedding">阿里云Multimodal Embedding</option>
-              </select>
+                  :options="providerOptions"
+                  label="提供商"
+                  @update:model-value="onProviderChange(model)"
+              />
             </div>
             <div v-if="model.provider !== 'selfHosted'">
               <label class="block text-sm font-medium text-gray-400 mb-1.5">模型 ID</label>
@@ -138,21 +134,60 @@
                   class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm"
               />
             </div>
+
+            <!-- 提示词优化配置（仅自托管模型） -->
+            <div v-if="model.provider === 'selfHosted'" class="col-span-2 mt-4 pt-4 border-t border-white/10">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <h4 class="text-sm font-medium text-white">提示词优化</h4>
+                  <p class="text-xs text-gray-500">将中文搜索词转换为适合模型理解的英文描述</p>
+                </div>
+                <!-- 启用开关 -->
+                <button
+                    @click="togglePromptOptimizer(model)"
+                    :class="[
+                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                      getPromptOptimizer(model).enabled ? 'bg-primary-500' : 'bg-gray-600'
+                    ]"
+                >
+                  <span
+                      :class="[
+                        'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                        getPromptOptimizer(model).enabled ? 'translate-x-4' : 'translate-x-0'
+                      ]"
+                  />
+                </button>
+              </div>
+
+              <!-- 系统提示词输入框 -->
+              <div v-if="getPromptOptimizer(model).enabled">
+                <label class="block text-sm font-medium text-gray-400 mb-1.5">系统提示词</label>
+                <textarea
+                    :value="getPromptOptimizer(model).system_prompt"
+                    @input="updateSystemPrompt(model, ($event.target as HTMLTextAreaElement).value)"
+                    placeholder="留空使用默认提示词..."
+                    rows="4"
+                    class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm resize-none"
+                />
+                <p class="mt-1 text-xs text-gray-500">默认提示词会将中文搜索词翻译为英文并扩展为详细的视觉描述</p>
+              </div>
+            </div>
           </div>
+        </div>
+
+        <!-- 保存按钮 -->
+        <div class="p-4">
+          <button
+              @click="handleSave"
+              :disabled="saving"
+              class="px-6 py-2.5 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 ring-1 ring-primary-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {{ saving ? '保存中...' : '保存 AI 设置' }}
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- 保存按钮 -->
-    <div class="flex justify-end">
-      <button
-          @click="handleSave"
-          :disabled="saving"
-          class="px-6 py-2.5 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 ring-1 ring-primary-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {{ saving ? '保存中...' : '保存 AI 设置' }}
-      </button>
-    </div>
   </div>
 </template>
 
@@ -161,7 +196,9 @@ import {onMounted, reactive, ref} from 'vue'
 import {PlusIcon, TrashIcon} from '@heroicons/vue/24/outline'
 import {useAIStore} from '@/stores/ai'
 import {useDialogStore} from '@/stores/dialog'
-import type {AIConfig, ModelConfig} from '@/types/ai'
+import type {AIConfig, ExtraConfig, ModelConfig, PromptOptimizerConfig} from '@/types/ai'
+import BaseSelect from '@/components/common/BaseSelect.vue'
+import type {SelectOption} from '@/components/common/BaseSelect.vue'
 
 const aiStore = useAIStore()
 const dialogStore = useDialogStore()
@@ -208,7 +245,7 @@ function removeModel(index: number) {
   localConfig.models.splice(index, 1)
 }
 
-// 自托管模型的固定值
+// 自托管模型的默认 ID（模型名称由用户自行配置）
 const SELF_HOSTED_ID = 'self-hosted'
 const SELF_HOSTED_MODEL_NAME = 'google/siglip-so400m-patch14-384'
 
@@ -224,11 +261,62 @@ function onProviderChange(model: ModelConfig) {
 // 记录用户是否手动修改过 model_name
 const userModifiedModelName = reactive<Record<string, boolean>>({})
 
+// 提供商选项
+const providerOptions: SelectOption[] = [
+  {label: '自托管模型', value: 'selfHosted'},
+  {label: 'OpenAI 兼容', value: 'openAI'},
+  {label: '阿里云Multimodal Embedding', value: 'alyunMultimodalEmbedding'}
+]
+
 function onApiModelNameChange(model: ModelConfig) {
   // 如果用户没有手动修改过 model_name，则智能同步
   if (!userModifiedModelName[model.id]) {
     model.model_name = model.api_model_name
   }
+}
+
+// ================== 提示词优化器配置 ==================
+
+// 解析 extra_config JSON
+function parseExtraConfig(model: ModelConfig): ExtraConfig {
+  if (!model.extra_config) return {}
+  try {
+    return JSON.parse(model.extra_config)
+  } catch {
+    return {}
+  }
+}
+
+// 序列化 extra_config
+function stringifyExtraConfig(config: ExtraConfig): string {
+  return JSON.stringify(config)
+}
+
+// 获取提示词优化器配置
+function getPromptOptimizer(model: ModelConfig): PromptOptimizerConfig {
+  const extra = parseExtraConfig(model)
+  return extra.prompt_optimizer ?? {enabled: true, system_prompt: ''}
+}
+
+// 更新提示词优化器配置
+function updatePromptOptimizer(model: ModelConfig, config: Partial<PromptOptimizerConfig>) {
+  const extra = parseExtraConfig(model)
+  extra.prompt_optimizer = {
+    ...getPromptOptimizer(model),
+    ...config
+  }
+  model.extra_config = stringifyExtraConfig(extra)
+}
+
+// 切换提示词优化器启用状态
+function togglePromptOptimizer(model: ModelConfig) {
+  const current = getPromptOptimizer(model)
+  updatePromptOptimizer(model, {enabled: !current.enabled})
+}
+
+// 更新系统提示词
+function updateSystemPrompt(model: ModelConfig, value: string) {
+  updatePromptOptimizer(model, {system_prompt: value})
 }
 
 async function testModelConnection(modelId: string) {

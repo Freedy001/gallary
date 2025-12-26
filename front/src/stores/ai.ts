@@ -2,8 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { aiApi } from '@/api/ai'
 import { useNotificationStore } from './notification'
-import type { AIConfig, AIQueueDetail, AIQueueInfo, ModelConfig } from '@/types/ai'
-import { getEnabledModels } from '@/types/ai'
+import type { AIConfig, AIQueueDetail, AIQueueInfo } from '@/types/ai'
 
 export const useAIStore = defineStore('ai', () => {
   // ================== State ==================
@@ -21,11 +20,6 @@ export const useAIStore = defineStore('ai', () => {
   // 所有队列
   const queues = computed((): AIQueueInfo[] => {
     return queueStatus.value?.queues || []
-  })
-
-  // 获取所有启用的模型
-  const enabledModels = computed((): ModelConfig[] => {
-    return getEnabledModels(config.value)
   })
 
   // ================== Actions ==================
@@ -141,7 +135,6 @@ export const useAIStore = defineStore('ai', () => {
 
     // Computed
     queues,
-    enabledModels,
 
     // Actions
     fetchConfig,

@@ -22,8 +22,8 @@ func SetupRouter(
 	migrationHandler *handler.MigrationHandler,
 	aiHandler *handler.AIHandler,
 	wsHandler *handler.WebSocketHandler,
-	configCompose *internal.PlatformConfig,
 ) *gin.Engine {
+	configCompose := internal.PlatConfig
 	// 设置运行模式
 	gin.SetMode(cfg.Server.Mode)
 
@@ -79,7 +79,10 @@ func SetupRouter(
 		}
 
 		// 搜索路由（需要认证）
-		api.GET("/search", middleware.AuthMiddleware(configCompose.AdminConfig), imageHandler.Search)
+		api.POST("/search", middleware.AuthMiddleware(configCompose.AdminConfig), imageHandler.Search)
+
+		// 标签路由（需要认证）
+		api.GET("/tags", middleware.AuthMiddleware(configCompose.AdminConfig), imageHandler.GetTags)
 
 		// 分享管理路由（需要认证）
 		shares := api.Group("/shares")
@@ -96,7 +99,6 @@ func SetupRouter(
 		{
 			albums.GET("", albumHandler.List)
 			albums.POST("", albumHandler.Create)
-			albums.GET("/:id", albumHandler.GetByID)
 			albums.PUT("/:id", albumHandler.Update)
 			albums.DELETE("/:id", albumHandler.Delete)
 			albums.GET("/:id/images", albumHandler.GetImages)
@@ -116,11 +118,11 @@ func SetupRouter(
 			settings.PUT("/ai", settingHandler.UpdateAI)
 
 			// 存储配置 CRUD
-			settings.POST("/storage", settingHandler.AddStorage)                 // 添加存储配置
-			settings.PUT("/storage/default", settingHandler.SetDefaultStorage)   // 设置默认存储（必须在 :storageId 之前）
-			settings.PUT("/storage/global", settingHandler.UpdateGlobalConfig)   // 更新全局配置（必须在 :storageId 之前）
-			settings.PUT("/storage/:storageId", settingHandler.UpdateStorage)    // 修改存储配置
-			settings.DELETE("/storage/:storageId", settingHandler.DeleteStorage) // 删除存储配置
+			settings.POST("/storage", settingHandler.AddStorage)                                 // 添加存储配置
+			settings.PUT("/storage/default", settingHandler.SetDefaultStorage)                   // 设置默认存储（必须在 :storageId 之前）
+			settings.PUT("/storage/alyunpan/global", settingHandler.UpdateAliyunpanGlobalConfig) // 更新全局配置（必须在 :storageId 之前）
+			settings.PUT("/storage/:storageId", settingHandler.UpdateStorage)                    // 修改存储配置
+			settings.DELETE("/storage/:storageId", settingHandler.DeleteStorage)                 // 删除存储配置
 		}
 
 		// 存储统计路由（需要认证）
@@ -152,6 +154,9 @@ func SetupRouter(
 			// AI 连接测试
 			ai.POST("/test", aiHandler.TestConnection)
 
+			// 获取可用的嵌入模型列表
+			ai.GET("/embedding-models", aiHandler.GetEmbeddingModels)
+
 			// AI 队列管理
 			ai.GET("/queues", aiHandler.GetQueueStatus)                    // 获取所有队列状态
 			ai.GET("/queues/:id", aiHandler.GetQueueDetail)                // 获取队列详情
@@ -160,9 +165,6 @@ func SetupRouter(
 			// AI 任务图片操作
 			ai.POST("/task-images/:id/retry", aiHandler.RetryTaskImage)   // 重试单张图片
 			ai.POST("/task-images/:id/ignore", aiHandler.IgnoreTaskImage) // 忽略单张图片
-
-			// 语义搜索
-			ai.POST("/search", aiHandler.SemanticSearch)
 		}
 	}
 

@@ -1,6 +1,6 @@
 <template>
   <div
-    class="group relative cursor-pointer overflow-hidden rounded-2xl bg-white/5 transition-all duration-300 hover:scale-[1.02] hover:z-10"
+    class="group relative cursor-pointer overflow-hidden rounded-xl bg-white/5 transition-all duration-300 hover:scale-[1.02]"
     :class="{ 'aspect-square': square }"
     @click="$emit('click')"
     @contextmenu.prevent="$emit('contextmenu', $event)"
@@ -24,7 +24,7 @@
     <div class="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 pointer-events-none transition-opacity group-hover:ring-white/20"></div>
 
     <!-- 悬停信息 -->
-    <div class="absolute bottom-0 left-0 right-0 translate-y-full bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 transition-transform duration-300 ease-out group-hover:translate-y-0">
+    <div class="absolute bottom-0 left-0 right-0 translate-y-full bg-linear-to-t from-black/90 via-black/50 to-transparent p-4 transition-transform duration-300 ease-out group-hover:translate-y-0">
       <p class="truncate text-sm font-medium text-gray-100">{{ image.original_name }}</p>
       <div class="mt-1 flex items-center gap-2 text-xs text-gray-400 font-light">
         <span v-if="image.taken_at">{{ formatDate(image.taken_at) }}</span>

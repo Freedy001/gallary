@@ -259,7 +259,7 @@ func (h *SettingHandler) SetDefaultStorage(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "默认存储设置成功"})
 }
 
-// UpdateGlobalConfig 更新阿里云盘全局配置
+// UpdateAliyunpanGlobalConfig 更新阿里云盘全局配置
 //
 //	@Summary		更新阿里云盘全局配置
 //	@Description	更新所有阿里云盘账号共享的配置（下载分片大小、并发数等）
@@ -270,8 +270,8 @@ func (h *SettingHandler) SetDefaultStorage(c *gin.Context) {
 //	@Success		200		{object}	utils.Response	"更新成功"
 //	@Failure		400		{object}	utils.Response	"请求参数错误"
 //	@Failure		500		{object}	utils.Response	"服务器错误"
-//	@Router			/api/settings/storage/global [put]
-func (h *SettingHandler) UpdateGlobalConfig(c *gin.Context) {
+//	@Router			/api/settings/storage/alyunpan/global [put]
+func (h *SettingHandler) UpdateAliyunpanGlobalConfig(c *gin.Context) {
 	var req model.AliyunPanGlobalConfig
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请求参数错误: "+err.Error())

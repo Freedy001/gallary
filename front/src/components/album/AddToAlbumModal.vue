@@ -100,7 +100,7 @@
     </div>
 
     <!-- 快速创建相册弹窗 -->
-    <CreateAlbumModal v-model="showCreateAlbum" @created="onAlbumCreated" />
+    <EditAlbumModal v-model="showCreateAlbum" @created="onAlbumCreated" />
   </Modal>
 </template>
 
@@ -109,7 +109,7 @@ import { ref, watch, computed } from 'vue'
 import { albumApi } from '@/api/album'
 import type { Album } from '@/types'
 import Modal from '@/components/common/Modal.vue'
-import CreateAlbumModal from './CreateAlbumModal.vue'
+import EditAlbumModal from './EditAlbumModal.vue'
 import {
   PhotoIcon,
   RectangleStackIcon,
@@ -150,7 +150,7 @@ async function loadAlbums() {
     const { data } = await albumApi.getList(1, 100) // 获取所有相册
     albums.value = data.list
   } catch (err) {
-    await dialogStore.alert({ title: '错误', message: '加载相册列表失败', type: 'error' })
+    dialogStore.alert({ title: '错误', message: '加载相册列表失败', type: 'error' })
     console.error('加载相册列表失败', err)
   } finally {
     loading.value = false
@@ -196,16 +196,16 @@ async function handleConfirm() {
       .join('、')
 
     // 显示成功通知
-    await dialogStore.alert({
+    dialogStore.alert({
       title: '添加成功',
-      message: `已将 ${props.imageIds.length} 张图片添加到「${selectedAlbumNames}」`,
+      message: `已将 ${props.imageIds.length} 张图片添加到（${selectedAlbumNames}）`,
       type: 'success'
     })
 
     emit('added', albumIdList)
     isOpen.value = false
   } catch (err) {
-    await dialogStore.alert({ title: '错误', message: '添加到相册失败', type: 'error' })
+    dialogStore.alert({ title: '错误', message: '添加到相册失败', type: 'error' })
     console.error('添加到相册失败', err)
   } finally {
     submitting.value = false

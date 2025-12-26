@@ -18,6 +18,8 @@ type AITaskRepository interface {
 	FindQueueByID(ctx context.Context, id int64) (*model.AIQueue, error)
 	UpdateQueue(ctx context.Context, queue *model.AIQueue) error
 	GetAllQueues(ctx context.Context) ([]*model.AIQueue, error)
+	DeleteQueueWithImages(ctx context.Context, queueID int64) error
+	DeleteQueuesByModelName(ctx context.Context, modelName string) error
 
 	// 队列图片管理
 	AddImagesToQueue(ctx context.Context, queueID int64, queueKey string, imageIDs []int64) (int, error)
@@ -113,6 +115,52 @@ func (r *aiTaskRepository) GetAllQueues(ctx context.Context) ([]*model.AIQueue, 
 	return queues, err
 }
 
+// DeleteQueueWithImages 删除队列及其关联的任务图片
+func (r *aiTaskRepository) DeleteQueueWithImages(ctx context.Context, queueID int64) error {
+	db := database.GetDB(ctx).WithContext(ctx)
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		// 先删除所有关联的任务图片
+		if err := tx.Where("task_id = ?", queueID).Delete(&model.AITaskImage{}).Error; err != nil {
+			return err
+		}
+
+		// 再删除队列
+		if err := tx.Delete(&model.AIQueue{}, queueID).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
+// DeleteQueuesByModelName 删除指定模型的所有队列及其关联的任务图片
+func (r *aiTaskRepository) DeleteQueuesByModelName(ctx context.Context, modelName string) error {
+	db := database.GetDB(ctx).WithContext(ctx)
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		// 查找该模型的所有队列
+		var queues []*model.AIQueue
+		if err := tx.Where("model_name = ?", modelName).Find(&queues).Error; err != nil {
+			return err
+		}
+
+		// 删除每个队列的任务图片
+		for _, queue := range queues {
+			if err := tx.Where("task_id = ?", queue.ID).Delete(&model.AITaskImage{}).Error; err != nil {
+				return err
+			}
+		}
+
+		// 删除所有队列
+		if err := tx.Where("model_name = ?", modelName).Delete(&model.AIQueue{}).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+}
+
 // ================== 队列图片管理 ==================
 
 // AddImagesToQueue 向队列添加图片（去重）
@@ -176,21 +224,17 @@ func (r *aiTaskRepository) UpdateTaskImage(ctx context.Context, taskImage *model
 func (r *aiTaskRepository) GetQueueStats(ctx context.Context, queueID int64) (pending, processing, failed int, err error) {
 	db := database.GetDB(ctx).WithContext(ctx)
 
-	var pendingCount, processingCount, failedCount int64
+	var pendingCount, failedCount int64
 
 	db.Model(&model.AITaskImage{}).
 		Where("task_id = ? AND status = ?", queueID, model.AITaskImageStatusPending).
 		Count(&pendingCount)
 
 	db.Model(&model.AITaskImage{}).
-		Where("task_id = ? AND status = ?", queueID, model.AITaskImageStatusProcessing).
-		Count(&processingCount)
-
-	db.Model(&model.AITaskImage{}).
 		Where("task_id = ? AND status = ?", queueID, model.AITaskImageStatusFailed).
 		Count(&failedCount)
 
-	return int(pendingCount), int(processingCount), int(failedCount), nil
+	return int(pendingCount), 0, int(failedCount), nil
 }
 
 // GetQueueStatus 获取所有队列状态汇总
@@ -205,40 +249,37 @@ func (r *aiTaskRepository) GetQueueStatus(ctx context.Context) (*model.AIQueueSt
 
 	// 获取每个队列的统计
 	queueInfos := make([]model.AIQueueInfo, 0, len(queues))
-	var totalPending, totalProcessing, totalFailed int
+	var totalPending, totalFailed int
 
 	for _, queue := range queues {
-		pending, processing, failed, err := r.GetQueueStats(ctx, queue.ID)
+		pending, _, failed, err := r.GetQueueStats(ctx, queue.ID)
 		if err != nil {
 			return nil, err
 		}
 
 		// 只返回有图片的队列
-		if pending == 0 && processing == 0 && failed == 0 {
+		if pending == 0 && failed == 0 {
 			continue
 		}
 
 		queueInfos = append(queueInfos, model.AIQueueInfo{
-			ID:              queue.ID,
-			QueueKey:        queue.QueueKey,
-			TaskType:        queue.TaskType,
-			ModelName:       queue.ModelName,
-			Status:          queue.Status,
-			PendingCount:    pending,
-			ProcessingCount: processing,
-			FailedCount:     failed,
+			ID:           queue.ID,
+			QueueKey:     queue.QueueKey,
+			TaskType:     queue.TaskType,
+			ModelName:    queue.ModelName,
+			Status:       queue.Status,
+			PendingCount: pending,
+			FailedCount:  failed,
 		})
 
 		totalPending += pending
-		totalProcessing += processing
 		totalFailed += failed
 	}
 
 	return &model.AIQueueStatus{
-		Queues:          queueInfos,
-		TotalPending:    totalPending,
-		TotalProcessing: totalProcessing,
-		TotalFailed:     totalFailed,
+		Queues:       queueInfos,
+		TotalPending: totalPending,
+		TotalFailed:  totalFailed,
 	}, nil
 }
 

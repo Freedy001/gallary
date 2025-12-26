@@ -51,32 +51,17 @@
                     {{ queue.failed_count }} 失败
                   </button>
                    <span v-else class="text-[10px] text-white/40 font-mono">
-                     {{ queue.processing_count + queue.pending_count }} 任务
+                     {{ queue.pending_count }} 任务
                    </span>
                 </div>
 
                 <!-- 统计数字 -->
-                <div class="grid grid-cols-3 gap-1 mb-2 text-[10px] text-white/50 bg-black/20 rounded p-1.5 border border-white/5">
+                <div class="grid grid-cols-2 gap-1 mb-2 text-[10px] text-white/50 bg-black/20 rounded p-1.5 border border-white/5">
                   <div class="text-center">
                      <span class="font-bold" :class="queue.pending_count > 0 ? 'text-yellow-400' : ''">{{ queue.pending_count }}</span> 待处理
                   </div>
                   <div class="text-center border-l border-white/10">
-                     <span class="font-bold" :class="queue.processing_count > 0 ? 'text-primary-400' : ''">{{ queue.processing_count }}</span> 处理中
-                  </div>
-                  <div class="text-center border-l border-white/10">
                      <span class="font-bold" :class="queue.failed_count > 0 ? 'text-red-400' : ''">{{ queue.failed_count }}</span> 失败
-                  </div>
-                </div>
-
-                <!-- 进度条 -->
-                <div class="h-1 bg-black/40 rounded-full overflow-hidden">
-                  <div
-                    class="h-full rounded-full transition-all duration-500 ease-out relative overflow-hidden"
-                    :class="getQueueProgressBarClass(queue)"
-                    :style="{ width: `${getQueueProgress(queue)}%` }"
-                  >
-                    <!-- 光泽效果 -->
-                    <div class="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
                   </div>
                 </div>
               </div>
@@ -175,7 +160,7 @@ const positionStyle = computed(() => {
 })
 
 function getQueueStatusDotClass(queue: AIQueueInfo): string {
-  if (queue.status === 'processing' || queue.processing_count > 0) {
+  if (queue.status === 'processing') {
     return 'bg-primary-500 animate-pulse text-primary-500'
   }
   if (queue.pending_count > 0) {
@@ -185,28 +170,6 @@ function getQueueStatusDotClass(queue: AIQueueInfo): string {
     return 'bg-red-500 text-red-500'
   }
   return 'bg-green-500 text-green-500'
-}
-
-function getQueueProgressBarClass(queue: AIQueueInfo): string {
-  if (queue.status === 'processing' || queue.processing_count > 0) {
-    return 'bg-gradient-to-r from-primary-500 to-primary-600 shadow-[0_0_8px_rgba(139,92,246,0.3)]'
-  }
-  if (queue.pending_count > 0) {
-    return 'bg-gradient-to-r from-yellow-500 to-orange-500 shadow-[0_0_8px_rgba(234,179,8,0.3)]'
-  }
-  if (queue.failed_count > 0) {
-    return 'bg-gradient-to-r from-red-500 to-red-600 shadow-[0_0_8px_rgba(239,68,68,0.3)]'
-  }
-  return 'bg-gradient-to-r from-green-500 to-green-600 shadow-[0_0_8px_rgba(34,197,94,0.3)]'
-}
-
-function getQueueProgress(queue: AIQueueInfo): number {
-  const total = queue.pending_count + queue.processing_count + queue.failed_count
-  if (total === 0) return 100
-  if (queue.pending_count > 0 || queue.processing_count > 0) {
-    return Math.round((queue.processing_count / (queue.pending_count + queue.processing_count)) * 50)
-  }
-  return 100
 }
 
 function openQueueDetail(queue: AIQueueInfo) {

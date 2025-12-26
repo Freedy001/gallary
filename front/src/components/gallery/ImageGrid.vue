@@ -46,11 +46,18 @@
     <div ref="containerRef" v-else class="relative select-none" @mousedown="handleMouseDown">
       <!-- 右键菜单 -->
       <ContextMenu v-model="contextMenu.visible" :x="contextMenu.x" :y="contextMenu.y">
-        <ContextMenuItem v-if="contextMenuTargetIds.length === 1" :icon="EyeIcon" @click="handleView">
-          查看
-        </ContextMenuItem>
-
         <template v-if="props.mode === 'gallery'">
+          <template v-if="props.excludeAlbumId">
+            <!-- 相册模式特有菜单 -->
+            <ContextMenuItem v-if="contextMenuTargetIds.length === 1" :icon="PhotoIcon" @click="handleSetAlbumCover">
+              设为封面
+            </ContextMenuItem>
+            <ContextMenuItem :icon="MinusCircleIcon" :danger="true" @click="handleRemoveFromAlbum">
+              从相册移除 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+            </ContextMenuItem>
+            <div class="h-px bg-white/10 my-1"></div>
+          </template>
+
           <ContextMenuItem :icon="RectangleStackIcon" @click="handleAddToAlbum">
             添加到相册 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
           </ContextMenuItem>
@@ -63,8 +70,8 @@
           <ContextMenuItem :icon="ArrowDownTrayIcon" @click="handleDownload">
             下载 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
           </ContextMenuItem>
-          <ContextMenuItem :icon="ArchiveBoxArrowDownIcon" @click="handleBatchDownload">
-            打包下载 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+          <ContextMenuItem v-if="contextMenuTargetIds.length>1" :icon="ArchiveBoxArrowDownIcon" @click="handleBatchDownload">
+            打包下载 {{  `(${contextMenuTargetIds.length})` }}
           </ContextMenuItem>
           <ContextMenuItem :icon="TrashIcon" :danger="true" @click="handleDelete">
             删除 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
@@ -189,7 +196,7 @@
             <!-- 选择模式遮罩 -->
             <div
                 v-if="uiStore.isSelectionMode"
-                class="absolute inset-0 cursor-pointer rounded-lg transition-colors"
+                class="absolute inset-0 cursor-pointer rounded-2xl transition-colors"
                 :class="[
                 imageStore.selectedImages.has(image.id)
                   ? 'bg-primary-500/20 ring-2 ring-primary-500'
@@ -237,19 +244,19 @@ import {useDialogStore} from '@/stores/dialog'
 import {imageApi} from '@/api/image'
 import type {Image} from '@/types'
 import {
+  ArchiveBoxArrowDownIcon,
   ArrowDownTrayIcon,
+  ArrowUturnLeftIcon,
   CheckIcon,
-  EyeIcon,
+  CloudArrowUpIcon,
+  MinusCircleIcon,
   PencilIcon,
   PhotoIcon,
-  TrashIcon,
+  RectangleStackIcon,
   ShareIcon,
   SparklesIcon,
-  ArchiveBoxArrowDownIcon,
-  CloudArrowUpIcon,
-  ArrowUturnLeftIcon,
-  XMarkIcon,
-  RectangleStackIcon
+  TrashIcon,
+  XMarkIcon
 } from '@heroicons/vue/24/outline'
 import ImageCard from './ImageCard.vue'
 import ContextMenu from '@/components/common/ContextMenu.vue'
@@ -260,6 +267,8 @@ import CreateShare from '@/components/gallery/menu/CreateShare.vue'
 import AddToAlbumModal from '@/components/album/AddToAlbumModal.vue'
 import ImageViewer from "@/components/gallery/ImageViewer.vue";
 import {useBoxSelection} from '@/composables/useBoxSelection'
+import {useAlbumStore} from '@/stores/album'
+import {albumApi} from '@/api/album'
 
 const props = withDefaults(defineProps<{
   mode?: 'gallery' | 'trash'
@@ -268,12 +277,53 @@ const props = withDefaults(defineProps<{
   mode: 'gallery'
 })
 
-const index = ref<number>(-1)
 
 const imageStore = useImageStore()
+const albumStore = useAlbumStore()
 const uiStore = useUIStore()
 const dialogStore = useDialogStore()
 const containerRef = ref<HTMLElement>()
+
+// ... (previous refs)
+
+// ImageGrid actions for album mode
+async function handleSetAlbumCover() {
+  contextMenu.value.visible = false
+  if (!props.excludeAlbumId || contextMenuTargetIds.value.length !== 1) return
+
+  try {
+    await albumStore.setAlbumCover(props.excludeAlbumId, contextMenuTargetIds.value[0] as number)
+    // Optional: show toast/notification success
+    dialogStore.alert({title: '成功', message: '设置封面成功',type:'success'})
+  } catch (err) {
+    console.error('设置封面失败', err)
+    dialogStore.alert({title: '错误', message: '设置封面失败', type: 'error'})
+  }
+}
+
+async function handleRemoveFromAlbum() {
+  contextMenu.value.visible = false
+  if (!props.excludeAlbumId || contextMenuTargetIds.value.length === 0) return
+
+  const ids = contextMenuTargetIds.value
+  const albumId = props.excludeAlbumId
+
+  try {
+    await albumApi.removeImages(albumId, ids)
+    // 更新本地列表
+    imageStore.images = imageStore.images.filter(img => img === null || !ids.includes(img.id))
+    imageStore.total -= ids.length
+    imageStore.selectedImages.clear() // Clear selection if any were removed (though typically context menu targets selection)
+
+    // 更新当前相册状态（如果在 AlbumDetailView 中）
+    if (albumStore.currentAlbum && albumStore.currentAlbum.id === albumId) {
+      albumStore.currentAlbum.image_count -= ids.length
+    }
+  } catch (err) {
+    console.error('从相册移除失败', err)
+    dialogStore.alert({title: '错误', message: '移除失败', type: 'error'})
+  }
+}
 
 // 右键菜单状态
 const contextMenu = ref({visible: false, x: 0, y: 0})
@@ -325,13 +375,6 @@ const onAddedToAlbum = () => {
   // 添加成功后清除选择
   imageStore.selectedImages.clear()
   uiStore.setSelectionMode(false)
-}
-
-const handleView = () => {
-  if (contextMenuSingleTarget.value) {
-    index.value = contextMenuSingleTarget.value.index
-  }
-  contextMenu.value.visible = false
 }
 
 const handleEdit = () => {

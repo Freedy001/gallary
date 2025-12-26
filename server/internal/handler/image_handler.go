@@ -8,12 +8,12 @@ import (
 	"gallary/server/pkg/database"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"gallary/server/internal/repository"
 	"gallary/server/internal/service"
 	"gallary/server/internal/utils"
 	"gallary/server/pkg/logger"
@@ -351,44 +351,49 @@ func (h *ImageHandler) BatchDownload(c *gin.Context) {
 //	@Summary		搜索图片
 //	@Description	根据多种条件搜索图片
 //	@Tags			图片管理
+//	@Accept			json
 //	@Produce		json
-//	@Param			keyword			query		string													false	"关键词"
-//	@Param			start_date		query		string													false	"开始日期"
-//	@Param			end_date		query		string													false	"结束日期"
-//	@Param			location		query		string													false	"地点"
-//	@Param			camera_model	query		string													false	"相机型号"
-//	@Param			tags			query		string													false	"标签ID列表(逗号分隔)"
-//	@Param			page			query		int														false	"页码"	default(1)
-//	@Param			page_size		query		int														false	"每页数量"	default(20)
-//	@Success		200				{object}	utils.Response{data=utils.PageData{list=[]model.Image}}	"搜索结果"
-//	@Failure		500				{object}	utils.Response											"搜索失败"
-//	@Router			/api/search [get]
+//	@Param			request	body		repository.SearchParams	true	"搜索参数"
+//	@Success		200		{object}	utils.Response{data=utils.PageData{list=[]model.Image}}	"搜索结果"
+//	@Failure		500		{object}	utils.Response											"搜索失败"
+//	@Router			/api/search [post]
 func (h *ImageHandler) Search(c *gin.Context) {
-	params := &repository.SearchParams{
-		Keyword:       c.Query("keyword"),
-		LocationName:  c.Query("location"),
-		CameraModel:   c.Query("camera_model"),
-		SemanticQuery: c.Query("semantic_query"),
-		ModelName:     c.Query("model_name"),
+	var params model.SearchParams
+
+	// 检查 Content-Type 判断是 JSON 还是 multipart
+	contentType := c.ContentType()
+
+	if strings.Contains(contentType, "multipart/form-data") {
+		// multipart 模式：支持图片上传
+		if err := c.ShouldBind(&params); err != nil {
+			utils.BadRequest(c, "无效的参数: "+err.Error())
+			return
+		}
+		// 处理上传的图片文件
+		file, err := c.FormFile("file")
+		if err == nil && file != nil {
+			f, openErr := file.Open()
+			if openErr == nil {
+				defer f.Close()
+				params.ImageData, _ = io.ReadAll(f)
+			}
+		}
+	} else {
+		// JSON 模式：保持向后兼容
+		if err := c.ShouldBindJSON(&params); err != nil {
+			utils.BadRequest(c, "无效的参数: "+err.Error())
+			return
+		}
 	}
 
-	if startDate := c.Query("start_date"); startDate != "" {
-		params.StartDate = &startDate
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	if params.PageSize < 1 {
+		params.PageSize = 20
 	}
 
-	if endDate := c.Query("end_date"); endDate != "" {
-		params.EndDate = &endDate
-	}
-
-	// 解析标签ID
-	if tagsStr := c.Query("tags"); tagsStr != "" {
-		// 这里简化处理，实际应该解析逗号分隔的ID列表
-	}
-
-	params.Page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
-	params.PageSize, _ = strconv.Atoi(c.DefaultQuery("page_size", "20"))
-
-	images, total, err := h.service.Search(c.Request.Context(), params)
+	images, total, err := h.service.Search(c.Request.Context(), &params)
 	if err != nil {
 		logger.Error("搜索图片失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
@@ -644,4 +649,24 @@ func (h *ImageHandler) PermanentlyDelete(c *gin.Context) {
 	}
 
 	utils.SuccessWithMessage(c, "彻底删除成功", nil)
+}
+
+// GetTags 获取所有普通标签
+//
+//	@Summary		获取标签列表
+//	@Description	获取所有可用的普通标签（用于搜索筛选）
+//	@Tags			标签管理
+//	@Produce		json
+//	@Success		200	{object}	utils.Response{data=[]model.Tag}	"标签列表"
+//	@Failure		500	{object}	utils.Response						"获取失败"
+//	@Router			/api/tags [get]
+func (h *ImageHandler) GetTags(c *gin.Context) {
+	tags, err := h.service.GetAllNormalTags(c.Request.Context())
+	if err != nil {
+		logger.Error("获取标签列表失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.Success(c, tags)
 }

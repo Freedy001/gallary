@@ -24,6 +24,11 @@ export const aiApi = {
     return http.post('/api/ai/test', request)
   },
 
+  // 获取可用的嵌入模型列表
+  getEmbeddingModels(): Promise<ApiResponse<string[]>> {
+    return http.get('/api/ai/embedding-models')
+  },
+
   // ================== 队列管理 ==================
 
   // 获取所有队列状态
