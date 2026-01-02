@@ -76,7 +76,8 @@ type ImageService interface {
 	Repo() repository.ImageRepository
 
 	// 标签相关方法
-	GetAllNormalTags(ctx context.Context) ([]*model.Tag, error)
+	SearchTags(ctx context.Context, keyword string, limit int) ([]*model.Tag, error)
+	GetPopularTags(ctx context.Context, limit int) ([]*model.Tag, error)
 }
 
 type imageService struct {
@@ -1010,6 +1011,13 @@ func (s *imageService) Repo() repository.ImageRepository {
 }
 
 // GetAllNormalTags 获取所有普通标签
-func (s *imageService) GetAllNormalTags(ctx context.Context) ([]*model.Tag, error) {
-	return s.repo.FindAllNormalTags(ctx)
+
+// SearchTags 搜索标签
+func (s *imageService) SearchTags(ctx context.Context, keyword string, limit int) ([]*model.Tag, error) {
+	return s.repo.SearchTags(ctx, keyword, limit)
+}
+
+// GetPopularTags 获取热门标签
+func (s *imageService) GetPopularTags(ctx context.Context, limit int) ([]*model.Tag, error) {
+	return s.repo.GetPopularTags(ctx, limit)
 }

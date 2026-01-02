@@ -1,6 +1,8 @@
 import http from './http'
 import type {
-  ApiResponse, ClusterResult, GeoBounds,
+  ApiResponse,
+  ClusterResult,
+  GeoBounds,
   Image,
   Pageable,
   SearchParams,
@@ -26,9 +28,12 @@ export const imageApi = {
     })
   },
 
-  // 获取标签列表
-  getTags(): Promise<ApiResponse<Tag[]>> {
-    return http.get('/api/tags')
+  // 获取标签列表（支持搜索）
+  getTags(keyword?: string, limit?: number): Promise<ApiResponse<Tag[]>> {
+    const params: Record<string, string | number> = {}
+    if (keyword) params.keyword = keyword
+    if (limit) params.limit = limit
+    return http.get('/api/tags', { params })
   },
 
   // 删除图片

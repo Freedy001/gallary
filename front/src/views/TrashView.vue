@@ -80,19 +80,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
-import { useImageStore } from '@/stores/image'
-import { useUIStore } from '@/stores/ui'
-import { useDialogStore } from '@/stores/dialog'
-import { imageApi } from '@/api/image'
-import type { Image, Pageable } from '@/types'
+import {computed, onMounted, onUnmounted} from 'vue'
+import {useImageStore} from '@/stores/image'
+import {useUIStore} from '@/stores/ui'
+import {useDialogStore} from '@/stores/dialog'
+import {imageApi} from '@/api/image'
+import type {Image, Pageable} from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ImageGrid from '@/components/gallery/ImageGrid.vue'
-import {
-  TrashIcon,
-  ArrowUturnLeftIcon,
-  XMarkIcon,
-} from '@heroicons/vue/24/outline'
+import {ArrowUturnLeftIcon, TrashIcon, XMarkIcon,} from '@heroicons/vue/24/outline'
 
 const imageStore = useImageStore()
 const uiStore = useUIStore()
@@ -178,7 +174,7 @@ async function handleBatchPermanentDelete() {
 
 onMounted(async () => {
   // 使用 refreshImages 切换数据源为回收站 API
-  const pageSize = uiStore.pageSize
+  const pageSize = uiStore.imagePageSize
   await imageStore.refreshImages(async (page: number, size: number): Promise<Pageable<Image>> => {
     return (await imageApi.getDeletedList(page, size)).data
   }, pageSize)

@@ -1,5 +1,5 @@
 import {defineStore} from 'pinia'
-import {ref, computed} from 'vue'
+import {computed, ref} from 'vue'
 import {createThumbnail} from "@/utils/image.ts";
 import {imageApi} from "@/api/image.ts";
 import {useImageStore} from "@/stores/image.ts";
@@ -36,6 +36,8 @@ export const useUIStore = defineStore('ui', () => {
 
   // Timeline state
   const timeLineState = ref<{ date: string, location: string | null } | null>(null)
+  //setting tab
+  const settingActiveTab = ref('security')
 
   // Computed
   const gridColumns = computed(() => {
@@ -61,7 +63,7 @@ export const useUIStore = defineStore('ui', () => {
 
   // 根据网格列数动态计算每页应加载的图片数量
   // 确保至少加载足够填满 2 屏的图片，以便触发滚动
-  const pageSize = computed(() => {
+  const imagePageSize = computed(() => {
     const cols = gridColumns.value.desktop
     // 估算每屏能显示的行数（假设视口高度约 900px，每个图片约 200px）
     const rowsPerScreen = Math.ceil(900 / 200)
@@ -250,10 +252,11 @@ export const useUIStore = defineStore('ui', () => {
     uploadTasks,
     isSelectionMode,
     timeLineState,
+    settingActiveTab,
 
     // Computed
     gridColumns,
-    pageSize,
+    imagePageSize,
     uploadingCount,
     completedCount,
     failedCount,

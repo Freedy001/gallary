@@ -35,8 +35,8 @@
               {{ totalFailed }} 失败
             </span>
             <!-- 进行/等待数 -->
-            <span v-if="totalPending + totalProcessing > 0" class="text-primary-300">
-              {{ totalProcessing + totalPending }} 任务
+            <span v-if="totalPending + processingCount > 0" class="text-primary-300">
+              {{ processingCount + totalPending }} 任务
             </span>
           </span>
         </div>
@@ -69,8 +69,8 @@
         </div>
 
         <!-- 简单的数量指示 -->
-        <span v-if="totalProcessing > 0" class="text-[10px] text-primary-400 font-bold">
-          {{ totalProcessing }}
+        <span v-if="processingCount > 0" class="text-[10px] text-primary-400 font-bold">
+          {{ processingCount }}
         </span>
       </div>
     </template>
@@ -85,9 +85,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { SparklesIcon, ArrowRightIcon } from '@heroicons/vue/24/outline'
-import { useNotificationStore } from '@/stores/notification.ts'
+import {computed, ref} from 'vue'
+import {ArrowRightIcon, SparklesIcon} from '@heroicons/vue/24/outline'
+import {useNotificationStore} from '@/stores/notification.ts'
 import AIQueueListModal from '@/components/widgets/AIQueueListModal.vue'
 
 defineProps<{
@@ -110,19 +110,23 @@ function openModal() {
 
 // 计算属性
 const totalPending = computed(() => notificationStore.aiQueueStatus?.total_pending || 0)
-const totalProcessing = computed(() => notificationStore.aiQueueStatus?.total_processing || 0)
 const totalFailed = computed(() => notificationStore.aiQueueStatus?.total_failed || 0)
+// 计算正在处理中的队列数量
+const processingCount = computed(() => {
+  const queues = notificationStore.aiQueueStatus?.queues || []
+  return queues.filter(q => q.status === 'processing').length
+})
 
-const hasActiveTasks = computed(() => totalProcessing.value > 0 || totalPending.value > 0)
+const hasActiveTasks = computed(() => processingCount.value > 0 || totalPending.value > 0)
 const hasFailedTasks = computed(() => totalFailed.value > 0)
 
 // 总体进度计算
 const overallProgress = computed(() => {
-  const total = totalPending.value + totalProcessing.value + totalFailed.value
+  const total = totalPending.value + processingCount.value + totalFailed.value
   if (total === 0) return 0 // 空闲时进度为0
-  if (totalProcessing.value > 0) {
+  if (processingCount.value > 0) {
     // 简单的动画效果模拟：如果有正在处理的，显示至少 10%
-    return Math.max(10, Math.round((totalProcessing.value / (totalPending.value + totalProcessing.value)) * 100))
+    return Math.max(10, Math.round((processingCount.value / (totalPending.value + processingCount.value)) * 100))
   }
   return 0
 })

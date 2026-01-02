@@ -1,12 +1,6 @@
 import http from './http'
-import type { ApiResponse, Image } from '@/types'
-import type {
-  AIConfig,
-  AIQueueStatus,
-  AIQueueDetail,
-  SemanticSearchRequest,
-  TestConnectionRequest,
-} from '@/types/ai'
+import type {ApiResponse} from '@/types'
+import type {AIConfig, AIQueueDetail, TestConnectionRequest,} from '@/types/ai'
 
 export const aiApi = {
   // 获取 AI 配置（通过 settings API）
@@ -30,16 +24,10 @@ export const aiApi = {
   },
 
   // ================== 队列管理 ==================
-
-  // 获取所有队列状态
-  getQueueStatus(): Promise<ApiResponse<AIQueueStatus>> {
-    return http.get('/api/ai/queues')
-  },
-
   // 获取队列详情（含失败图片列表）
   getQueueDetail(queueId: number, page = 1, pageSize = 20): Promise<ApiResponse<AIQueueDetail>> {
     return http.get(`/api/ai/queues/${queueId}`, {
-      params: { page, page_size: pageSize }
+      params: {page, page_size: pageSize}
     })
   },
 
@@ -58,12 +46,5 @@ export const aiApi = {
   // 忽略单张图片
   ignoreTaskImage(taskImageId: number): Promise<ApiResponse<null>> {
     return http.post(`/api/ai/task-images/${taskImageId}/ignore`)
-  },
-
-  // ================== 搜索 ==================
-
-  // 语义搜索
-  semanticSearch(request: SemanticSearchRequest): Promise<ApiResponse<Image[]>> {
-    return http.post('/api/ai/search', request)
   },
 }

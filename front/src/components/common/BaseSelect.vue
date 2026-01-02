@@ -6,7 +6,7 @@
     @update:model-value="val => emit('update:modelValue', val)"
     v-slot="{ open, disabled: isDisabled }"
   >
-    <div class="relative">
+    <div :class="['relative', open ? 'z-50' : '']">
       <!-- Label (Optional) -->
       <ListboxLabel v-if="label" class="block text-sm font-medium text-gray-300 mb-2">
         {{ label }}
@@ -84,15 +84,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import {
-  Listbox,
-  ListboxButton,
-  ListboxLabel,
-  ListboxOptions,
-  ListboxOption,
-} from '@headlessui/vue'
-import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/20/solid'
+import {computed} from 'vue'
+import {Listbox, ListboxButton, ListboxLabel, ListboxOption, ListboxOptions,} from '@headlessui/vue'
+import {CheckIcon, ChevronUpDownIcon} from '@heroicons/vue/20/solid'
 import Tooltip from './Tooltip.vue'
 
 export interface SelectOption {

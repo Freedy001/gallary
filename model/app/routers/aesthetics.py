@@ -6,13 +6,14 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException
 
+from train.model import get_score_level
 from ..models import (
     AestheticData,
     AestheticRequest,
     AestheticResponse,
     ErrorResponse,
 )
-from ..services import get_score_level, model_service
+from ..services import model_service
 
 router = APIRouter(tags=["aesthetics"])
 
@@ -29,8 +30,8 @@ async def evaluate_aesthetics(request: AestheticRequest) -> AestheticResponse:
     """
     评估图片美学质量
 
-    基于 Aesthetic Predictor V2.5 (SigLIP + MLP)
-    评分范围: 1-10，5.5+ 被认为是高美学分数
+    基于 SigLIP2 + 自训练 LoRA 模型
+    评分范围: 1-10，输出 10 类评分概率分布，加权平均得到最终分数
 
     支持的输入格式:
     - 本地文件路径: "/path/to/image.jpg"
@@ -64,14 +65,17 @@ async def evaluate_aesthetics(request: AestheticRequest) -> AestheticResponse:
                 index=i,
                 score=round(result.score, 2),
                 level=get_score_level(result.score),
-                embedding=(
-                    result.embedding.tolist() if request.return_embeddings else None
+                distribution=(
+                    result.distribution.tolist() if request.return_distribution else None
                 ),
             )
             for i, result in enumerate(results)
         ]
 
-        return AestheticResponse(data=data)
+        return AestheticResponse(
+            data=data,
+            backend=model_service.backend.backend_type if model_service.backend else "unknown",
+        )
 
     except FileNotFoundError as e:
         raise HTTPException(status_code=400, detail=f"File not found: {e}")

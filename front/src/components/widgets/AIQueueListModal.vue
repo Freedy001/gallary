@@ -37,7 +37,7 @@
                 <div class="flex items-center justify-between mb-2">
                   <div class="flex items-center gap-2">
                     <div class="w-2 h-2 rounded-full shadow-[0_0_5px_currentColor]" :class="getQueueStatusDotClass(queue)"></div>
-                    <span class="text-xs font-medium text-gray-200 truncate max-w-[120px]" :title="getQueueDisplayName(queue)">
+                    <span :title="getQueueDisplayName(queue)" class="text-xs font-medium text-gray-200 truncate max-w-[200px]">
                       {{ getQueueDisplayName(queue) }}
                     </span>
                   </div>
@@ -86,12 +86,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { XMarkIcon, SparklesIcon } from '@heroicons/vue/24/outline'
-import { useAIStore } from '@/stores/ai.ts'
-import { getQueueDisplayName } from '@/types/ai.ts'
-import type { AIQueueInfo } from '@/types/ai.ts'
-import { onClickOutside } from '@vueuse/core'
+import {computed, ref} from 'vue'
+import {SparklesIcon, XMarkIcon} from '@heroicons/vue/24/outline'
+import {useAIStore} from '@/stores/ai.ts'
+import type {AIQueueInfo} from '@/types/ai.ts'
+import {getQueueDisplayName} from '@/types/ai.ts'
+import {onClickOutside} from '@vueuse/core'
 import AIQueueDetailModal from '@/components/widgets/AIQueueDetailModal.vue'
 import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
 

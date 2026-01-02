@@ -44,16 +44,21 @@ func (m AlbumMetadata) Value() (driver.Value, error) {
 
 // Tag 标签模型
 type Tag struct {
-	ID        int64          `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name      string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"name"`
-	Color     *string        `gorm:"type:varchar(7)" json:"color,omitempty"`
-	Type      TagType        `gorm:"type:varchar(20);not null;default:normal;index" json:"type"`
-	Metadata  *AlbumMetadata `gorm:"type:jsonb" json:"metadata,omitempty"`
-	CreatedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	ID                int64          `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name              string         `gorm:"type:varchar(50);uniqueIndex;not null" json:"name"`
+	NameEn            *string        `gorm:"type:varchar(100)" json:"name_en,omitempty"`            // 英文名称
+	VectorDescription *string        `gorm:"type:text" json:"vector_description,omitempty"`         // 用于生成向量的描述
+	SourceCategoryId  *string        `gorm:"type:varchar(100)" json:"source_category_id,omitempty"` // 来源分类ID（如 portrait_photography）
+	SubCategoryId     *string        `gorm:"type:varchar(100)" json:"sub_category_id,omitempty"`    // 子分类ID（如 traditional_studio）
+	Color             *string        `gorm:"type:varchar(7)" json:"color,omitempty"`
+	Type              TagType        `gorm:"type:varchar(20);not null;default:normal;index" json:"type"`
+	Metadata          *AlbumMetadata `gorm:"type:jsonb" json:"metadata,omitempty"`
+	CreatedAt         time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt         time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
 
 	// 关联
-	Images []Image `gorm:"many2many:image_tags" json:"-"`
+	Images     []Image        `gorm:"many2many:image_tags" json:"-"`
+	Embeddings []TagEmbedding `gorm:"foreignKey:TagID" json:"-"` // 一对多：一个标签可有多个模型的向量
 }
 
 // TableName 指定表名

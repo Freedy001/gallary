@@ -99,7 +99,7 @@ const renderMarkers = (clusters: ClusterResult[]) => {
     // 添加点击事件
     marker.on('click', async () => {
       try {
-        await imageStore.refreshImages(async (page, size) => (await imageApi.getClusterImages(min_lat, max_lat, min_lng, max_lng, page, size)).data, uiStore.pageSize)
+        await imageStore.refreshImages(async (page, size) => (await imageApi.getClusterImages(min_lat, max_lat, min_lng, max_lng, page, size)).data, uiStore.imagePageSize)
         imageStore.viewerIndex = 1
       } catch (error) {
         console.error('加载聚合图片失败:', error)

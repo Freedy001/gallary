@@ -1,5 +1,39 @@
 <template>
   <div class="space-y-6">
+    <!-- AI 全局设置 -->
+    <div class="rounded-2xl bg-white/5 ring-1 ring-white/10">
+      <div class="border-b border-white/5 p-5 bg-white/2 rounded-t-2xl">
+        <h2 class="text-lg font-medium text-white">全局设置</h2>
+        <p class="mt-1 text-sm text-gray-500">配置 AI 功能的默认行为</p>
+      </div>
+
+      <div class="p-6 space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <!-- 默认搜索模型 -->
+          <div>
+            <BaseSelect
+                v-model="config.global_config!.default_search_model_id"
+                :options="enabledModelOptions"
+                label="默认搜索模型"
+                placeholder="选择默认搜索模型"
+            />
+            <p class="mt-1 text-xs text-gray-500">用于语义搜索的默认模型</p>
+          </div>
+
+          <!-- 默认打标签模型 -->
+          <div>
+            <BaseSelect
+                v-model="config.global_config!.default_tag_model_id"
+                :options="enabledModelOptions"
+                label="默认打标签模型"
+                placeholder="选择默认打标签模型"
+            />
+            <p class="mt-1 text-xs text-gray-500">用于自动生成图片标签的默认模型</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 嵌入模型设置 -->
     <div class="rounded-2xl bg-white/5 ring-1 ring-white/10 overflow-hidden">
       <div class="border-b border-white/5 p-5 bg-white/2 flex items-center justify-between">
@@ -22,7 +56,7 @@
       </div>
 
       <!-- 无模型状态 -->
-      <div v-else-if="localConfig.models.length === 0" class="p-8 text-center">
+      <div v-else-if="config.models.length === 0" class="p-8 text-center">
         <div class="text-gray-500 mb-4">
           <svg class="h-12 w-12 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -39,7 +73,7 @@
       </div>
 
       <div v-else class="divide-y divide-white/5">
-        <div v-for="(model, index) in localConfig.models" :key="model.id" class="p-6">
+        <div v-for="(model, index) in config.models" :key="model.id" class="p-6">
           <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3">
               <!-- 启用开关 -->
@@ -92,7 +126,7 @@
               <input
                   v-model="model.id"
                   type="text"
-                  placeholder="如: siglip-so400m"
+                  placeholder="用于区分添加的不同模型"
                   class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm"
               />
             </div>
@@ -111,7 +145,7 @@
                   v-model="model.api_model_name"
                   @input="onApiModelNameChange(model)"
                   type="text"
-                  placeholder="如: SigLIP 本地模型"
+                  placeholder="调用api时使用的模型名称，如: gemini"
                   class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm"
               />
             </div>
@@ -121,7 +155,7 @@
                   v-model="model.model_name"
                   @input="userModifiedModelName[model.id] = model.model_name !== model.api_model_name;"
                   type="text"
-                  placeholder="如: siglip-so400m-patch14-384"
+                  placeholder="相通模型名称的provider将作为一组，被负载均衡器调用"
                   class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm"
               />
             </div>
@@ -136,7 +170,7 @@
             </div>
 
             <!-- 提示词优化配置（仅自托管模型） -->
-            <div v-if="model.provider === 'selfHosted'" class="col-span-2 mt-4 pt-4 border-t border-white/10">
+            <div v-if="model.provider === 'selfHosted'" class="col-span-2 mt-1">
               <div class="flex items-center justify-between mb-3">
                 <div>
                   <h4 class="text-sm font-medium text-white">提示词优化</h4>
@@ -194,13 +228,12 @@
 <script setup lang="ts">
 import {onMounted, reactive, ref} from 'vue'
 import {PlusIcon, TrashIcon} from '@heroicons/vue/24/outline'
-import {useAIStore} from '@/stores/ai'
 import {useDialogStore} from '@/stores/dialog'
 import type {AIConfig, ExtraConfig, ModelConfig, PromptOptimizerConfig} from '@/types/ai'
-import BaseSelect from '@/components/common/BaseSelect.vue'
 import type {SelectOption} from '@/components/common/BaseSelect.vue'
+import BaseSelect from '@/components/common/BaseSelect.vue'
+import {aiApi} from "@/api/ai.ts";
 
-const aiStore = useAIStore()
 const dialogStore = useDialogStore()
 
 const loading = ref(true)
@@ -208,17 +241,36 @@ const saving = ref(false)
 const testing = ref<string | null>(null)
 
 // 使用本地状态避免直接修改 store
-const localConfig = reactive<AIConfig>({
-  models: []
+const config = reactive<AIConfig>({
+  models: [],
+  global_config: {
+    default_search_model_id: '',
+    default_tag_model_id: ''
+  }
 })
+
+// 计算启用的模型选项（用于全局设置下拉框）
+const enabledModelOptions = ref<SelectOption[]>([])
 
 async function loadSettings() {
   loading.value = true
   try {
-    await aiStore.fetchConfig()
-    // 深拷贝到本地状态，确保 models 是数组
-    const config = JSON.parse(JSON.stringify(aiStore.config))
-    localConfig.models = config.models || []
+    const response = await aiApi.getSettings()
+    if (response.data) {
+      config.models = response.data.models || []
+      config.global_config = response.data.global_config || {
+        default_search_model_id: config.models[0]?.id || '',
+        default_tag_model_id: config.models[0]?.id || ''
+      }
+    }
+
+    config.models.forEach(m => {
+      enabledModelOptions.value.push({
+        label: m.model_name || m.id,
+        value: m.id
+      })
+    })
+    console.log(enabledModelOptions.value)
   } catch (error) {
     console.error('Failed to load AI settings:', error)
   } finally {
@@ -236,13 +288,13 @@ function addModel() {
     provider: 'selfHosted',
     enabled: false,
   }
-  localConfig.models.push(newModel)
+  config.models.push(newModel)
 }
 
 function removeModel(index: number) {
-  const model = localConfig.models[index]
+  const model = config.models[index]
   if (!model) return
-  localConfig.models.splice(index, 1)
+  config.models.splice(index, 1)
 }
 
 // 自托管模型的默认 ID（模型名称由用户自行配置）
@@ -322,8 +374,8 @@ function updateSystemPrompt(model: ModelConfig, value: string) {
 async function testModelConnection(modelId: string) {
   testing.value = modelId
   try {
-    const message = await aiStore.testConnection(modelId)
-    dialogStore.notify({title: '成功', message, type: 'success'})
+    const response = await aiApi.testConnection({id: modelId})
+    dialogStore.notify({title: '成功', message: response.data?.message || '连接成功', type: 'success'})
   } catch (error: any) {
     dialogStore.notify({title: '连接失败', message: error.message || '无法连接到模型服务', type: 'error'})
   } finally {
@@ -333,14 +385,14 @@ async function testModelConnection(modelId: string) {
 
 async function handleSave() {
   // 验证：至少需要有一个模型
-  if (localConfig.models.length === 0) {
+  if (config.models.length === 0) {
     dialogStore.notify({title: '提示', message: '请至少添加一个模型配置', type: 'warning'})
     return
   }
 
   saving.value = true
   try {
-    await aiStore.updateConfig(localConfig)
+    await aiApi.updateSettings(config)
     dialogStore.notify({title: '成功', message: 'AI 设置更新成功', type: 'success'})
   } catch (error: any) {
     dialogStore.notify({title: '错误', message: error.message || '更新 AI 设置失败', type: 'error'})

@@ -15,13 +15,13 @@
             <button
                 v-for="tab in tabs"
                 :key="tab.id"
-                @click="activeTab = tab.id"
                 :class="[
                 'px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-300',
-                activeTab === tab.id
+                uiStore.settingActiveTab === tab.id
                   ? 'bg-primary-500/20 text-primary-400 ring-1 ring-primary-500/30 shadow-[0_0_15px_rgba(139,92,246,0.2)]'
                   : 'text-gray-400 hover:text-white hover:bg-white/5'
               ]"
+                @click="uiStore.settingActiveTab = tab.id"
             >
               <component :is="tab.icon" class="h-4 w-4 inline-block mr-2"/>
               {{ tab.name }}
@@ -29,22 +29,22 @@
           </div>
 
           <!-- 安全设置 Tab -->
-          <div v-if="activeTab === 'security'" class="space-y-6">
+          <div v-if="uiStore.settingActiveTab === 'security'" class="space-y-6">
             <SecuritySettings />
           </div>
 
           <!-- 存储设置 Tab -->
-          <div v-if="activeTab === 'storage'" class="space-y-6">
+          <div v-if="uiStore.settingActiveTab === 'storage'" class="space-y-6">
             <StorageSettings />
           </div>
 
           <!-- 清理策略 Tab -->
-          <div v-if="activeTab === 'cleanup'" class="space-y-6">
+          <div v-if="uiStore.settingActiveTab === 'cleanup'" class="space-y-6">
             <CleanupSettings />
           </div>
 
           <!-- AI 设置 Tab -->
-          <div v-if="activeTab === 'ai'" class="space-y-6">
+          <div v-if="uiStore.settingActiveTab === 'ai'" class="space-y-6">
             <AISettings />
           </div>
         </div>
@@ -54,18 +54,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import SecuritySettings from '@/components/settings/SecuritySettings.vue'
 import StorageSettings from '@/components/settings/StorageSettings.vue'
 import CleanupSettings from '@/components/settings/CleanupSettings.vue'
 import AISettings from '@/components/settings/AISettings.vue'
-import {
-  ShieldCheckIcon,
-  CloudIcon,
-  TrashIcon,
-  SparklesIcon,
-} from '@heroicons/vue/24/outline'
+import {CloudIcon, ShieldCheckIcon, SparklesIcon, TrashIcon,} from '@heroicons/vue/24/outline'
+import {useUIStore} from "@/stores/ui.ts";
+
+const uiStore = useUIStore();
 
 // Tab 配置
 const tabs = [
@@ -74,6 +71,4 @@ const tabs = [
   { id: 'cleanup', name: '清理策略', icon: TrashIcon },
   { id: 'ai', name: 'AI 设置', icon: SparklesIcon },
 ]
-
-const activeTab = ref('security')
 </script>

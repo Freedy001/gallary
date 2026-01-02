@@ -51,34 +51,43 @@
           <span class="text-sm text-white/50">加载中...</span>
         </div>
 
-        <div v-else-if="failedImages.length === 0" class="flex flex-col items-center justify-center py-12 text-white/30 space-y-3">
+        <div v-else-if="failedItems.length === 0" class="flex flex-col items-center justify-center py-12 text-white/30 space-y-3">
           <CheckCircleIcon class="h-16 w-16 opacity-50" />
           <span class="text-sm">暂无失败任务</span>
         </div>
 
         <div v-else class="space-y-3">
           <div
-              v-for="item in failedImages"
+              v-for="item in failedItems"
               :key="item.id"
               class="glass-list-item group"
           >
-            <!-- 缩略图 -->
-            <div class="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-black/40 border border-white/10 relative">
-              <img
-                  v-if="item.thumbnailurl"
-                  :src="item.thumbnailurl"
-                  :alt="item.image_id+''"
-                  class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-              />
-              <div v-else class="w-full h-full flex items-center justify-center text-white/20">
-                <PhotoIcon class="h-8 w-8" />
-              </div>
+            <!-- 缩略图/图标 -->
+            <div class="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-black/40 border border-white/10 relative flex items-center justify-center">
+              <!-- 标签类型：显示标签图标 -->
+              <template v-if="item.item_type === 'tag-embedding'">
+                <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-500/20 to-purple-500/20">
+                  <TagIcon class="h-8 w-8 text-primary-400" />
+                </div>
+              </template>
+              <!-- 图片类型：显示缩略图 -->
+              <template v-else>
+                <img
+                    v-if="item.item_thumb"
+                    :alt="item.item_id+''"
+                    :src="item.item_thumb"
+                    class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                />
+                <div v-else class="w-full h-full flex items-center justify-center text-white/20">
+                  <PhotoIcon class="h-8 w-8" />
+                </div>
+              </template>
             </div>
 
             <!-- 信息 -->
             <div class="flex-1 min-w-0 px-4">
               <div class="text-sm font-medium text-white/90 truncate mb-1">
-                {{ item.imageName }}
+                {{ item.item_name || `#${item.item_id}` }}
               </div>
               <div v-if="item.error" class="text-xs text-red-300/90 bg-red-500/10 rounded px-2 py-1 border border-red-500/10 whitespace-pre-wrap break-words">
                 {{ item.error }}
@@ -91,7 +100,7 @@
             <!-- 操作按钮 -->
             <div class="shrink-0 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <button
-                  @click="retryImage(item.id)"
+                  @click="retryItem(item.id)"
                   :disabled="aiStore.loading"
                   class="glass-icon-btn text-primary-400 hover:text-primary-300 hover:bg-primary-500/20"
                   title="重试"
@@ -99,7 +108,7 @@
                 <ArrowPathIcon class="h-4 w-4" />
               </button>
               <button
-                  @click="ignoreImage(item.id)"
+                  @click="ignoreItem(item.id)"
                   :disabled="aiStore.loading"
                   class="glass-icon-btn text-gray-400 hover:text-white hover:bg-white/10"
                   title="忽略"
@@ -115,7 +124,7 @@
           </div>
 
           <!-- 已加载全部 -->
-          <div v-else-if="hasMore === false && failedImages.length > 0" class="text-center py-4 text-xs text-white/40">
+          <div v-else-if="hasMore === false && failedItems.length > 0" class="text-center py-4 text-xs text-white/40">
             已加载全部
           </div>
         </div>
@@ -125,17 +134,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import {nextTick, ref, watch} from 'vue'
 import {
-  XMarkIcon,
   ArrowPathIcon,
   CheckCircleIcon,
+  ExclamationCircleIcon,
   PhotoIcon,
-  ExclamationCircleIcon
+  TagIcon,
+  XMarkIcon
 } from '@heroicons/vue/24/outline'
-import { useAIStore } from '@/stores/ai.ts'
-import type { AIQueueInfo, AITaskImageInfo } from '@/types/ai.ts'
-import { getQueueDisplayName } from '@/types/ai.ts'
+import {useAIStore} from '@/stores/ai.ts'
+import type {AIQueueInfo, AITaskItemInfo} from '@/types/ai.ts'
+import {getQueueDisplayName} from '@/types/ai.ts'
 import Modal from '@/components/common/Modal.vue'
 
 const props = defineProps<{
@@ -150,7 +160,7 @@ const initialLoading = ref(false)
 const loadingMore = ref(false)
 const currentPage = ref(1)
 const pageSize = 20
-const failedImages = ref<AITaskImageInfo[]>([])
+const failedItems = ref<AITaskItemInfo[]>([])
 const hasMore = ref(true)
 
 // 获取状态点样式
@@ -183,16 +193,16 @@ function formatTime(timeStr: string): string {
 async function initLoadData() {
   initialLoading.value = true
   currentPage.value = 1
-  failedImages.value = []
+  failedItems.value = []
   hasMore.value = true
 
   try {
     await aiStore.fetchQueueDetail(props.queue.id, 1, pageSize)
-    failedImages.value = aiStore.queueDetail?.failed_images || []
+    failedItems.value = aiStore.queueDetail?.failed_items || []
 
     // 检查是否还有更多数据
     const total = aiStore.queueDetail?.total_failed || 0
-    hasMore.value = failedImages.value.length < total
+    hasMore.value = failedItems.value.length < total
   } finally {
     initialLoading.value = false
   }
@@ -207,12 +217,12 @@ async function loadMore() {
 
   try {
     await aiStore.fetchQueueDetail(props.queue.id, currentPage.value, pageSize)
-    const newImages = aiStore.queueDetail?.failed_images || []
-    failedImages.value.push(...newImages)
+    const newItems = aiStore.queueDetail?.failed_items || []
+    failedItems.value.push(...newItems)
 
     // 检查是否还有更多数据
     const total = aiStore.queueDetail?.total_failed || 0
-    hasMore.value = failedImages.value.length < total
+    hasMore.value = failedItems.value.length < total
   } finally {
     loadingMore.value = false
   }
@@ -231,28 +241,28 @@ function handleScroll(event: Event) {
   }
 }
 
-// 重试单张图片
-async function retryImage(taskImageId: number) {
+// 重试单个任务项
+async function retryItem(taskItemId: number) {
   try {
-    await aiStore.retryTaskImage(taskImageId)
+    await aiStore.retryTaskItem(taskItemId)
     // 从列表中移除该项
-    const index = failedImages.value.findIndex(img => img.id === taskImageId)
+    const index = failedItems.value.findIndex(item => item.id === taskItemId)
     if (index !== -1) {
-      failedImages.value.splice(index, 1)
+      failedItems.value.splice(index, 1)
     }
   } catch (error) {
     console.error('重试失败:', error)
   }
 }
 
-// 忽略单张图片
-async function ignoreImage(taskImageId: number) {
+// 忽略单个任务项
+async function ignoreItem(taskItemId: number) {
   try {
-    await aiStore.ignoreTaskImage(taskImageId)
+    await aiStore.ignoreTaskItem(taskItemId)
     // 从列表中移除该项
-    const index = failedImages.value.findIndex(img => img.id === taskImageId)
+    const index = failedItems.value.findIndex(item => item.id === taskItemId)
     if (index !== -1) {
-      failedImages.value.splice(index, 1)
+      failedItems.value.splice(index, 1)
     }
   } catch (error) {
     console.error('忽略失败:', error)

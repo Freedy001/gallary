@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"gallary/server/internal"
+	"gallary/server/internal/llms"
 	"gallary/server/internal/model"
+	"gallary/server/internal/service/ai_processors"
 	"gallary/server/internal/websocket"
 	"log"
 	"net/http"
@@ -128,6 +130,7 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 	// 6. 初始化Repository层
 	imageRepo, shareRepo, settingRepo, migrationRepo, albumRepo := repository.NewImageRepository(), repository.NewShareRepository(), repository.NewSettingRepository(), repository.NewMigrationRepository(), repository.NewAlbumRepository()
 	aiTaskRepo, embeddingRepo := repository.NewAITaskRepository(), repository.NewEmbeddingRepository()
+	tagRepo, tagEmbeddingRepo := repository.NewTagRepository(), repository.NewTagEmbeddingRepository()
 
 	// 7. 初始化设置服务并加载数据库设置
 	settingService := service.NewSettingService(settingRepo)
@@ -155,8 +158,52 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 	)
 
 	// 9. 初始化Service层
-	// 先初始化 AI Service（Image Service 依赖它）
-	aiService := service.NewAIService(aiTaskRepo, embeddingRepo, imageRepo, settingService, notifier)
+	// 9.1 创建负载均衡器（供 AIService 和 TaggingService 共用）
+	loadBalancer := llms.NewModelLoadBalancer(storageManager)
+
+	// 9.2 初始化 TaggingService
+	taggingService := service.NewTaggingService(
+		tagRepo,
+		tagEmbeddingRepo,
+		embeddingRepo,
+		imageRepo,
+		loadBalancer,
+		"tags",
+	)
+
+	// 9.3 注册 AI 任务处理器
+	// 图片向量嵌入处理器
+	service.RegisterProcessor(ai_processors.NewEmbeddingProcessor(
+		embeddingRepo,
+		imageRepo,
+		storageManager,
+		taggingService,
+	))
+
+	// 标签向量嵌入处理器
+	service.RegisterProcessor(ai_processors.NewTagEmbeddingProcessor(
+		tagRepo,
+		taggingService,
+		tagEmbeddingRepo,
+	))
+
+	// 美学评分处理器
+	service.RegisterProcessor(ai_processors.NewAestheticScoringProcessor(
+		imageRepo,
+		storageManager,
+	))
+
+	// 9.4 初始化 AIService
+	aiService := service.NewAIService(
+		aiTaskRepo,
+		embeddingRepo,
+		imageRepo,
+		tagRepo,
+		settingService,
+		taggingService,
+		loadBalancer,
+		notifier,
+	)
 
 	imageService := service.NewImageService(imageRepo, albumRepo, storageManager, cfg, notifier, aiService)
 	shareService := service.NewShareService(shareRepo, storageManager)

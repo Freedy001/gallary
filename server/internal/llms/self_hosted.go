@@ -14,15 +14,15 @@ import (
 
 // ================== 自托管模型客户端 ==================
 
-// promptOptimizerConfig 提示词优化器配置（用于 API 请求）
-type promptOptimizerConfig struct {
+// PromptOptimizerConfig 提示词优化器配置（用于 API 请求）
+type PromptOptimizerConfig struct {
 	Enabled      bool   `json:"enabled"`
 	SystemPrompt string `json:"system_prompt"`
 }
 
-// extraConfig 额外配置结构（用于解析 ExtraConfig 字段）
-type extraConfig struct {
-	PromptOptimizer *promptOptimizerConfig `json:"prompt_optimizer,omitempty"`
+// ExtraConfig 额外配置结构（用于解析 ExtraConfig 字段）
+type ExtraConfig struct {
+	PromptOptimizer *PromptOptimizerConfig `json:"prompt_optimizer,omitempty"`
 }
 
 // SelfHostedClient 自托管模型客户端
@@ -54,13 +54,23 @@ func (c *SelfHostedClient) SupportsTextEmbedding() bool {
 	return true
 }
 
-// SupportsEmbeddingWithAesthetics 自托管模型支持同时计算向量和美学评分
-func (c *SelfHostedClient) SupportsEmbeddingWithAesthetics() bool {
+// SupportAesthetics 自托管模型支持美学评分
+func (c *SelfHostedClient) SupportAesthetics() bool {
 	return true
 }
 
 // Embedding 使用阿里云兼容格式计算嵌入向量
 func (c *SelfHostedClient) Embedding(ctx context.Context, imageData []byte, text string) ([]float32, error) {
+	// 文本查询时传递提示词优化器配置
+	var promptOptimizer *PromptOptimizerConfig
+	if text != "" {
+		promptOptimizer = c.getPromptOptimizerConfig()
+	}
+
+	return c.EmbeddingWithPromptConfig(ctx, imageData, text, promptOptimizer)
+}
+
+func (c *SelfHostedClient) EmbeddingWithPromptConfig(ctx context.Context, imageData []byte, text string, promptOptimizer *PromptOptimizerConfig) ([]float32, error) {
 	contents := make([]map[string]string, 0)
 
 	if len(imageData) > 0 {
@@ -76,41 +86,32 @@ func (c *SelfHostedClient) Embedding(ctx context.Context, imageData []byte, text
 		return nil, fmt.Errorf("必须提供图片或文本")
 	}
 
-	// 文本查询时传递提示词优化器配置
-	var promptOptimizer *promptOptimizerConfig
-	if text != "" {
-		promptOptimizer = c.getPromptOptimizerConfig()
-	}
-
 	return c.callMultimodalEmbedding(ctx, contents, promptOptimizer)
 }
 
-// EmbeddingWithAesthetics 同时计算嵌入和美学评分
-// 使用传统的 aesthetics API 以获取美学评分
-func (c *SelfHostedClient) EmbeddingWithAesthetics(ctx context.Context, imageData []byte) ([]float32, float64, error) {
+// Aesthetics 美学评分（仅返回评分，不返回嵌入向量）
+func (c *SelfHostedClient) Aesthetics(ctx context.Context, imageData []byte) (float64, error) {
 	if len(imageData) == 0 {
-		return nil, 0, fmt.Errorf("必须提供图片")
+		return 0, fmt.Errorf("必须提供图片")
 	}
 
 	base64Data := base64.StdEncoding.EncodeToString(imageData)
 
 	reqBody := struct {
-		Input            string `json:"input"`
-		ReturnEmbeddings bool   `json:"return_embeddings"`
+		Input string `json:"input"`
 	}{
-		Input:            base64Data,
-		ReturnEmbeddings: true,
+		Input: base64Data,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, 0, err
+		return 0, err
 	}
 
 	url := c.config.Endpoint + "/v1/aesthetics"
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return nil, 0, err
+		return 0, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -120,43 +121,42 @@ func (c *SelfHostedClient) EmbeddingWithAesthetics(ctx context.Context, imageDat
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("请求自托管服务失败: %v", err)
+		return 0, fmt.Errorf("请求自托管服务失败: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, 0, fmt.Errorf("自托管服务返回错误: %d, %s", resp.StatusCode, string(body))
+		return 0, fmt.Errorf("自托管服务返回错误: %d, %s", resp.StatusCode, string(body))
 	}
 
 	var response struct {
 		Data []struct {
-			Index     int       `json:"index"`
-			Score     float64   `json:"score"`
-			Level     string    `json:"level"`
-			Embedding []float32 `json:"embedding,omitempty"`
+			Index int     `json:"index"`
+			Score float64 `json:"score"`
+			Level string  `json:"level"`
 		} `json:"data"`
 		Model string `json:"model"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, 0, fmt.Errorf("解析响应失败: %v", err)
+		return 0, fmt.Errorf("解析响应失败: %v", err)
 	}
 
 	if len(response.Data) == 0 {
-		return nil, 0, fmt.Errorf("响应数据为空")
+		return 0, fmt.Errorf("响应数据为空")
 	}
 
-	return response.Data[0].Embedding, response.Data[0].Score, nil
+	return response.Data[0].Score, nil
 }
 
 // getPromptOptimizerConfig 从 ExtraConfig 中解析提示词优化器配置
-func (c *SelfHostedClient) getPromptOptimizerConfig() *promptOptimizerConfig {
+func (c *SelfHostedClient) getPromptOptimizerConfig() *PromptOptimizerConfig {
 	if c.config.ExtraConfig == "" {
 		return nil
 	}
 
-	var extra extraConfig
+	var extra ExtraConfig
 	if err := json.Unmarshal([]byte(c.config.ExtraConfig), &extra); err != nil {
 		return nil
 	}
@@ -165,14 +165,14 @@ func (c *SelfHostedClient) getPromptOptimizerConfig() *promptOptimizerConfig {
 }
 
 // callMultimodalEmbedding 调用阿里云兼容的多模态嵌入 API
-func (c *SelfHostedClient) callMultimodalEmbedding(ctx context.Context, contents []map[string]string, promptOptimizer *promptOptimizerConfig) ([]float32, error) {
+func (c *SelfHostedClient) callMultimodalEmbedding(ctx context.Context, contents []map[string]string, promptOptimizer *PromptOptimizerConfig) ([]float32, error) {
 	// 构建阿里云兼容的请求格式
 	reqBody := struct {
 		Model string `json:"model"`
 		Input struct {
 			Contents []map[string]string `json:"contents"`
 		} `json:"input"`
-		PromptOptimizer *promptOptimizerConfig `json:"prompt_optimizer,omitempty"`
+		PromptOptimizer *PromptOptimizerConfig `json:"prompt_optimizer,omitempty"`
 	}{
 		Model:           c.config.ApiModelName,
 		PromptOptimizer: promptOptimizer,

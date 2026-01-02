@@ -53,8 +53,8 @@ func (c *AliyunMultimodalEmbedding) SupportsTextEmbedding() bool {
 	return true
 }
 
-// SupportsEmbeddingWithAesthetics 阿里云不支持美学评分
-func (c *AliyunMultimodalEmbedding) SupportsEmbeddingWithAesthetics() bool {
+// SupportAesthetics 阿里云不支持美学评分
+func (c *AliyunMultimodalEmbedding) SupportAesthetics() bool {
 	return false
 }
 
@@ -81,10 +81,9 @@ func (c *AliyunMultimodalEmbedding) Embedding(ctx context.Context, imageData []b
 	return c.callMultimodalEmbedding(ctx, contents)
 }
 
-// EmbeddingWithAesthetics 阿里云不支持美学评分，仅返回嵌入向量
-func (c *AliyunMultimodalEmbedding) EmbeddingWithAesthetics(ctx context.Context, imageData []byte) ([]float32, float64, error) {
-	embedding, err := c.Embedding(ctx, imageData, "")
-	return embedding, 0, err
+// Aesthetics 阿里云不支持美学评分
+func (c *AliyunMultimodalEmbedding) Aesthetics(ctx context.Context, imageData []byte) (float64, error) {
+	return 0, fmt.Errorf("阿里云客户端不支持美学评分")
 }
 
 // callMultimodalEmbedding 调用阿里云多模态嵌入 API

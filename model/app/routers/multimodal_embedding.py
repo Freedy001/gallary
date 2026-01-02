@@ -1,6 +1,7 @@
 """
 多模态嵌入接口 - 兼容阿里云 Multimodal-Embedding API 格式
 支持文本和图片的向量嵌入
+文本查询会自动通过 Qwen3-0.6B 优化为更适合 SigLIP 的英文描述
 """
 
 from fastapi import APIRouter, HTTPException
@@ -12,6 +13,7 @@ from ..models import (
     MultimodalEmbeddingItem,
     MultimodalEmbeddingUsage,
 )
+from ..prompt_optimizer import prompt_optimizer_service
 from ..services import model_service
 
 router = APIRouter(tags=["multimodal-embedding"])
@@ -19,7 +21,7 @@ router = APIRouter(tags=["multimodal-embedding"])
 
 @router.post("/multimodal-embedding", response_model=MultimodalEmbeddingResponse)
 async def create_multimodal_embedding(
-    request: MultimodalEmbeddingRequest,
+        req: MultimodalEmbeddingRequest,
 ) -> MultimodalEmbeddingResponse:
     """
     创建多模态嵌入向量 - 兼容阿里云 API 格式
@@ -33,7 +35,7 @@ async def create_multimodal_embedding(
     if not model_service.is_loaded:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
-    contents = request.input.contents
+    contents = req.input.contents
     if not contents:
         raise HTTPException(status_code=400, detail="Input contents cannot be empty")
 
@@ -62,9 +64,26 @@ async def create_multimodal_embedding(
                     detail=f"Invalid content at index {idx}: must contain 'text' or 'image' key",
                 )
 
-        # 处理文本嵌入
+        # 处理文本嵌入（先通过 Qwen3 优化提示词）
         if texts:
-            text_embeddings = model_service.infer_text(texts)
+            # 确定是否启用提示词优化及使用哪个配置
+            # 优先使用请求中的配置，否则使用服务端默认配置
+            if req.prompt_optimizer is not None and req.prompt_optimizer.enabled and prompt_optimizer_service.is_loaded:
+                optimized_texts = []
+                for text in texts:
+                    try:
+                        optimized = prompt_optimizer_service.optimize_prompt(text, req.prompt_optimizer.system_prompt)
+                        print(f"[Prompt Optimizer] '{text}' -> '{optimized}'")
+                        optimized_texts.append(optimized)
+                    except Exception as e:
+                        # 优化失败时使用原始文本
+                        print(f"[Prompt Optimizer] Failed to optimize '{text}': {e}")
+                        optimized_texts.append(text)
+                texts_for_embedding = optimized_texts
+            else:
+                texts_for_embedding = texts
+
+            text_embeddings = model_service.infer_text(texts_for_embedding)
             for i, (text_idx, embedding) in enumerate(zip(text_indices, text_embeddings)):
                 embeddings_result.append(
                     MultimodalEmbeddingItem(
@@ -97,7 +116,7 @@ async def create_multimodal_embedding(
                 input_tokens=input_tokens,
                 image_tokens=image_tokens,
             ),
-            model=request.model,
+            model=req.model,
         )
 
     except HTTPException:

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"gallary/server/internal/llms"
 	"gallary/server/internal/websocket"
-	"io"
 	"sync"
 	"time"
 
@@ -24,12 +23,12 @@ type AIService interface {
 	GetQueueStatus(ctx context.Context) (*model.AIQueueStatus, error)
 	GetQueueDetail(ctx context.Context, queueID int64, page, pageSize int) (*model.AIQueueDetail, error)
 
-	// 单张图片操作
-	RetryTaskImage(ctx context.Context, taskImageID int64) error
-	IgnoreTaskImage(ctx context.Context, taskImageID int64) error
+	// 单个任务项操作
+	RetryTaskItem(ctx context.Context, taskItemID int64) error
+	IgnoreTaskItem(ctx context.Context, taskItemID int64) error
 
 	// 批量操作
-	RetryQueueFailedImages(ctx context.Context, queueID int64) error
+	RetryQueueFailedItems(ctx context.Context, queueID int64) error
 
 	// 处理器
 	StartProcessor(ctx context.Context)
@@ -45,9 +44,11 @@ type AIService interface {
 
 type aiService struct {
 	taskRepo       repository.AITaskRepository
-	embeddingRepo  repository.EmbeddingRepository
+	embeddingRepo  repository.ImageEmbeddingRepository
 	imageRepo      repository.ImageRepository
+	tagRepo        repository.TagRepository
 	settingService SettingService
+	taggingService TaggingService
 
 	loadBalancer *llms.ModelLoadBalancer
 	notifier     websocket.Notifier
@@ -62,17 +63,22 @@ type aiService struct {
 // NewAIService 创建 AI 服务实例
 func NewAIService(
 	taskRepo repository.AITaskRepository,
-	embeddingRepo repository.EmbeddingRepository,
+	embeddingRepo repository.ImageEmbeddingRepository,
 	imageRepo repository.ImageRepository,
+	tagRepo repository.TagRepository,
 	settingService SettingService,
+	taggingService TaggingService,
+	loadBalancer *llms.ModelLoadBalancer,
 	notifier websocket.Notifier,
 ) AIService {
 	return &aiService{
 		taskRepo:       taskRepo,
 		embeddingRepo:  embeddingRepo,
 		imageRepo:      imageRepo,
+		tagRepo:        tagRepo,
 		settingService: settingService,
-		loadBalancer:   llms.NewModelLoadBalancer(settingService.GetStorageManager()),
+		taggingService: taggingService,
+		loadBalancer:   loadBalancer,
 		notifier:       notifier,
 	}
 }
@@ -95,7 +101,7 @@ func (s *aiService) GetQueueStatus(ctx context.Context) (*model.AIQueueStatus, e
 	return s.taskRepo.GetQueueStatus(ctx)
 }
 
-// GetQueueDetail 获取队列详情（含失败图片列表）
+// GetQueueDetail 获取队列详情（含失败项目列表）
 func (s *aiService) GetQueueDetail(ctx context.Context, queueID int64, page, pageSize int) (*model.AIQueueDetail, error) {
 	// 获取队列信息
 	queue, err := s.taskRepo.FindQueueByID(ctx, queueID)
@@ -109,19 +115,20 @@ func (s *aiService) GetQueueDetail(ctx context.Context, queueID int64, page, pag
 		return nil, err
 	}
 
-	// 获取失败图片列表
-	failedImages, totalFailed, err := s.taskRepo.GetFailedTaskImages(ctx, queueID, page, pageSize)
+	// 获取失败项目列表
+	failedItems, totalFailed, err := s.taskRepo.GetFailedTaskItems(ctx, queueID, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
 
 	// 转换为前端格式
-	imageInfos := make([]model.AITaskImageInfo, len(failedImages))
-	manager := s.settingService.GetStorageManager()
-	for i, img := range failedImages {
-		_, thumbnail := manager.ImageUrl(img.Image)
-		imageInfos[i] = img.ToInfo(thumbnail)
+	itemInfos := make([]model.AITaskItemInfo, len(failedItems))
+	for i, item := range failedItems {
+		itemInfos[i] = item.ToInfo()
 	}
+
+	// 批量填充 ItemName 和 ItemThumb
+	s.batchFillTaskItemInfo(ctx, queue.TaskType, itemInfos)
 
 	return &model.AIQueueDetail{
 		Queue: model.AIQueueInfo{
@@ -133,30 +140,94 @@ func (s *aiService) GetQueueDetail(ctx context.Context, queueID int64, page, pag
 			PendingCount: pending,
 			FailedCount:  failed,
 		},
-		FailedImages: imageInfos,
-		TotalFailed:  totalFailed,
-		Page:         page,
-		PageSize:     pageSize,
+		FailedItems: itemInfos,
+		TotalFailed: totalFailed,
+		Page:        page,
+		PageSize:    pageSize,
 	}, nil
 }
 
-// ================== 单张图片操作 ==================
+// batchFillTaskItemInfo 批量填充项目的名称和缩略图
+func (s *aiService) batchFillTaskItemInfo(ctx context.Context, taskType model.TaskType, items []model.AITaskItemInfo) {
+	if len(items) == 0 {
+		return
+	}
 
-// RetryTaskImage 重试单张图片
-func (s *aiService) RetryTaskImage(ctx context.Context, taskImageID int64) error {
-	return s.taskRepo.RetryTaskImage(ctx, taskImageID)
+	// 收集所有 ItemID
+	itemIDs := make([]int64, len(items))
+	for i, item := range items {
+		itemIDs[i] = item.ItemID
+	}
+
+	switch taskType {
+	case model.ImageEmbeddingTaskType, model.AestheticScoringTaskType:
+		// 图片类任务：批量加载图片信息
+		images, err := s.imageRepo.FindByIDs(ctx, itemIDs)
+		if err != nil {
+			logger.Debug("批量加载图片信息失败", zap.Error(err))
+			return
+		}
+
+		// 构建 ID -> Image 映射
+		imageMap := make(map[int64]*model.Image, len(images))
+		for _, img := range images {
+			imageMap[img.ID] = img
+		}
+
+		// 获取 storageManager
+		storageManager := s.settingService.GetStorageManager()
+
+		// 填充信息
+		for i := range items {
+			if img, ok := imageMap[items[i].ItemID]; ok {
+				items[i].ItemName = img.OriginalName
+				if storageManager != nil {
+					_, thumbURL := storageManager.ImageUrl(img)
+					items[i].ItemThumb = thumbURL
+				}
+			}
+		}
+
+	case model.TagEmbeddingTaskType:
+		// 标签类任务：批量加载标签信息
+		tags, err := s.tagRepo.FindByIDs(ctx, itemIDs)
+		if err != nil {
+			logger.Debug("批量加载标签信息失败", zap.Error(err))
+			return
+		}
+
+		// 构建 ID -> Tag 映射
+		tagMap := make(map[int64]*model.Tag, len(tags))
+		for _, tag := range tags {
+			tagMap[tag.ID] = tag
+		}
+
+		// 填充信息
+		for i := range items {
+			if tag, ok := tagMap[items[i].ItemID]; ok {
+				items[i].ItemName = tag.Name
+			}
+		}
+	}
 }
 
-// IgnoreTaskImage 忽略单张图片（删除关联）
-func (s *aiService) IgnoreTaskImage(ctx context.Context, taskImageID int64) error {
-	return s.taskRepo.RemoveTaskImage(ctx, taskImageID)
+// ================== 单个任务项操作 ==================
+
+// RetryTaskItem 重试单个任务项
+func (s *aiService) RetryTaskItem(ctx context.Context, taskItemID int64) error {
+	return s.taskRepo.RetryTaskItem(ctx, taskItemID)
+}
+
+// IgnoreTaskItem 忽略单个任务项（删除关联）
+func (s *aiService) IgnoreTaskItem(ctx context.Context, taskItemID int64) error {
+	return s.taskRepo.RemoveTaskItem(ctx, taskItemID)
 }
 
 // ================== 批量操作 ==================
 
-// RetryQueueFailedImages 重试队列所有失败图片
-func (s *aiService) RetryQueueFailedImages(ctx context.Context, queueID int64) error {
-	return s.taskRepo.RetryQueueFailedImages(ctx, queueID)
+// RetryQueueFailedItems 重试队列所有失败项目
+func (s *aiService) RetryQueueFailedItems(ctx context.Context, queueID int64) error {
+	return s.taskRepo.RetryQueueFailedItems(ctx, queueID)
 }
 
 // ================== 处理器 ==================
@@ -173,8 +244,8 @@ func (s *aiService) StartProcessor(ctx context.Context) {
 	s.runningMu.Unlock()
 
 	s.processorWg.Add(2)
-	go s.processLoop(s.syncQueueImages)
-	go s.processLoop(s.processQueueImages)
+	go s.processLoop(s.aiTaskAdder)
+	go s.processLoop(s.processQueueItems)
 }
 
 // StopProcessor 停止处理器
@@ -210,13 +281,13 @@ func (s *aiService) processLoop(processor func()) {
 	}
 }
 
-// syncQueueImages 同步队列图片（检测未处理的图片并添加到队列）
-// 按 ModelName 分组，为每个唯一的 ModelName 创建一个队列
+// aiTaskAdder 同步队列任务（检测未处理的项目并添加到队列）
+// 遍历所有注册的处理器，为每个模型创建队列
 // 同时清理已删除模型对应的队列
-func (s *aiService) syncQueueImages() {
+func (s *aiService) aiTaskAdder() {
 	ctx := context.Background()
 
-	// 获取所有可用的嵌入模型
+	// ========== 获取所有可用的嵌入模型 ==========
 	models, err := s.loadBalancer.GetAllEmbeddingModels()
 	if err != nil {
 		logger.Error("获取 AI 配置失败", zap.Error(err))
@@ -229,19 +300,18 @@ func (s *aiService) syncQueueImages() {
 		validModels[modelName] = true
 	}
 
-	// 获取所有现有队列
+	// ========== 清理无效队列 ==========
 	allQueues, err := s.taskRepo.GetAllQueues(ctx)
 	if err != nil {
 		logger.Error("获取所有队列失败", zap.Error(err))
 	} else {
-		// 清理已删除模型对应的队列
 		for _, queue := range allQueues {
 			if !validModels[queue.ModelName] {
 				logger.Info("检测到无效模型队列，准备清理",
 					zap.String("model_name", queue.ModelName),
 					zap.Int64("queue_id", queue.ID))
 
-				if err := s.taskRepo.DeleteQueueWithImages(ctx, queue.ID); err != nil {
+				if err := s.taskRepo.DeleteQueueWithItems(ctx, queue.ID); err != nil {
 					logger.Error("删除队列失败",
 						zap.String("model_name", queue.ModelName),
 						zap.Int64("queue_id", queue.ID),
@@ -255,44 +325,64 @@ func (s *aiService) syncQueueImages() {
 		}
 	}
 
-	// 为每个可用模型同步图片
-	for _, modelName := range models {
-		// 查找或创建队列
-		queue, err := s.taskRepo.FindOrCreateQueue(ctx, model.AITaskTypeEmbedding, modelName)
-		if err != nil {
-			logger.Error("查找或创建队列失败", zap.String("model_name", modelName), zap.Error(err))
-			continue
-		}
+	// ========== 4. 遍历所有处理器，为每个模型同步任务项 ==========
+	for _, processor := range GetAllProcessors() {
+		taskType := processor.TaskType()
 
-		// 查询未计算向量的图片
-		imageIDs, err := s.embeddingRepo.FindImagesWithoutEmbedding(ctx, modelName, 1000)
-		if err != nil {
-			logger.Error("查询未处理图片失败", zap.String("model_name", modelName), zap.Error(err))
-			continue
-		}
+		for _, modelName := range models {
+			// 检查模型是否支持此任务类型
+			client, _, err := s.loadBalancer.GetClientByName(modelName)
+			if err != nil || !processor.SupportedBy(client) {
+				continue
+			}
 
-		if len(imageIDs) == 0 {
-			continue
-		}
+			// 查找或创建队列
+			queue, err := s.taskRepo.FindOrCreateQueue(ctx, taskType, modelName)
+			if err != nil {
+				logger.Error("查找或创建队列失败",
+					zap.String("task_type", string(taskType)),
+					zap.String("model_name", modelName),
+					zap.Error(err))
+				continue
+			}
 
-		// 向队列添加图片（去重）
-		added, err := s.taskRepo.AddImagesToQueue(ctx, queue.ID, queue.QueueKey, imageIDs)
-		if err != nil {
-			logger.Error("添加图片到队列失败", zap.String("model_name", modelName), zap.Error(err))
-		} else if added > 0 {
-			logger.Info("向队列添加图片",
-				zap.String("model_name", modelName),
-				zap.Int("added_count", added))
+			// 查询待处理项目
+			itemIDs, err := processor.FindPendingItems(ctx, modelName, 1000)
+			if err != nil {
+				logger.Error("查询待处理项目失败",
+					zap.String("task_type", string(taskType)),
+					zap.String("model_name", modelName),
+					zap.Error(err))
+				continue
+			}
+
+			if len(itemIDs) == 0 {
+				continue
+			}
+
+			// 添加到队列
+			added, err := s.taskRepo.AddItemsToQueue(ctx, queue.ID, queue.QueueKey, itemIDs, processor.TaskType())
+			if err != nil {
+				logger.Error("添加项目到队列失败",
+					zap.String("task_type", string(taskType)),
+					zap.String("model_name", modelName),
+					zap.Error(err))
+			} else if added > 0 {
+				logger.Info("向队列添加项目",
+					zap.String("task_type", string(taskType)),
+					zap.String("model_name", modelName),
+					zap.Int("added_count", added))
+			}
 		}
 	}
 }
 
-// processQueueImages 处理队列中的图片
-func (s *aiService) processQueueImages() {
+// processQueueItems 处理队列中的任务项
+func (s *aiService) processQueueItems() {
 	ctx := context.Background()
 
-	// 获取有待处理图片的队列
-	queues, err := s.taskRepo.FindQueuesWithPendingImages(ctx, 1)
+	// 获取有待处理任务项的队列
+	queues, err := s.taskRepo.FindQueuesWithPendingItems(ctx, 1)
 	if err != nil {
 		logger.Error("获取待处理队列失败", zap.Error(err))
 		return
@@ -303,6 +393,12 @@ func (s *aiService) processQueueImages() {
 	}
 
 	queue := queues[0]
+	for _, q := range queues {
+		if q.TaskType == model.TagEmbeddingTaskType {
+			queue = q //优先级最高
+			break
+		}
+	}
 
 	// 更新队列状态为处理中
 	queue.Status = model.AIQueueStatusProcessing
@@ -311,10 +407,10 @@ func (s *aiService) processQueueImages() {
 		return
 	}
 
-	// 处理队列中的图片
+	// 处理队列中的任务项
 	s.processQueue(ctx, queue)
 
-	// 检查队列是否还有待处理图片
+	// 检查队列是否还有待处理任务项
 	pending, _, _, err := s.taskRepo.GetQueueStats(ctx, queue.ID)
 	if err == nil && pending == 0 {
 		// 队列空闲
@@ -325,10 +421,10 @@ func (s *aiService) processQueueImages() {
 
 // processQueue 处理单个队列
 func (s *aiService) processQueue(ctx context.Context, queue *model.AIQueue) {
-	// 获取待处理的图片
-	taskImages, err := s.taskRepo.GetPendingTaskImages(ctx, queue.ID, 10)
+	// 获取待处理的任务项
+	taskItems, err := s.taskRepo.GetPendingTaskItems(ctx, queue.ID, 1000)
 	if err != nil {
-		logger.Error("获取队列图片失败", zap.Error(err))
+		logger.Error("获取队列任务项失败", zap.Error(err))
 		return
 	}
 
@@ -336,131 +432,48 @@ func (s *aiService) processQueue(ctx context.Context, queue *model.AIQueue) {
 	_, _, err = s.loadBalancer.GetClientByName(queue.ModelName)
 	if err != nil {
 		logger.Error("获取模型客户端失败", zap.String("model_name", queue.ModelName), zap.Error(err))
-		// 将所有待处理图片标记为失败
+		// 将所有待处理任务项标记为失败
 		errMsg := fmt.Sprintf("模型客户端不可用: %v", err)
-		for _, taskImage := range taskImages {
-			s.failTaskImage(ctx, taskImage, errMsg)
+		for _, taskItem := range taskItems {
+			s.failTaskItem(ctx, taskItem, errMsg)
 		}
 		return
 	}
 
-	logger.Info("开始处理队列图片",
+	logger.Info("开始处理队列任务项",
 		zap.Int64("queue_id", queue.ID),
 		zap.String("model_name", queue.ModelName),
-		zap.Int("image_count", len(taskImages)))
+		zap.Int("item_count", len(taskItems)))
 
-	for _, taskImage := range taskImages {
+	for _, taskItem := range taskItems {
 		select {
 		case <-s.processorCtx.Done():
 			return
 		default:
 		}
 
-		s.processTaskImage(ctx, queue, taskImage)
-	}
-}
+		// 获取处理器
+		processor, ok := GetProcessor(queue.TaskType)
+		if !ok {
+			s.failTaskItem(ctx, taskItem, fmt.Sprintf("未知的任务类型: %s", queue.TaskType))
+			continue
+		}
 
-// processTaskImage 处理单张图片
-func (s *aiService) processTaskImage(ctx context.Context, queue *model.AIQueue, taskImage *model.AITaskImage) {
-	image := taskImage.Image
-	if image == nil {
-		image, _ = s.imageRepo.FindByID(ctx, taskImage.ImageID)
-	}
+		//根据队列的任务类型获取对应的处理器，并调用处理器的 ProcessItem 方法
+		// 执行处理（带重试，尝试所有提供商）
+		err := s.loadBalancer.TryAllProviders(queue.ModelName, func(client llms.ModelClient, config *model.ModelConfig) error {
+			if !processor.SupportedBy(client) {
+				return fmt.Errorf("模型 %s 不支持任务类型 %s", config.ModelName, queue.TaskType)
+			}
+			return processor.ProcessItem(ctx, taskItem.ItemID, client, config)
+		})
 
-	if image == nil {
-		s.failTaskImage(ctx, taskImage, "图片不存在")
-		return
-	}
-
-	var err error
-	switch queue.TaskType {
-	case model.AITaskTypeEmbedding:
-		err = s.processImageEmbeddingWithRetry(ctx, queue.ModelName, image)
-	case model.AITaskTypeDescription:
-		err = fmt.Errorf("描述生成功能尚未实现")
-	default:
-		err = fmt.Errorf("未知的任务类型: %s", queue.TaskType)
-	}
-
-	if err != nil {
-		s.failTaskImage(ctx, taskImage, err.Error())
-	} else {
-		s.completeTaskImage(ctx, taskImage)
-	}
-}
-
-// processImageEmbeddingWithRetry 处理图片嵌入（带重试，尝试所有提供商）
-func (s *aiService) processImageEmbeddingWithRetry(ctx context.Context, modelName string, image *model.Image) error {
-	return s.loadBalancer.TryAllProviders(modelName, func(client llms.ModelClient, modelConfig *model.ModelConfig) error {
-		return s.processImageEmbedding(ctx, image, client, modelConfig)
-	})
-}
-
-// processImageEmbedding 处理图片嵌入
-func (s *aiService) processImageEmbedding(ctx context.Context, image *model.Image, client llms.ModelClient, modelConfig *model.ModelConfig) error {
-	if !client.SupportEmbedding() {
-		return fmt.Errorf("模型 %s 不支持嵌入", modelConfig.ModelName)
-	}
-
-	// 从存储读取图片数据
-	imageData, err := s.readImageData(ctx, image)
-	if err != nil {
-		return fmt.Errorf("读取图片数据失败: %v", err)
-	}
-
-	// 检查是否支持同时计算（自托管模型）
-	if client.SupportsEmbeddingWithAesthetics() {
-		embedding, score, err := client.EmbeddingWithAesthetics(ctx, imageData)
 		if err != nil {
-			return err
+			s.failTaskItem(ctx, taskItem, err.Error())
+		} else {
+			s.completeTaskItem(ctx, taskItem)
 		}
-
-		// 保存嵌入向量
-		embeddingModel := &model.ImageEmbedding{
-			ImageID:   image.ID,
-			ModelID:   modelConfig.ID,
-			ModelName: modelConfig.ModelName,
-			Dimension: len(embedding),
-			Embedding: model.Vector(embedding),
-		}
-		if err := s.embeddingRepo.Save(ctx, embeddingModel); err != nil {
-			return err
-		}
-
-		// 更新图片评分
-		image.AIScore = &score
-
-		return s.imageRepo.Update(ctx, image)
 	}
-
-	// 普通嵌入处理
-	embedding, err := client.Embedding(ctx, imageData, "")
-	if err != nil {
-		return err
-	}
-
-	// 保存嵌入
-	embeddingModel := &model.ImageEmbedding{
-		ImageID:   image.ID,
-		ModelID:   modelConfig.ID,
-		ModelName: modelConfig.ModelName,
-		Dimension: len(embedding),
-		Embedding: model.Vector(embedding),
-	}
-
-	return s.embeddingRepo.Save(ctx, embeddingModel)
-}
-
-// readImageData 从存储读取图片数据
-func (s *aiService) readImageData(ctx context.Context, image *model.Image) ([]byte, error) {
-	storageManager := s.settingService.GetStorageManager()
-	reader, err := storageManager.Download(ctx, image.StorageId, image.StoragePath)
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
-
-	return io.ReadAll(reader)
 }
 
 // ================== 语义搜索 ==================
@@ -499,13 +512,12 @@ func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byt
 }
 
 // ================== 辅助方法 ==================
+func (s *aiService) failTaskItem(ctx context.Context, taskItem *model.AITaskItem, errMsg string) {
+	logger.Info("AI 任务失败: " + errMsg)
 
-func (s *aiService) failTaskImage(ctx context.Context, taskImage *model.AITaskImage, errMsg string) {
-	logger.Info("图片 AI 任务失败: " + errMsg)
-
-	taskImage.Status = model.AITaskImageStatusFailed
-	taskImage.Error = &errMsg
-	err := s.taskRepo.UpdateTaskImage(ctx, taskImage)
+	taskItem.Status = model.AITaskItemStatusFailed
+	taskItem.Error = &errMsg
+	err := s.taskRepo.UpdateTaskItem(ctx, taskItem)
 	if err != nil {
 		logger.Error("操作数据库失败", zap.Error(err))
 	}
@@ -514,11 +526,11 @@ func (s *aiService) failTaskImage(ctx context.Context, taskImage *model.AITaskIm
 	s.notifyStatusChange(ctx)
 }
 
-func (s *aiService) completeTaskImage(ctx context.Context, taskImage *model.AITaskImage) {
+func (s *aiService) completeTaskItem(ctx context.Context, taskItem *model.AITaskItem) {
 	// 成功后删除关联记录
-	err := s.taskRepo.RemoveTaskImage(ctx, taskImage.ID)
+	err := s.taskRepo.RemoveTaskItem(ctx, taskItem.ID)
 	if err != nil {
-		logger.Error("删除任务图片关联失败", zap.Error(err))
+		logger.Error("删除任务项关联失败", zap.Error(err))
 	}
 
 	// 通知状态变化

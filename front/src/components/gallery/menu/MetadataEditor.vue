@@ -202,11 +202,11 @@
 </template>
 
 <script setup lang="ts">
-import {ref, computed, watch} from 'vue'
+import {computed, ref, watch} from 'vue'
 import Modal from '@/components/common/Modal.vue'
 import LocationPicker from '@/components/common/LocationPicker.vue'
 import {XMarkIcon} from '@heroicons/vue/24/outline'
-import type {Image, UpdateMetadataRequest, MetadataUpdate, Tag} from '@/types'
+import type {Image, MetadataUpdate, Tag, UpdateMetadataRequest} from '@/types'
 import {imageApi} from '@/api/image.ts'
 
 const props = defineProps<{
@@ -227,6 +227,7 @@ const allTags = ref<Tag[]>([])
 const selectedTags = ref<Tag[]>([])
 const tagSearchQuery = ref('')
 const showTagDropdown = ref(false)
+const isLoadingTags = ref(false)
 
 interface FormState {
   original_name?: string
@@ -244,26 +245,34 @@ const form = ref<FormState>({
 const isSingleMode = computed(() => props.imageIds.length === 1)
 const title = computed(() => isSingleMode.value ? '编辑图片元数据' : `批量编辑 ${props.imageIds.length} 张图片`)
 
-// 标签过滤和检测
+// 标签过滤（排除已选中的）
 const filteredTags = computed(() => {
-  const query = tagSearchQuery.value.toLowerCase().trim()
   const selectedIds = new Set(selectedTags.value.map(t => t.id))
-
-  return allTags.value.filter(tag =>
-      !selectedIds.has(tag.id) &&
-      (query === '' || tag.name.toLowerCase().includes(query))
-  )
+  return allTags.value.filter(tag => !selectedIds.has(tag.id))
 })
 
-// 加载所有标签
-const loadTags = async () => {
+// 防抖搜索标签
+let tagSearchTimer: ReturnType<typeof setTimeout> | null = null
+// 监听标签搜索输入
+watch(tagSearchQuery, (keyword) => {
+  if (tagSearchTimer) clearTimeout(tagSearchTimer)
+  tagSearchTimer = setTimeout(async () => {
+    await loadTags(keyword)
+  }, 300)
+})
+
+// 加载标签列表
+const loadTags = async (keyword?: string) => {
+  isLoadingTags.value = true
   try {
-    const res = await imageApi.getTags()
+    const res = await imageApi.getTags(keyword, 20)
     if (res.data) {
       allTags.value = res.data
     }
   } catch (e) {
     console.error('Failed to load tags', e)
+  } finally {
+    isLoadingTags.value = false
   }
 }
 

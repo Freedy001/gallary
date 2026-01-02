@@ -19,9 +19,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useImageStore } from '@/stores/image'
-import { useUIStore } from '@/stores/ui'
+import {onMounted} from 'vue'
+import {useImageStore} from '@/stores/image'
+import {useUIStore} from '@/stores/ui'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import CommandPalette from '@/components/search/CommandPalette.vue'
 import ImageGrid from '@/components/gallery/ImageGrid.vue'
@@ -34,7 +34,7 @@ const imageStore = useImageStore()
 const uiStore = useUIStore()
 
 onMounted(async () => {
-  const pageSize = uiStore.pageSize
+  const pageSize = uiStore.imagePageSize
   await imageStore.refreshImages(async (page: number, size: number): Promise<Pageable<Image>> => (await imageApi.getList(page, size)).data, pageSize)
 
   // 加载图片列表

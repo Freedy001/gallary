@@ -1,7 +1,7 @@
 import {defineStore} from 'pinia'
-import {ref, computed} from 'vue'
+import {computed, ref} from 'vue'
 import {imageApi} from '@/api/image'
-import type {Image, Pageable} from '@/types'
+import type {Image, Pageable, SearchParams} from '@/types'
 
 export const useImageStore = defineStore('image', () => {
   // State
@@ -18,6 +18,16 @@ export const useImageStore = defineStore('image', () => {
   // Search state
   const isSearchMode = ref(false)
   const searchDescription = ref('')
+  const searchFilters = ref<SearchParams>({
+    keyword: '',
+    start_date: '',
+    end_date: '',
+    location: '',
+    tags: [],  // 改为数组类型
+    latitude: undefined,
+    longitude: undefined,
+    radius: 10,
+  })
 
   // Computed
   const selectedCount = computed(() => selectedImages.value.size)
@@ -137,6 +147,7 @@ export const useImageStore = defineStore('image', () => {
     total,
     isSearchMode,
     searchDescription,
+    searchFilters,
     // Computed
     selectedCount,
     selectedIds,

@@ -36,8 +36,8 @@ func (c *OpenAIClient) SupportsTextEmbedding() bool {
 	return false
 }
 
-// SupportsCombined OpenAI 客户端不支持同时计算
-func (c *OpenAIClient) SupportsEmbeddingWithAesthetics() bool {
+// SupportAesthetics OpenAI 客户端不支持美学评分
+func (c *OpenAIClient) SupportAesthetics() bool {
 	return false
 }
 
@@ -46,10 +46,9 @@ func (c *OpenAIClient) Embedding(ctx context.Context, imageData []byte, text str
 	return nil, fmt.Errorf("OpenAI 客户端不支持嵌入")
 }
 
-// EmbeddingWithAesthetics OpenAI 客户端不支持同时计算
-func (c *OpenAIClient) EmbeddingWithAesthetics(ctx context.Context, imageData []byte) ([]float32, float64, error) {
-	embedding, err := c.Embedding(ctx, imageData, "")
-	return embedding, 0, err
+// Aesthetics OpenAI 客户端不支持美学评分
+func (c *OpenAIClient) Aesthetics(ctx context.Context, imageData []byte) (float64, error) {
+	return 0, fmt.Errorf("OpenAI 客户端不支持美学评分")
 }
 
 // TestConnection 测试连接

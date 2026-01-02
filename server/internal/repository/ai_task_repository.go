@@ -14,32 +14,31 @@ import (
 // AITaskRepository AI 任务/队列仓库接口
 type AITaskRepository interface {
 	// 队列管理
-	FindOrCreateQueue(ctx context.Context, taskType string, modelName string) (*model.AIQueue, error)
+	FindOrCreateQueue(ctx context.Context, taskType model.TaskType, modelName string) (*model.AIQueue, error)
 	FindQueueByID(ctx context.Context, id int64) (*model.AIQueue, error)
 	UpdateQueue(ctx context.Context, queue *model.AIQueue) error
 	GetAllQueues(ctx context.Context) ([]*model.AIQueue, error)
-	DeleteQueueWithImages(ctx context.Context, queueID int64) error
-	DeleteQueuesByModelName(ctx context.Context, modelName string) error
+	DeleteQueueWithItems(ctx context.Context, queueID int64) error
 
-	// 队列图片管理
-	AddImagesToQueue(ctx context.Context, queueID int64, queueKey string, imageIDs []int64) (int, error)
-	RemoveTaskImage(ctx context.Context, taskImageID int64) error
-	GetPendingTaskImages(ctx context.Context, queueID int64, limit int) ([]*model.AITaskImage, error)
-	UpdateTaskImage(ctx context.Context, taskImage *model.AITaskImage) error
+	// 队列任务项管理（通用）
+	AddItemsToQueue(ctx context.Context, queueID int64, queueKey string, itemIDs []int64, taskType model.TaskType) (int, error)
+	RemoveTaskItem(ctx context.Context, taskItemID int64) error
+	GetPendingTaskItems(ctx context.Context, queueID int64, limit int) ([]*model.AITaskItem, error)
+	UpdateTaskItem(ctx context.Context, taskItem *model.AITaskItem) error
 
 	// 统计
 	GetQueueStats(ctx context.Context, queueID int64) (pending, processing, failed int, err error)
 	GetQueueStatus(ctx context.Context) (*model.AIQueueStatus, error)
 
 	// 队列详情
-	GetFailedTaskImages(ctx context.Context, queueID int64, page, pageSize int) ([]*model.AITaskImage, int64, error)
+	GetFailedTaskItems(ctx context.Context, queueID int64, page, pageSize int) ([]*model.AITaskItem, int64, error)
 
 	// 重试相关
-	RetryTaskImage(ctx context.Context, taskImageID int64) error
-	RetryQueueFailedImages(ctx context.Context, queueID int64) error
+	RetryTaskItem(ctx context.Context, taskItemID int64) error
+	RetryQueueFailedItems(ctx context.Context, queueID int64) error
 
-	// 查找有待处理图片的队列
-	FindQueuesWithPendingImages(ctx context.Context, limit int) ([]*model.AIQueue, error)
+	// 查找有待处理项目的队列
+	FindQueuesWithPendingItems(ctx context.Context, limit int) ([]*model.AIQueue, error)
 }
 
 type aiTaskRepository struct{}
@@ -52,7 +51,7 @@ func NewAITaskRepository() AITaskRepository {
 // ================== 队列管理 ==================
 
 // FindOrCreateQueue 查找或创建队列
-func (r *aiTaskRepository) FindOrCreateQueue(ctx context.Context, taskType string, modelName string) (*model.AIQueue, error) {
+func (r *aiTaskRepository) FindOrCreateQueue(ctx context.Context, taskType model.TaskType, modelName string) (*model.AIQueue, error) {
 	queueKey := model.GenerateQueueKey(taskType, modelName)
 
 	var queue model.AIQueue
@@ -115,13 +114,13 @@ func (r *aiTaskRepository) GetAllQueues(ctx context.Context) ([]*model.AIQueue, 
 	return queues, err
 }
 
-// DeleteQueueWithImages 删除队列及其关联的任务图片
-func (r *aiTaskRepository) DeleteQueueWithImages(ctx context.Context, queueID int64) error {
+// DeleteQueueWithItems 删除队列及其关联的任务项
+func (r *aiTaskRepository) DeleteQueueWithItems(ctx context.Context, queueID int64) error {
 	db := database.GetDB(ctx).WithContext(ctx)
 
 	return db.Transaction(func(tx *gorm.DB) error {
-		// 先删除所有关联的任务图片
-		if err := tx.Where("task_id = ?", queueID).Delete(&model.AITaskImage{}).Error; err != nil {
+		// 先删除所有关联的任务项
+		if err := tx.Where("task_id = ?", queueID).Delete(&model.AITaskItem{}).Error; err != nil {
 			return err
 		}
 
@@ -134,59 +133,35 @@ func (r *aiTaskRepository) DeleteQueueWithImages(ctx context.Context, queueID in
 	})
 }
 
-// DeleteQueuesByModelName 删除指定模型的所有队列及其关联的任务图片
-func (r *aiTaskRepository) DeleteQueuesByModelName(ctx context.Context, modelName string) error {
-	db := database.GetDB(ctx).WithContext(ctx)
+// DeleteQueuesByModelName 删除指定模型的所有队列及其关联的任务项
 
-	return db.Transaction(func(tx *gorm.DB) error {
-		// 查找该模型的所有队列
-		var queues []*model.AIQueue
-		if err := tx.Where("model_name = ?", modelName).Find(&queues).Error; err != nil {
-			return err
-		}
+// ================== 队列任务项管理 ==================
 
-		// 删除每个队列的任务图片
-		for _, queue := range queues {
-			if err := tx.Where("task_id = ?", queue.ID).Delete(&model.AITaskImage{}).Error; err != nil {
-				return err
-			}
-		}
-
-		// 删除所有队列
-		if err := tx.Where("model_name = ?", modelName).Delete(&model.AIQueue{}).Error; err != nil {
-			return err
-		}
-
-		return nil
-	})
-}
-
-// ================== 队列图片管理 ==================
-
-// AddImagesToQueue 向队列添加图片（去重）
+// AddItemsToQueue 向队列添加任务项（去重）
 // 返回实际添加的数量
-func (r *aiTaskRepository) AddImagesToQueue(ctx context.Context, queueID int64, queueKey string, imageIDs []int64) (int, error) {
-	if len(imageIDs) == 0 {
+func (r *aiTaskRepository) AddItemsToQueue(ctx context.Context, queueID int64, queueKey string, itemIDs []int64, taskType model.TaskType) (int, error) {
+	if len(itemIDs) == 0 {
 		return 0, nil
 	}
 
-	taskImages := make([]model.AITaskImage, len(imageIDs))
-	for i, imageID := range imageIDs {
-		taskImages[i] = model.AITaskImage{
+	taskItems := make([]model.AITaskItem, len(itemIDs))
+	for i, itemID := range itemIDs {
+		taskItems[i] = model.AITaskItem{
 			TaskID:   queueID,
-			ImageID:  imageID,
+			ItemID:   itemID,
+			TaskType: taskType,
 			QueueKey: queueKey,
-			Status:   model.AITaskImageStatusPending,
+			Status:   model.AITaskItemStatusPending,
 		}
 	}
 
 	// 使用 ON CONFLICT DO NOTHING 来忽略重复
 	result := database.GetDB(ctx).WithContext(ctx).
 		Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "image_id"}, {Name: "queue_key"}},
+			Columns:   []clause.Column{{Name: "item_id"}, {Name: "queue_key"}},
 			DoNothing: true,
 		}).
-		CreateInBatches(taskImages, 100)
+		CreateInBatches(taskItems, 100)
 
 	if result.Error != nil {
 		return 0, result.Error
@@ -195,27 +170,26 @@ func (r *aiTaskRepository) AddImagesToQueue(ctx context.Context, queueID int64, 
 	return int(result.RowsAffected), nil
 }
 
-// RemoveTaskImage 删除任务图片关联（处理成功后调用）
-func (r *aiTaskRepository) RemoveTaskImage(ctx context.Context, taskImageID int64) error {
+// RemoveTaskItem 删除任务项关联（处理成功后调用）
+func (r *aiTaskRepository) RemoveTaskItem(ctx context.Context, taskItemID int64) error {
 	return database.GetDB(ctx).WithContext(ctx).
-		Delete(&model.AITaskImage{}, taskImageID).Error
+		Delete(&model.AITaskItem{}, taskItemID).Error
 }
 
-// GetPendingTaskImages 获取队列中待处理的图片
-func (r *aiTaskRepository) GetPendingTaskImages(ctx context.Context, queueID int64, limit int) ([]*model.AITaskImage, error) {
-	var taskImages []*model.AITaskImage
+// GetPendingTaskItems 获取队列中待处理的任务项
+func (r *aiTaskRepository) GetPendingTaskItems(ctx context.Context, queueID int64, limit int) ([]*model.AITaskItem, error) {
+	var taskItems []*model.AITaskItem
 	err := database.GetDB(ctx).WithContext(ctx).
-		Where("task_id = ? AND status = ?", queueID, model.AITaskImageStatusPending).
-		Preload("Image").
+		Where("task_id = ? AND status = ?", queueID, model.AITaskItemStatusPending).
 		Order("created_at ASC").
 		Limit(limit).
-		Find(&taskImages).Error
-	return taskImages, err
+		Find(&taskItems).Error
+	return taskItems, err
 }
 
-// UpdateTaskImage 更新任务图片状态
-func (r *aiTaskRepository) UpdateTaskImage(ctx context.Context, taskImage *model.AITaskImage) error {
-	return database.GetDB(ctx).WithContext(ctx).Save(taskImage).Error
+// UpdateTaskItem 更新任务项状态
+func (r *aiTaskRepository) UpdateTaskItem(ctx context.Context, taskItem *model.AITaskItem) error {
+	return database.GetDB(ctx).WithContext(ctx).Save(taskItem).Error
 }
 
 // ================== 统计 ==================
@@ -226,12 +200,12 @@ func (r *aiTaskRepository) GetQueueStats(ctx context.Context, queueID int64) (pe
 
 	var pendingCount, failedCount int64
 
-	db.Model(&model.AITaskImage{}).
-		Where("task_id = ? AND status = ?", queueID, model.AITaskImageStatusPending).
+	db.Model(&model.AITaskItem{}).
+		Where("task_id = ? AND status = ?", queueID, model.AITaskItemStatusPending).
 		Count(&pendingCount)
 
-	db.Model(&model.AITaskImage{}).
-		Where("task_id = ? AND status = ?", queueID, model.AITaskImageStatusFailed).
+	db.Model(&model.AITaskItem{}).
+		Where("task_id = ? AND status = ?", queueID, model.AITaskItemStatusFailed).
 		Count(&failedCount)
 
 	return int(pendingCount), 0, int(failedCount), nil
@@ -257,7 +231,7 @@ func (r *aiTaskRepository) GetQueueStatus(ctx context.Context) (*model.AIQueueSt
 			return nil, err
 		}
 
-		// 只返回有图片的队列
+		// 只返回有任务项的队列
 		if pending == 0 && failed == 0 {
 			continue
 		}
@@ -285,54 +259,53 @@ func (r *aiTaskRepository) GetQueueStatus(ctx context.Context) (*model.AIQueueSt
 
 // ================== 队列详情 ==================
 
-// GetFailedTaskImages 获取队列中的失败图片列表（分页）
-func (r *aiTaskRepository) GetFailedTaskImages(ctx context.Context, queueID int64, page, pageSize int) ([]*model.AITaskImage, int64, error) {
+// GetFailedTaskItems 获取队列中的失败任务项列表（分页）
+func (r *aiTaskRepository) GetFailedTaskItems(ctx context.Context, queueID int64, page, pageSize int) ([]*model.AITaskItem, int64, error) {
 	db := database.GetDB(ctx).WithContext(ctx)
 
 	// 统计总数
 	var total int64
-	if err := db.Model(&model.AITaskImage{}).
-		Where("task_id = ? AND status = ?", queueID, model.AITaskImageStatusFailed).
+	if err := db.Model(&model.AITaskItem{}).
+		Where("task_id = ? AND status = ?", queueID, model.AITaskItemStatusFailed).
 		Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	// 分页查询
-	var taskImages []*model.AITaskImage
+	var taskItems []*model.AITaskItem
 	offset := (page - 1) * pageSize
-	if err := db.Where("task_id = ? AND status = ?", queueID, model.AITaskImageStatusFailed).
-		Preload("Image").
+	if err := db.Where("task_id = ? AND status = ?", queueID, model.AITaskItemStatusFailed).
 		Order("updated_at DESC").
 		Offset(offset).
 		Limit(pageSize).
-		Find(&taskImages).Error; err != nil {
+		Find(&taskItems).Error; err != nil {
 		return nil, 0, err
 	}
 
-	return taskImages, total, nil
+	return taskItems, total, nil
 }
 
 // ================== 重试相关 ==================
 
-// RetryTaskImage 重试单张图片（重置状态为 pending）
-func (r *aiTaskRepository) RetryTaskImage(ctx context.Context, taskImageID int64) error {
+// RetryTaskItem 重试单个任务项（重置状态为 pending）
+func (r *aiTaskRepository) RetryTaskItem(ctx context.Context, taskItemID int64) error {
 	return database.GetDB(ctx).WithContext(ctx).
-		Model(&model.AITaskImage{}).
-		Where("id = ? AND status = ?", taskImageID, model.AITaskImageStatusFailed).
+		Model(&model.AITaskItem{}).
+		Where("id = ? AND status = ?", taskItemID, model.AITaskItemStatusFailed).
 		Updates(map[string]interface{}{
-			"status":     model.AITaskImageStatusPending,
+			"status":     model.AITaskItemStatusPending,
 			"error":      gorm.Expr("NULL"),
 			"updated_at": time.Now(),
 		}).Error
 }
 
-// RetryQueueFailedImages 重试队列中所有失败的图片
-func (r *aiTaskRepository) RetryQueueFailedImages(ctx context.Context, queueID int64) error {
+// RetryQueueFailedItems 重试队列中所有失败的任务项
+func (r *aiTaskRepository) RetryQueueFailedItems(ctx context.Context, queueID int64) error {
 	return database.GetDB(ctx).WithContext(ctx).
-		Model(&model.AITaskImage{}).
-		Where("task_id = ? AND status = ?", queueID, model.AITaskImageStatusFailed).
+		Model(&model.AITaskItem{}).
+		Where("task_id = ? AND status = ?", queueID, model.AITaskItemStatusFailed).
 		Updates(map[string]interface{}{
-			"status":     model.AITaskImageStatusPending,
+			"status":     model.AITaskItemStatusPending,
 			"error":      gorm.Expr("NULL"),
 			"updated_at": time.Now(),
 		}).Error
@@ -340,14 +313,14 @@ func (r *aiTaskRepository) RetryQueueFailedImages(ctx context.Context, queueID i
 
 // ================== 查找队列 ==================
 
-// FindQueuesWithPendingImages 查找有待处理图片的队列
-func (r *aiTaskRepository) FindQueuesWithPendingImages(ctx context.Context, limit int) ([]*model.AIQueue, error) {
+// FindQueuesWithPendingItems 查找有待处理任务项的队列
+func (r *aiTaskRepository) FindQueuesWithPendingItems(ctx context.Context, limit int) ([]*model.AIQueue, error) {
 	db := database.GetDB(ctx).WithContext(ctx)
 
-	// 子查询：获取有待处理图片的队列 ID
-	subQuery := db.Model(&model.AITaskImage{}).
+	// 子查询：获取有待处理任务项的队列 ID
+	subQuery := db.Model(&model.AITaskItem{}).
 		Select("DISTINCT task_id").
-		Where("status = ?", model.AITaskImageStatusPending)
+		Where("status = ?", model.AITaskItemStatusPending)
 
 	var queues []*model.AIQueue
 	err := db.Where("id IN (?)", subQuery).
@@ -355,120 +328,5 @@ func (r *aiTaskRepository) FindQueuesWithPendingImages(ctx context.Context, limi
 		Limit(limit).
 		Find(&queues).Error
 
-	return queues, err
-}
-
-// ================== 兼容旧接口 ==================
-
-// Create 创建任务（兼容旧代码）
-func (r *aiTaskRepository) Create(ctx context.Context, task *model.AIQueue) error {
-	return database.GetDB(ctx).WithContext(ctx).Create(task).Error
-}
-
-// FindByID 根据 ID 查找任务（兼容旧代码）
-func (r *aiTaskRepository) FindByID(ctx context.Context, id int64) (*model.AIQueue, error) {
-	return r.FindQueueByID(ctx, id)
-}
-
-// Update 更新任务（兼容旧代码）
-func (r *aiTaskRepository) Update(ctx context.Context, task *model.AIQueue) error {
-	return r.UpdateQueue(ctx, task)
-}
-
-// Delete 删除任务（兼容旧代码，但在新逻辑中不应使用）
-func (r *aiTaskRepository) Delete(ctx context.Context, id int64) error {
-	return database.GetDB(ctx).WithContext(ctx).Delete(&model.AIQueue{}, id).Error
-}
-
-// CreateTaskImages 批量创建任务图片关联（兼容旧代码）
-func (r *aiTaskRepository) CreateTaskImages(ctx context.Context, taskImages []model.AITaskImage) error {
-	if len(taskImages) == 0 {
-		return nil
-	}
-	return database.GetDB(ctx).WithContext(ctx).CreateInBatches(taskImages, 100).Error
-}
-
-// GetPendingTasks 获取待处理任务（兼容旧代码）
-func (r *aiTaskRepository) GetPendingTasks(ctx context.Context, limit int) ([]*model.AIQueue, error) {
-	return r.FindQueuesWithPendingImages(ctx, limit)
-}
-
-// GetProcessingTasks 获取处理中的任务（兼容旧代码）
-func (r *aiTaskRepository) GetProcessingTasks(ctx context.Context) ([]*model.AIQueue, error) {
-	var tasks []*model.AIQueue
-	err := database.GetDB(ctx).WithContext(ctx).
-		Where("status = ?", model.AIQueueStatusProcessing).
-		Find(&tasks).Error
-	return tasks, err
-}
-
-// GetTaskImages 获取任务关联的图片（兼容旧代码）
-func (r *aiTaskRepository) GetTaskImages(ctx context.Context, taskID int64, status string) ([]*model.AITaskImage, error) {
-	var taskImages []*model.AITaskImage
-	query := database.GetDB(ctx).WithContext(ctx).
-		Where("task_id = ?", taskID)
-	if status != "" {
-		query = query.Where("status = ?", status)
-	}
-	err := query.Preload("Image").Find(&taskImages).Error
-	return taskImages, err
-}
-
-// GetActiveTasks 获取活跃任务（兼容旧代码）
-func (r *aiTaskRepository) GetActiveTasks(ctx context.Context, limit int) ([]*model.AIQueue, error) {
-	return r.FindQueuesWithPendingImages(ctx, limit)
-}
-
-// CountPendingImages 统计待处理的图片数量（兼容旧代码）
-func (r *aiTaskRepository) CountPendingImages(ctx context.Context) (int64, error) {
-	var count int64
-	err := database.GetDB(ctx).WithContext(ctx).
-		Model(&model.AITaskImage{}).
-		Where("status = ?", model.AITaskImageStatusPending).
-		Count(&count).Error
-	return count, err
-}
-
-// GetFailedTasks 获取有失败图片的队列（兼容旧代码）
-func (r *aiTaskRepository) GetFailedTasks(ctx context.Context) ([]*model.AIQueue, error) {
-	db := database.GetDB(ctx).WithContext(ctx)
-
-	// 子查询：获取有失败图片的队列 ID
-	subQuery := db.Model(&model.AITaskImage{}).
-		Select("DISTINCT task_id").
-		Where("status = ?", model.AITaskImageStatusFailed)
-
-	var queues []*model.AIQueue
-	err := db.Where("id IN (?)", subQuery).Find(&queues).Error
-	return queues, err
-}
-
-// ResetFailedTaskImages 重置任务中失败的图片状态（兼容旧代码）
-func (r *aiTaskRepository) ResetFailedTaskImages(ctx context.Context, taskID int64) error {
-	return r.RetryQueueFailedImages(ctx, taskID)
-}
-
-// FindActiveTaskByModelID 查找指定模型的队列（兼容旧代码）
-func (r *aiTaskRepository) FindActiveTaskByModelID(ctx context.Context, modelID string) (*model.AIQueue, error) {
-	queueKey := model.GenerateQueueKey(model.AITaskTypeEmbedding, modelID)
-	var queue model.AIQueue
-	err := database.GetDB(ctx).WithContext(ctx).
-		Where("queue_key = ?", queueKey).
-		First(&queue).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &queue, nil
-}
-
-// FindActiveTasksByType 查找指定类型的队列（兼容旧代码）
-func (r *aiTaskRepository) FindActiveTasksByType(ctx context.Context, taskType string) ([]*model.AIQueue, error) {
-	var queues []*model.AIQueue
-	err := database.GetDB(ctx).WithContext(ctx).
-		Where("task_type = ?", taskType).
-		Find(&queues).Error
 	return queues, err
 }

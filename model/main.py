@@ -1,31 +1,62 @@
 """
 Image Aesthetic & Embedding Service
-基于 Aesthetic Predictor V2.5 和 SigLIP 的图片美学评分与向量嵌入微服务
+基于 SigLIP2 + 自训练 LoRA 的图片美学评分与向量嵌入微服务
 
 启动方式:
-    python main.py                    # 默认端口 8100
-    PORT=8080 python main.py          # 自定义端口
+    python main.py                              # 默认 PyTorch 后端
+    BACKEND=onnx python main.py                 # 使用 ONNX 后端
+    PORT=8080 python main.py                    # 自定义端口
     uvicorn main:app --host 0.0.0.0 --port 8100
 """
 
 import os
 from contextlib import asynccontextmanager
 
+import torch
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.models import HealthResponse
+from app.prompt_optimizer import prompt_optimizer_service
 from app.routers import aesthetics_router, embeddings_router, multimodal_embedding_router
-from app.services import model_service
+from app.services import model_service, BackendType
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_):
     """应用生命周期管理 - 启动时加载模型"""
-    # 启动时加载模型
+    # 获取配置
     device = os.environ.get("DEVICE", None)
-    model_service.initialize(device=device)
+    if device is None:
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
+
+    backend_str = os.environ.get("BACKEND", "pytorch").lower()
+    backend = BackendType.ONNX if backend_str == "onnx" else BackendType.PYTORCH
+
+    # 模型路径配置
+    base_model_path = os.environ.get("BASE_MODEL_PATH", None)
+    lora_weights_path = os.environ.get("LORA_WEIGHTS_PATH", None)
+    onnx_model_path = os.environ.get("ONNX_MODEL_PATH", None)
+
+    # 初始化模型
+    model_service.initialize(
+        device=device,
+        backend=backend,
+        base_model_path=base_model_path,
+        lora_weights_path=lora_weights_path,
+        onnx_model_path=onnx_model_path,
+    )
+
+    # 加载提示词优化模型（可选，通过环境变量控制）
+    if os.environ.get("ENABLE_PROMPT_OPTIMIZER", "true").lower() == "true":
+        prompt_optimizer_service.initialize(device=device, gguf_model_path="/Users/wuyuejiang/.cache/huggingface/hub/models--Qwen--Qwen3-0.6B-GGUF/blobs/9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031")
+
     yield
     # 关闭时清理（如果需要）
 
@@ -34,13 +65,24 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Image Aesthetic & Embedding Service",
     description="""
-基于 Aesthetic Predictor V2.5 和 SigLIP 的图片美学评分与向量嵌入微服务
+基于 SigLIP2 + 自训练 LoRA 的图片美学评分与向量嵌入微服务
 
 ## 功能
 
 - **嵌入接口** (`/v1/embeddings`): 兼容 OpenAI Embeddings API，生成图片向量
-- **美学评分** (`/v1/aesthetics`): 评估图片美学质量，返回 1-10 分评分
+- **美学评分** (`/v1/aesthetics`): 评估图片美学质量，返回 1-10 分评分及概率分布
 - **多模态嵌入** (`/v1/multimodal-embedding`): 兼容阿里云 API，支持文本和图片
+
+## 模型
+
+- 基础模型: google/siglip2-so400m-patch16-512
+- 美学评分: 自训练 LoRA 模型，输出 10 类评分概率分布
+
+## 后端
+
+支持两种推理后端:
+- **PyTorch**: 完整功能，支持 GPU 加速
+- **ONNX**: 轻量化 CPU 推理，适合部署
 
 ## 输入格式
 
@@ -49,7 +91,7 @@ app = FastAPI(
 - HTTP URL: `https://example.com/image.jpg`
 - Base64: `data:image/jpeg;base64,/9j/4AAQ...` 或纯 Base64 字符串
     """,
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -75,6 +117,7 @@ async def health_check() -> HealthResponse:
         status="ok",
         model_loaded=model_service.is_loaded,
         device=model_service.device or "not initialized",
+        backend=model_service.backend.backend_type if model_service.backend else "not initialized",
     )
 
 
@@ -83,13 +126,22 @@ async def root():
     """根路径 - API 信息"""
     return {
         "name": "Image Aesthetic & Embedding Service",
-        "version": "1.0.0",
+        "version": "2.0.0",
+        "model": {
+            "base": "google/siglip2-so400m-patch16-512",
+            "aesthetic": "siglip2-aesthetic-lora",
+            "backend": model_service.backend.backend_type if model_service.backend else "not initialized",
+        },
         "endpoints": {
             "embeddings": "/v1/embeddings",
             "aesthetics": "/v1/aesthetics",
             "multimodal_embedding": "/v1/multimodal-embedding",
             "health": "/health",
             "docs": "/docs",
+        },
+        "prompt_optimizer": {
+            "enabled": prompt_optimizer_service.is_loaded,
+            "model": "Qwen/Qwen3-0.6B",
         },
     }
 

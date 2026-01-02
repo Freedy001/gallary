@@ -395,9 +395,16 @@ func (m *ModelConfig) Hash() string {
 	return hex.EncodeToString(h[:])
 }
 
+// AIGlobalConfig AI 全局配置
+type AIGlobalConfig struct {
+	DefaultSearchModelId string `json:"default_search_model_id"` // 默认搜索模型 ID
+	DefaultTagModelId    string `json:"default_tag_model_id"`    // 默认打标签模型 ID
+}
+
 // AIPo AI 配置 PO
 type AIPo struct {
-	Models []*ModelConfig `json:"models"` // 通用模型配置
+	Models       []*ModelConfig  `json:"models"`        // 通用模型配置
+	GlobalConfig *AIGlobalConfig `json:"global_config"` // 全局配置
 }
 
 func (a AIPo) Category() string {
@@ -443,4 +450,36 @@ func (a AIPo) FindModelsByName(modelName string) []*ModelConfig {
 		}
 	}
 	return models
+}
+
+// GetDefaultSearchModel 获取默认搜索模型
+func (a AIPo) GetDefaultSearchModel() *ModelConfig {
+	if a.GlobalConfig != nil && a.GlobalConfig.DefaultSearchModelId != "" {
+		if model := a.FindModelById(a.GlobalConfig.DefaultSearchModelId); model != nil && model.Enabled {
+			return model
+		}
+	}
+	// 回退到第一个启用的模型
+	models := a.GetEnabledModels()
+	if len(models) > 0 {
+		return models[0]
+	}
+	return nil
+}
+
+// GetDefaultTagName 获取默认打标签模型
+func (a AIPo) GetDefaultTagName() string {
+	if a.GlobalConfig != nil && a.GlobalConfig.DefaultTagModelId != "" {
+		if model := a.FindModelById(a.GlobalConfig.DefaultTagModelId); model != nil && model.Enabled {
+			return model.ModelName
+		}
+	}
+
+	// 回退到第一个启用的模型
+	models := a.GetEnabledModels()
+	if len(models) > 0 {
+		return models[0].ApiModelName
+	}
+
+	return ""
 }

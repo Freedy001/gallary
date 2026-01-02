@@ -16,13 +16,13 @@
               <component
                   :is="isSemanticSearch ? SparklesIcon : MagnifyingGlassIcon"
                   :class="[
-                    'h-6 w-6 flex-shrink-0 animate-pulse',
+                    'h-6 w-6 shrink-0 animate-pulse',
                     isSemanticSearch ? 'text-pink-500' : 'text-primary-500'
                   ]"
               />
               <input
                   ref="searchInputRef"
-                  v-model="filters.keyword"
+                  v-model="imageStore.searchFilters.keyword"
                   type="text"
                   :placeholder="isSemanticSearch ? '描述你想找的图片，如：海边日落、穿红色衣服的人...' : '搜索影像记忆 / 日期 / 地点...'"
                   class="flex-1 border-none bg-transparent text-lg text-white placeholder:text-gray-600 focus:outline-none font-light tracking-wide"
@@ -45,7 +45,7 @@
           </div>
 
           <!-- 筛选选项 -->
-          <div class="border-b border-white/5 px-5 py-4 bg-white/[0.02]">
+          <div class="border-b border-white/5 px-5 py-4 bg-white/2">
             <div class="flex flex-wrap gap-2">
               <!-- AI 语义搜索 -->
               <button
@@ -54,7 +54,7 @@
                   :class="[
                   'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-medium transition-all duration-300 border',
                   isSemanticSearch
-                    ? 'bg-gradient-to-r from-primary-500/30 to-pink-500/30 text-primary-200 border-primary-400/50 shadow-[0_0_15px_rgba(139,92,246,0.3)]'
+                    ? 'bg-linear-to-r from-primary-500/30 to-pink-500/30 text-primary-200 border-primary-400/50 shadow-glow'
                     : 'bg-white/5 text-gray-400 border-transparent hover:bg-white/10 hover:text-gray-200',
                 ]"
               >
@@ -109,7 +109,7 @@
           </div>
 
           <!-- 图片上传区域（仅在语义搜索开启时显示） -->
-          <div v-if="isSemanticSearch" class="border-b border-white/5 px-5 py-4 bg-white/[0.01]">
+          <div v-if="isSemanticSearch" class="border-b border-white/5 px-5 py-4 bg-white/1">
             <label class="mb-3 block text-xs font-medium text-gray-400">以图搜图（可选）</label>
 
             <!-- 已选择图片预览 -->
@@ -138,7 +138,7 @@
                   'flex items-center justify-center gap-3 h-24 rounded-xl border-2 border-dashed cursor-pointer transition-all duration-200',
                   isDragging
                     ? 'border-primary-500 bg-primary-500/10'
-                    : 'border-white/10 hover:border-white/20 hover:bg-white/[0.02]'
+                    : 'border-white/10 hover:border-white/20 hover:bg-white/2'
                 ]"
             >
               <PhotoIcon class="h-8 w-8 text-gray-500"/>
@@ -165,13 +165,13 @@
               <label class="mb-3 block text-sm font-medium text-gray-300">日期范围</label>
               <div class="flex items-center gap-3">
                 <input
-                    v-model="filters.start_date"
+                    v-model="imageStore.searchFilters.start_date"
                     type="date"
                     class="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/50"
                 />
                 <span class="text-sm font-medium text-gray-600">至</span>
                 <input
-                    v-model="filters.end_date"
+                    v-model="imageStore.searchFilters.end_date"
                     type="date"
                     class="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/50"
                 />
@@ -181,9 +181,9 @@
             <!-- 位置筛选 -->
             <div v-if="activeFilters.has('location')" class="mb-6 last:mb-0">
               <LocationPicker
-                  v-model="filters.location"
-                  v-model:latitude="filters.latitude"
-                  v-model:longitude="filters.longitude"
+                  v-model="imageStore.searchFilters.location"
+                  v-model:latitude="imageStore.searchFilters.latitude"
+                  v-model:longitude="imageStore.searchFilters.longitude"
                   label="位置名称 (搜索)"
                   :show-map="true"
                   placeholder="例如: 北京"
@@ -191,7 +191,7 @@
               <!-- 搜索半径选择 -->
               <div class="mt-4">
                 <label class="block text-sm font-medium text-white/80 mb-2">
-                  搜索半径: <span class="text-primary-400">{{ filters.radius || 10 }} 公里</span>
+                  搜索半径: <span class="text-primary-400">{{ imageStore.searchFilters.radius || 10 }} 公里</span>
                 </label>
                 <div class="flex items-center gap-3">
                   <span class="text-xs text-gray-500">1km</span>
@@ -199,8 +199,8 @@
                       type="range"
                       min="1"
                       max="100"
-                      :value="filters.radius || 10"
-                      @input="(e) => filters.radius = Number((e.target as HTMLInputElement).value)"
+                      :value="imageStore.searchFilters.radius || 10"
+                      @input="(e) => imageStore.searchFilters.radius = Number((e.target as HTMLInputElement).value)"
                       class="flex-1 cursor-pointer accent-primary-500 h-1.5 bg-white/10 rounded-full appearance-none hover:bg-white/20"
                   />
                   <span class="text-xs text-gray-500">100km</span>
@@ -249,10 +249,10 @@
                       :key="tag.id"
                       @click="toggleTag(tag.id)"
                       class="flex items-center justify-between w-full px-4 py-2.5 text-sm text-left hover:bg-white/5 transition-colors"
-                      :class="filters.tags?.includes(tag.id) ? 'text-primary-300' : 'text-gray-300'"
+                      :class="imageStore.searchFilters.tags?.includes(tag.id) ? 'text-primary-300' : 'text-gray-300'"
                   >
                     <span>{{ tag.name }}</span>
-                    <CheckIcon v-if="filters.tags?.includes(tag.id)" class="h-4 w-4 text-primary-400"/>
+                    <CheckIcon v-if="imageStore.searchFilters.tags?.includes(tag.id)" class="h-4 w-4 text-primary-400"/>
                   </button>
                 </div>
               </div>
@@ -288,7 +288,7 @@
                   :class="[
                     'rounded-xl px-6 py-2 text-sm font-bold text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed',
                     isSemanticSearch
-                      ? 'bg-gradient-to-r from-primary-600 to-pink-600 shadow-[0_0_20px_rgba(236,72,153,0.4)] hover:shadow-[0_0_30px_rgba(236,72,153,0.6)]'
+                      ? 'bg-linear-to-r from-primary-600 to-pink-600 shadow-[0_0_20px_rgba(236,72,153,0.4)] hover:shadow-[0_0_30px_rgba(236,72,153,0.6)]'
                       : 'bg-primary-600 shadow-[0_0_20px_rgba(124,58,237,0.4)] hover:bg-primary-500 hover:shadow-[0_0_30px_rgba(124,58,237,0.6)]'
                   ]"
               >
@@ -311,22 +311,22 @@
 </template>
 
 <script setup lang="ts">
-import {ref, watch, onMounted, onUnmounted, nextTick, computed} from 'vue'
+import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {useUIStore} from '@/stores/ui'
 import {useImageStore} from '@/stores/image'
 import LocationPicker from '@/components/common/LocationPicker.vue'
-import BaseSelect from '@/components/common/BaseSelect.vue'
 import type {SelectOption} from '@/components/common/BaseSelect.vue'
+import BaseSelect from '@/components/common/BaseSelect.vue'
 import {
-  MagnifyingGlassIcon,
   CalendarIcon,
-  MapPinIcon,
-  TagIcon,
-  SparklesIcon,
-  XMarkIcon,
   CheckIcon,
+  MagnifyingGlassIcon,
+  MapPinIcon,
   PhotoIcon,
+  SparklesIcon,
+  TagIcon,
+  XMarkIcon,
 } from '@heroicons/vue/24/outline'
 import type {SearchParams, Tag} from '@/types'
 import {imageApi} from "@/api/image.ts"
@@ -349,61 +349,73 @@ const isDragging = ref(false)
 const imageInputRef = ref<HTMLInputElement>()
 
 const activeFilters = ref(new Set<string>())
-const filters = ref<Partial<SearchParams>>({
-  keyword: '',
-  start_date: '',
-  end_date: '',
-  location: '',
-  tags: [],  // 改为数组类型
-  latitude: undefined,
-  longitude: undefined,
-  radius: 10,
-})
 
 // 标签相关状态
 const allTags = ref<Tag[]>([])
+const selectedTagsMap = ref<Map<number, Tag>>(new Map()) // 保存已选中标签的完整信息
 const tagSearchQuery = ref('')
 const tagDropdownOpen = ref(false)
+const isLoadingTags = ref(false)
 
-// 过滤后的标签列表
+// 过滤后的标签列表（排除已选中的）
 const filteredTags = computed(() => {
-  if (!tagSearchQuery.value) return allTags.value
-  const query = tagSearchQuery.value.toLowerCase()
-  return allTags.value.filter(tag => tag.name.toLowerCase().includes(query))
+  return allTags.value.filter(tag => !selectedTagsMap.value.has(tag.id))
 })
 
 // 获取已选中的标签对象
 const selectedTags = computed(() => {
-  const tagIds = filters.value.tags || []
-  return allTags.value.filter(tag => tagIds.includes(tag.id))
+  return Array.from(selectedTagsMap.value.values())
+})
+
+// 防抖搜索标签
+let tagSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+// 监听标签搜索输入
+watch(tagSearchQuery, (keyword: string) => {
+  if (tagSearchTimer) clearTimeout(tagSearchTimer)
+  tagSearchTimer = setTimeout(async () => {
+    await loadTags(keyword)
+  }, 300)
 })
 
 // 加载标签列表
-async function loadTags() {
+async function loadTags(keyword?: string) {
+  isLoadingTags.value = true
   try {
-    const response = await imageApi.getTags()
+    const response = await imageApi.getTags(keyword, 20)
     if (response.data) {
       allTags.value = response.data
     }
   } catch (error) {
     console.error('加载标签列表失败:', error)
+  } finally {
+    isLoadingTags.value = false
   }
 }
 
 // 切换标签选中状态
 function toggleTag(tagId: number) {
-  const tags = filters.value.tags || []
+  const tags = imageStore.searchFilters.tags || []
   const index = tags.indexOf(tagId)
   if (index === -1) {
-    filters.value.tags = [...tags, tagId]
+    // 添加标签
+    imageStore.searchFilters.tags = [...tags, tagId]
+    // 保存标签完整信息到 map
+    const tag = allTags.value.find(t => t.id === tagId)
+    if (tag) {
+      selectedTagsMap.value.set(tagId, tag)
+    }
   } else {
-    filters.value.tags = tags.filter(id => id !== tagId)
+    // 移除标签
+    imageStore.searchFilters.tags = tags.filter(id => id !== tagId)
+    selectedTagsMap.value.delete(tagId)
   }
 }
 
 // 移除标签
 function removeTag(tagId: number) {
-  filters.value.tags = (filters.value.tags || []).filter(id => id !== tagId)
+  imageStore.searchFilters.tags = (imageStore.searchFilters.tags || []).filter(id => id !== tagId)
+  selectedTagsMap.value.delete(tagId)
 }
 
 // 嵌入模型相关状态
@@ -423,6 +435,7 @@ const hasEmbeddingModel = computed(() => {
 })
 
 let first = true
+
 // 加载嵌入模型列表
 async function loadEmbeddingModels() {
   try {
@@ -539,9 +552,10 @@ function clearFilters() {
   activeFilters.value.clear()
   tagSearchQuery.value = ''
   tagDropdownOpen.value = false
+  selectedTagsMap.value.clear()
   removeSearchImage()
-  filters.value = {
-    keyword: filters.value.keyword,
+  imageStore.searchFilters = {
+    keyword: imageStore.searchFilters.keyword,
     start_date: '',
     end_date: '',
     location: '',
@@ -557,16 +571,16 @@ async function executeSearch() {
   const searchParams: SearchParams = {}
 
   // 始终添加传统筛选条件（如果有）
-  if (filters.value.keyword) searchParams.keyword = filters.value.keyword
-  if (filters.value.start_date) searchParams.start_date = filters.value.start_date
-  if (filters.value.end_date) searchParams.end_date = filters.value.end_date
-  if (filters.value.location) searchParams.location = filters.value.location
-  if (filters.value.tags && filters.value.tags.length > 0) searchParams.tags = filters.value.tags
+  if (imageStore.searchFilters.keyword) searchParams.keyword = imageStore.searchFilters.keyword
+  if (imageStore.searchFilters.start_date) searchParams.start_date = imageStore.searchFilters.start_date
+  if (imageStore.searchFilters.end_date) searchParams.end_date = imageStore.searchFilters.end_date
+  if (imageStore.searchFilters.location) searchParams.location = imageStore.searchFilters.location
+  if (imageStore.searchFilters.tags && imageStore.searchFilters.tags.length > 0) searchParams.tags = imageStore.searchFilters.tags
   // 经纬度搜索（优先使用经纬度，如果有的话）
-  if (filters.value.latitude !== undefined && filters.value.longitude !== undefined) {
-    searchParams.latitude = filters.value.latitude
-    searchParams.longitude = filters.value.longitude
-    searchParams.radius = filters.value.radius || 10
+  if (imageStore.searchFilters.latitude !== undefined && imageStore.searchFilters.longitude !== undefined) {
+    searchParams.latitude = imageStore.searchFilters.latitude
+    searchParams.longitude = imageStore.searchFilters.longitude
+    searchParams.radius = imageStore.searchFilters.radius || 10
   }
 
   // 如果启用语义搜索，添加语义搜索参数（与传统筛选条件组合使用）
@@ -587,14 +601,14 @@ async function executeSearch() {
     if (searchImage.value) {
       parts.push('📷 以图搜图')
     }
-    if (filters.value.keyword) {
-      parts.push(isSemanticSearch.value ? `AI: "${filters.value.keyword.trim()}"` : `关键词: "${filters.value.keyword}"`)
+    if (imageStore.searchFilters.keyword) {
+      parts.push(isSemanticSearch.value ? `AI: "${imageStore.searchFilters.keyword.trim()}"` : `关键词: "${imageStore.searchFilters.keyword}"`)
     }
-    if (filters.value.start_date || filters.value.end_date) {
-      parts.push(`日期: ${filters.value.start_date || '开始'} - ${filters.value.end_date || '至今'}`)
+    if (imageStore.searchFilters.start_date || imageStore.searchFilters.end_date) {
+      parts.push(`日期: ${imageStore.searchFilters.start_date || '开始'} - ${imageStore.searchFilters.end_date || '至今'}`)
     }
-    if (filters.value.location) parts.push(`位置: "${filters.value.location}"`)
-    if (filters.value.tags && filters.value.tags.length > 0) {
+    if (imageStore.searchFilters.location) parts.push(`位置: "${imageStore.searchFilters.location}"`)
+    if (imageStore.searchFilters.tags && imageStore.searchFilters.tags.length > 0) {
       const tagNames = selectedTags.value.map(t => t.name).join(', ')
       parts.push(`标签: "${tagNames}"`)
     }

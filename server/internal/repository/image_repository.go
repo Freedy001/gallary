@@ -32,7 +32,6 @@ type ImageRepository interface {
 	ListDeleted(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error)
 	FindDeletedByIDs(ctx context.Context, ids []int64) ([]*model.Image, error)
 	RestoreBatch(ctx context.Context, ids []int64) error
-	HardDelete(ctx context.Context, id int64) error
 	HardDeleteBatch(ctx context.Context, ids []int64) error
 	FindExpiredDeleted(ctx context.Context, days int) ([]*model.Image, error)
 
@@ -48,6 +47,8 @@ type ImageRepository interface {
 	UpdateImageTags(ctx context.Context, imageID int64, tagIDs []int64) error
 	AddImageTags(ctx context.Context, imageID int64, tagIDs []int64) error
 	FindAllNormalTags(ctx context.Context) ([]*model.Tag, error)
+	SearchTags(ctx context.Context, keyword string, limit int) ([]*model.Tag, error)
+	GetPopularTags(ctx context.Context, limit int) ([]*model.Tag, error)
 
 	// 聚合相关
 	GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, gridSizeLat, gridSizeLng float64) ([]*model.ClusterResult, error)
@@ -56,8 +57,9 @@ type ImageRepository interface {
 
 	// 迁移相关方法
 	CountByStorageType(ctx context.Context, storageType string) (int, error)
-	ListByStorageType(ctx context.Context, storageType string, page, pageSize int) ([]*model.Image, int64, error)
-	UpdateStoragePath(ctx context.Context, imageID int64, storagePath string) error
+
+	// AI 评分相关方法
+	FindImagesWithoutAIScore(ctx context.Context, limit int) ([]int64, error)
 }
 
 type imageRepository struct {
@@ -434,6 +436,48 @@ func (r *imageRepository) FindAllNormalTags(ctx context.Context) ([]*model.Tag, 
 	return tags, nil
 }
 
+// SearchTags 根据关键字搜索标签
+func (r *imageRepository) SearchTags(ctx context.Context, keyword string, limit int) ([]*model.Tag, error) {
+	var tags []*model.Tag
+	query := database.GetDB(ctx).Model(&model.Tag{}).
+		Where("type <> ?", model.TagTypeAlbum)
+
+	if keyword != "" {
+		// 支持中文名称和英文名称模糊搜索
+		query = query.Where("name ILIKE ? OR name_en ILIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+
+	err := query.Order("name ASC").Find(&tags).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return tags, nil
+}
+
+// GetPopularTags 获取热门标签（按使用次数排序）
+func (r *imageRepository) GetPopularTags(ctx context.Context, limit int) ([]*model.Tag, error) {
+	var tags []*model.Tag
+	err := database.GetDB(ctx).
+		Select("tags.*, COUNT(image_tags.id) as usage_count").
+		Joins("LEFT JOIN image_tags ON tags.id = image_tags.tag_id").
+		Where("tags.type <> ?", model.TagTypeAlbum).
+		Group("tags.id").
+		Order("usage_count DESC, tags.name ASC").
+		Limit(limit).
+		Find(&tags).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tags, nil
+}
+
 // GetImagesWithLocation 获取带有地理位置的图片
 func (r *imageRepository) GetImagesWithLocation(ctx context.Context) ([]*model.Image, error) {
 	var images []*model.Image
@@ -642,9 +686,6 @@ func (r *imageRepository) RestoreBatch(ctx context.Context, ids []int64) error {
 }
 
 // HardDelete 物理删除单个图片记录
-func (r *imageRepository) HardDelete(ctx context.Context, id int64) error {
-	return database.GetDB(ctx).WithContext(ctx).Unscoped().Delete(&model.Image{}, id).Error
-}
 
 // HardDeleteBatch 物理删除批量图片记录
 func (r *imageRepository) HardDeleteBatch(ctx context.Context, ids []int64) error {
@@ -682,34 +723,22 @@ func (r *imageRepository) CountByStorageType(ctx context.Context, storageType st
 }
 
 // ListByStorageType 按存储类型分页获取图片列表
-func (r *imageRepository) ListByStorageType(ctx context.Context, storageType string, page, pageSize int) ([]*model.Image, int64, error) {
-	var images []*model.Image
-	var total int64
-
-	offset := (page - 1) * pageSize
-
-	db := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).
-		Where("storage_type = ?", storageType)
-
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	err := db.Order("id ASC").
-		Limit(pageSize).
-		Offset(offset).
-		Find(&images).Error
-
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return images, total, nil
-}
 
 // UpdateStoragePath 更新图片存储路径
-func (r *imageRepository) UpdateStoragePath(ctx context.Context, imageID int64, storagePath string) error {
-	return database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).
-		Where("id = ?", imageID).
-		Update("storage_path", storagePath).Error
+
+// FindImagesWithoutAIScore 查找没有 AI 评分的图片ID列表
+func (r *imageRepository) FindImagesWithoutAIScore(ctx context.Context, limit int) ([]int64, error) {
+	var ids []int64
+	err := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).
+		Select("id").
+		Where("ai_score IS NULL").
+		Order("created_at DESC").
+		Limit(limit).
+		Pluck("id", &ids).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return ids, nil
 }

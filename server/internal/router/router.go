@@ -158,13 +158,13 @@ func SetupRouter(
 			ai.GET("/embedding-models", aiHandler.GetEmbeddingModels)
 
 			// AI 队列管理
-			ai.GET("/queues", aiHandler.GetQueueStatus)                    // 获取所有队列状态
-			ai.GET("/queues/:id", aiHandler.GetQueueDetail)                // 获取队列详情
-			ai.POST("/queues/:id/retry", aiHandler.RetryQueueFailedImages) // 重试队列所有失败图片
+			ai.GET("/queues", aiHandler.GetQueueStatus)                   // 获取所有队列状态
+			ai.GET("/queues/:id", aiHandler.GetQueueDetail)               // 获取队列详情
+			ai.POST("/queues/:id/retry", aiHandler.RetryQueueFailedItems) // 重试队列所有失败项目
 
-			// AI 任务图片操作
-			ai.POST("/task-images/:id/retry", aiHandler.RetryTaskImage)   // 重试单张图片
-			ai.POST("/task-images/:id/ignore", aiHandler.IgnoreTaskImage) // 忽略单张图片
+			// AI 任务项操作
+			ai.POST("/task-items/:id/retry", aiHandler.RetryTaskItem)   // 重试单个任务项
+			ai.POST("/task-items/:id/ignore", aiHandler.IgnoreTaskItem) // 忽略单个任务项
 		}
 	}
 

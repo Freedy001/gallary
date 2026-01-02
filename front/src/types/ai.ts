@@ -28,12 +28,22 @@ export interface ModelConfig {
   dimension?: number     // 向量维度
 }
 
+// AI 全局配置
+export interface AIGlobalConfig {
+  default_search_model_id: string  // 默认搜索模型 ID
+  default_tag_model_id: string     // 默认打标签模型 ID
+}
+
 // AI 配置（与后端 AIPo 对应）
 export interface AIConfig {
-  models: ModelConfig[]  // 模型配置列表
+  models: ModelConfig[]           // 模型配置列表
+  global_config?: AIGlobalConfig  // 全局配置
 }
 
 // ================== 队列相关类型 ==================
+
+// 任务类型
+export type TaskType = 'image-embedding' | 'tag-embedding' | 'aesthetic-scoring'
 
 // AI 队列状态汇总
 export interface AIQueueStatus {
@@ -46,28 +56,29 @@ export interface AIQueueStatus {
 export interface AIQueueInfo {
   id: number
   queue_key: string
-  task_type: 'embedding' | 'description'
+  task_type: TaskType
   model_name?: string
   status: 'idle' | 'processing'   // 队列状态
   pending_count: number
   failed_count: number
 }
 
-// 队列详情（含失败图片列表）
+// 队列详情（含失败项目列表）
 export interface AIQueueDetail {
   queue: AIQueueInfo
-  failed_images: AITaskImageInfo[]
+  failed_items: AITaskItemInfo[]  // 失败项目列表
   total_failed: number
   page: number
   page_size: number
 }
 
-// 任务图片信息
-export interface AITaskImageInfo {
+// 任务项目信息（通用）
+export interface AITaskItemInfo {
   id: number
-  image_id: number
-  imageName?: string
-  thumbnailurl?: string
+  item_id: number              // 实体 ID（图片ID、标签ID等）
+  item_type: TaskType          // 实体类型
+  item_name?: string           // 项目名称
+  item_thumb?: string          // 缩略图URL
   status: 'pending' | 'failed'
   error?: string
   created_at: string
@@ -90,9 +101,10 @@ export interface SemanticSearchRequest {
 // ================== 显示标签 ==================
 
 // 任务类型显示名称
-export const TaskTypeLabels: Record<string, string> = {
-  embedding: '向量嵌入',
-  description: 'AI 描述'
+export const TaskTypeLabels: Record<TaskType, string> = {
+  'image-embedding': '图片向量嵌入',
+  'tag-embedding': '标签向量嵌入',
+  'aesthetic-scoring': '美学评分'
 }
 
 // ================== 辅助函数 ==================

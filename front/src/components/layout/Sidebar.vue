@@ -260,24 +260,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { useUIStore } from '@/stores/ui'
-import { useNotificationStore } from '@/stores/notification'
+import {computed} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
+import {useUIStore} from '@/stores/ui'
+import {useNotificationStore} from '@/stores/notification'
 import UploadDrawer from '@/components/upload/UploadDrawer.vue'
 import StorageUsage from '@/components/widgets/StorageUsage.vue'
 import AIQueueStatus from '@/components/widgets/AIQueueStatus.vue'
 import {
-  PhotoIcon,
-  MapPinIcon,
-  UserGroupIcon,
-  CalendarIcon,
   Bars3Icon,
+  CalendarIcon,
   ChevronLeftIcon,
+  Cog6ToothIcon,
+  MapPinIcon,
+  PhotoIcon,
+  RectangleStackIcon,
   ShareIcon,
   TrashIcon,
-  Cog6ToothIcon,
-  RectangleStackIcon,
+  UserGroupIcon,
 } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
@@ -285,11 +285,12 @@ const route = useRoute()
 const uiStore = useUIStore()
 const notificationStore = useNotificationStore()
 
-// 判断是否有 AI 任务（pending、processing 或 failed）
+// 判断是否有 AI 任务（pending 或 failed，或有队列正在处理中）
 const hasAITasks = computed(() => {
   const status = notificationStore.aiQueueStatus
   if (!status) return false
-  return (status.total_pending > 0 || status.total_processing > 0 || status.total_failed > 0)
+  const hasProcessing = status.queues?.some(q => q.status === 'processing') || false
+  return (status.total_pending > 0 || hasProcessing || status.total_failed > 0)
 })
 
 function navigateTo(path: string) {

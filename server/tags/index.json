@@ -15,21 +15,24 @@
       "name": "人像摄影",
       "name_en": "Portrait Photography",
       "file": "portrait_photography.json",
-      "description": "人像摄影的完整分类体系，包含流派、光影、姿态与情感维度"
+      "description": "人像摄影的完整分类体系，包含流派、光影、姿态与情感维度",
+      "vector_description": "Portrait photography, human face, person, people, headshot, facial features, eyes, expression, skin texture, human body, model, studio portrait, environmental portrait, candid portrait, lifestyle photography, fashion portrait, beauty shot"
     },
     {
       "id": "humanities_documentary",
       "name": "人文与社会纪实摄影",
       "name_en": "Humanities & Documentary Photography",
       "file": "humanities_documentary.json",
-      "description": "街头摄影、社会纪实与人道主义摄影的分类体系"
+      "description": "街头摄影、社会纪实与人道主义摄影的分类体系",
+      "vector_description": "Street photography, documentary photography, photojournalism, candid street scene, urban life, city people, social documentary, human interest story, cultural event, everyday life, reportage, decisive moment, urban landscape with people"
     },
     {
       "id": "landscape_photography",
       "name": "风光摄影",
       "name_en": "Landscape Photography",
       "file": "landscape_photography.json",
-      "description": "风光摄影完整分类体系，包含地质学精确性与航拍术语"
+      "description": "风光摄影完整分类体系，包含地质学精确性与航拍术语",
+      "vector_description": "Landscape photography, nature scenery, mountain, ocean, forest, sky, sunset, sunrise, scenic view, natural environment, outdoor photography, seascape, wilderness, countryside, horizon, clouds, natural light, wide angle vista, scenic overlook"
     },
     {
       "id": "technical_metadata",

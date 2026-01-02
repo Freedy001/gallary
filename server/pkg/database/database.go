@@ -77,8 +77,9 @@ func AutoMigrate() error {
 		&model.Setting{},
 		&model.MigrationTask{},
 		&model.AIQueue{},
-		&model.AITaskImage{},
+		&model.AITaskItem{},
 		&model.ImageEmbedding{},
+		&model.TagEmbedding{},
 	)
 	if err != nil {
 		return fmt.Errorf("数据库迁移失败: %w", err)

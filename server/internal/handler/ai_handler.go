@@ -107,10 +107,10 @@ func (h *AIHandler) GetQueueDetail(c *gin.Context) {
 	utils.Success(c, detail)
 }
 
-// RetryQueueFailedImages 重试队列所有失败图片
+// RetryQueueFailedItems 重试队列所有失败项目
 //
-//	@Summary		重试队列所有失败图片
-//	@Description	重试指定队列中所有失败的图片
+//	@Summary		重试队列所有失败项目
+//	@Description	重试指定队列中所有失败的项目
 //	@Tags			AI
 //	@Produce		json
 //	@Param			id	path		int				true	"队列 ID"
@@ -118,7 +118,7 @@ func (h *AIHandler) GetQueueDetail(c *gin.Context) {
 //	@Failure		400	{object}	utils.Response	"请求参数错误"
 //	@Failure		500	{object}	utils.Response	"重试失败"
 //	@Router			/api/ai/queues/{id}/retry [post]
-func (h *AIHandler) RetryQueueFailedImages(c *gin.Context) {
+func (h *AIHandler) RetryQueueFailedItems(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -126,7 +126,7 @@ func (h *AIHandler) RetryQueueFailedImages(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.RetryQueueFailedImages(c.Request.Context(), id); err != nil {
+	if err := h.service.RetryQueueFailedItems(c.Request.Context(), id); err != nil {
 		utils.InternalServerError(c, "重试失败: "+err.Error())
 		return
 	}
@@ -134,26 +134,26 @@ func (h *AIHandler) RetryQueueFailedImages(c *gin.Context) {
 	utils.Success(c, nil)
 }
 
-// RetryTaskImage 重试单张图片
+// RetryTaskItem 重试单个任务项
 //
-//	@Summary		重试单张图片
-//	@Description	重试指定的失败图片
+//	@Summary		重试单个任务项
+//	@Description	重试指定的失败任务项
 //	@Tags			AI
 //	@Produce		json
-//	@Param			id	path		int				true	"任务图片 ID"
+//	@Param			id	path		int				true	"任务项 ID"
 //	@Success		200	{object}	utils.Response	"重试成功"
 //	@Failure		400	{object}	utils.Response	"请求参数错误"
 //	@Failure		500	{object}	utils.Response	"重试失败"
-//	@Router			/api/ai/task-images/{id}/retry [post]
-func (h *AIHandler) RetryTaskImage(c *gin.Context) {
+//	@Router			/api/ai/task-items/{id}/retry [post]
+func (h *AIHandler) RetryTaskItem(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的任务图片 ID")
+		utils.BadRequest(c, "无效的任务项 ID")
 		return
 	}
 
-	if err := h.service.RetryTaskImage(c.Request.Context(), id); err != nil {
+	if err := h.service.RetryTaskItem(c.Request.Context(), id); err != nil {
 		utils.InternalServerError(c, "重试失败: "+err.Error())
 		return
 	}
@@ -161,26 +161,26 @@ func (h *AIHandler) RetryTaskImage(c *gin.Context) {
 	utils.Success(c, nil)
 }
 
-// IgnoreTaskImage 忽略单张图片
+// IgnoreTaskItem 忽略单个任务项
 //
-//	@Summary		忽略单张图片
-//	@Description	忽略指定的失败图片（从队列中移除）
+//	@Summary		忽略单个任务项
+//	@Description	忽略指定的失败任务项（从队列中移除）
 //	@Tags			AI
 //	@Produce		json
-//	@Param			id	path		int				true	"任务图片 ID"
+//	@Param			id	path		int				true	"任务项 ID"
 //	@Success		200	{object}	utils.Response	"操作成功"
 //	@Failure		400	{object}	utils.Response	"请求参数错误"
 //	@Failure		500	{object}	utils.Response	"操作失败"
-//	@Router			/api/ai/task-images/{id}/ignore [post]
-func (h *AIHandler) IgnoreTaskImage(c *gin.Context) {
+//	@Router			/api/ai/task-items/{id}/ignore [post]
+func (h *AIHandler) IgnoreTaskItem(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		utils.BadRequest(c, "无效的任务图片 ID")
+		utils.BadRequest(c, "无效的任务项 ID")
 		return
 	}
 
-	if err := h.service.IgnoreTaskImage(c.Request.Context(), id); err != nil {
+	if err := h.service.IgnoreTaskItem(c.Request.Context(), id); err != nil {
 		utils.InternalServerError(c, "操作失败: "+err.Error())
 		return
 	}

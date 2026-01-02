@@ -634,7 +634,7 @@ onMounted(() => {
             if (!isNaN(index)) {
               // 如果该位置没有图片，触发加载
               if (!imageStore.images[index]) {
-                const pageSize = uiStore.pageSize
+                const pageSize = uiStore.imagePageSize
                 const page = Math.floor(index / pageSize) + 1
                 imageStore.fetchImages(page, pageSize)
               }

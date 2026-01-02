@@ -651,17 +651,38 @@ func (h *ImageHandler) PermanentlyDelete(c *gin.Context) {
 	utils.SuccessWithMessage(c, "彻底删除成功", nil)
 }
 
-// GetTags 获取所有普通标签
+// GetTags 获取标签列表
 //
 //	@Summary		获取标签列表
-//	@Description	获取所有可用的普通标签（用于搜索筛选）
+//	@Description	获取标签列表，支持关键字搜索。无关键字时返回热门标签（默认10个）
 //	@Tags			标签管理
 //	@Produce		json
-//	@Success		200	{object}	utils.Response{data=[]model.Tag}	"标签列表"
-//	@Failure		500	{object}	utils.Response						"获取失败"
+//	@Param			keyword	query		string						false	"搜索关键字"
+//	@Param			limit	query		int							false	"返回数量限制"	default(10)
+//	@Success		200		{object}	utils.Response{data=[]model.Tag}	"标签列表"
+//	@Failure		500		{object}	utils.Response						"获取失败"
 //	@Router			/api/tags [get]
 func (h *ImageHandler) GetTags(c *gin.Context) {
-	tags, err := h.service.GetAllNormalTags(c.Request.Context())
+	keyword := c.Query("keyword")
+	limit := 10 // 默认返回10个标签
+
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	var tags []*model.Tag
+	var err error
+
+	if keyword != "" {
+		// 有关键字时进行搜索
+		tags, err = h.service.SearchTags(c.Request.Context(), keyword, limit)
+	} else {
+		// 无关键字时返回热门标签
+		tags, err = h.service.GetPopularTags(c.Request.Context(), limit)
+	}
+
 	if err != nil {
 		logger.Error("获取标签列表失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())

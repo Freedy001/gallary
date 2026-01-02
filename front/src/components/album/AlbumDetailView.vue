@@ -82,7 +82,7 @@ async function handleRemoveFromAlbum() {
 
 onMounted(async () => {
   // 使用相册图片 API 作为数据源
-  const pageSize = uiStore.pageSize
+  const pageSize = uiStore.imagePageSize
   await imageStore.refreshImages(async (page: number, size: number): Promise<Pageable<Image>> => {
     return currentAlbumId.value ? (await albumApi.getImages(currentAlbumId.value, page, size)).data : emptyPage
   }, pageSize)
