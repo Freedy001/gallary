@@ -51,7 +51,7 @@ func (p *ImageEmbeddingProcessor) SupportedBy(client llms.ModelClient) bool {
 	return client.SupportEmbedding()
 }
 
-func (p *ImageEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64, client llms.ModelClient, config *model.ModelConfig) error {
+func (p *ImageEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64, client llms.ModelClient, config *model.ModelConfig, modelItem *model.ModelItem) error {
 	// 1. 获取图片
 	image, err := p.imageRepo.FindByID(ctx, itemID)
 	if err != nil {
@@ -73,11 +73,11 @@ func (p *ImageEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64,
 		return err
 	}
 
-	// 4. 保存嵌入向量
+	// 4. 保存嵌入向量（使用 modelItem.ModelName 作为内部标识）
 	embeddingModel := &model.ImageEmbedding{
 		ImageID:   image.ID,
-		ModelID:   config.ID,
-		ModelName: config.ModelName,
+		ModelID:   string(model.CreateModelId(config.ID, modelItem.ApiModelName)),
+		ModelName: modelItem.ModelName,
 		Dimension: len(embedding),
 		Embedding: model.Vector(embedding),
 	}
@@ -86,8 +86,8 @@ func (p *ImageEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64,
 	}
 
 	// 5. 自动打标签（如果是默认标签模型）
-	if config.ModelName == internal.PlatConfig.GetDefaultTagName() {
-		err := p.taggingService.TaggingImage(ctx, image.ID, config.ModelName)
+	if modelItem.ModelName == internal.PlatConfig.AIPo.GetDefaultTagModelName() {
+		err := p.taggingService.TaggingImage(ctx, image.ID, modelItem.ModelName)
 		if err != nil {
 			logger.Error("添加图片时，自动打标签失败", zap.Error(err))
 		}

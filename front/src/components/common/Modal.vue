@@ -4,7 +4,7 @@
       <div
         v-if="modelValue"
         class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-sm"
-        @click.self="handleClose"
+        @mousedown.self="handleClose"
       >
         <Transition name="modal-content" appear>
           <LiquidGlassCard
@@ -49,8 +49,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { XMarkIcon } from '@heroicons/vue/24/outline'
+import {computed} from 'vue'
+import {XMarkIcon} from '@heroicons/vue/24/outline'
 import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
 
 interface Props {

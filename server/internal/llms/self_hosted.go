@@ -28,6 +28,7 @@ type ExtraConfig struct {
 // SelfHostedClient 自托管模型客户端
 type SelfHostedClient struct {
 	config     *model.ModelConfig
+	modelItem  *model.ModelItem
 	httpClient *http.Client
 	manager    *storage.StorageManager
 }
@@ -37,9 +38,10 @@ func (c *SelfHostedClient) UpdateConfig(config *model.ModelConfig) {
 }
 
 // NewSelfHostedClient 创建自托管模型客户端
-func NewSelfHostedClient(config *model.ModelConfig, httpClient *http.Client, manager *storage.StorageManager) *SelfHostedClient {
+func NewSelfHostedClient(provider *model.ModelConfig, modelItem *model.ModelItem, httpClient *http.Client, manager *storage.StorageManager) *SelfHostedClient {
 	return &SelfHostedClient{
-		config:     config,
+		config:     provider,
+		modelItem:  modelItem,
 		httpClient: httpClient,
 		manager:    manager,
 	}
@@ -57,6 +59,16 @@ func (c *SelfHostedClient) SupportsTextEmbedding() bool {
 // SupportAesthetics 自托管模型支持美学评分
 func (c *SelfHostedClient) SupportAesthetics() bool {
 	return true
+}
+
+// SupportChatCompletion 自托管模型不支持 Chat Completion
+func (c *SelfHostedClient) SupportChatCompletion() bool {
+	return false
+}
+
+// ChatCompletion 自托管模型不支持 Chat Completion
+func (c *SelfHostedClient) ChatCompletion(ctx context.Context, messages []ChatMessage) (string, error) {
+	return "", fmt.Errorf("自托管模型不支持 Chat Completion")
 }
 
 // Embedding 使用阿里云兼容格式计算嵌入向量
@@ -174,7 +186,7 @@ func (c *SelfHostedClient) callMultimodalEmbedding(ctx context.Context, contents
 		} `json:"input"`
 		PromptOptimizer *PromptOptimizerConfig `json:"prompt_optimizer,omitempty"`
 	}{
-		Model:           c.config.ApiModelName,
+		Model:           c.modelItem.ApiModelName,
 		PromptOptimizer: promptOptimizer,
 	}
 	reqBody.Input.Contents = contents

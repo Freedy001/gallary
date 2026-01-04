@@ -212,3 +212,63 @@ func (h *AIHandler) GetEmbeddingModels(c *gin.Context) {
 	}
 	utils.Success(c, models)
 }
+
+// GetChatCompletionModels 获取支持 ChatCompletion 的模型列表
+//
+//	@Summary		获取支持 ChatCompletion 的模型列表
+//	@Description	获取所有已启用且支持 ChatCompletion 功能的模型名称列表
+//	@Tags			AI
+//	@Produce		json
+//	@Success		200	{object}	utils.Response{data=[]string}	"获取成功"
+//	@Failure		500	{object}	utils.Response					"获取失败"
+//	@Router			/api/ai/chat-completion-models [get]
+func (h *AIHandler) GetChatCompletionModels(c *gin.Context) {
+	models, err := h.service.GetChatCompletionModels(c.Request.Context())
+	if err != nil {
+		utils.InternalServerError(c, "获取 ChatCompletion 模型列表失败: "+err.Error())
+		return
+	}
+	utils.Success(c, models)
+}
+
+// OptimizePromptRequest 优化提示词请求
+type OptimizePromptRequest struct {
+	Query string `json:"query" binding:"required"` // 原始查询
+}
+
+// OptimizePromptResponse 优化提示词响应
+type OptimizePromptResponse struct {
+	OriginalQuery   string `json:"original_query"`
+	OptimizedPrompt string `json:"optimized_prompt"`
+}
+
+// OptimizePrompt 优化搜索提示词
+//
+//	@Summary		优化搜索提示词
+//	@Description	将中文搜索查询优化为适合语义搜索的英文描述
+//	@Tags			AI
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		OptimizePromptRequest						true	"优化请求"
+//	@Success		200		{object}	utils.Response{data=OptimizePromptResponse}	"优化成功"
+//	@Failure		400		{object}	utils.Response								"请求参数错误"
+//	@Failure		500		{object}	utils.Response								"优化失败"
+//	@Router			/api/ai/optimize-prompt [post]
+func (h *AIHandler) OptimizePrompt(c *gin.Context) {
+	var req OptimizePromptRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+
+	optimized, err := h.service.OptimizePrompt(c.Request.Context(), req.Query)
+	if err != nil {
+		utils.InternalServerError(c, "提示词优化失败: "+err.Error())
+		return
+	}
+
+	utils.Success(c, OptimizePromptResponse{
+		OriginalQuery:   req.Query,
+		OptimizedPrompt: optimized,
+	})
+}

@@ -21,7 +21,7 @@ type AITaskProcessor interface {
 
 	// ProcessItem 处理单个项目
 	// itemID: 项目ID（可以是图片ID、标签ID等）
-	ProcessItem(ctx context.Context, itemID int64, client llms.ModelClient, config *model.ModelConfig) error
+	ProcessItem(ctx context.Context, itemID int64, client llms.ModelClient, config *model.ModelConfig, modelItem *model.ModelItem) error
 
 	// SupportedBy 检查模型客户端是否支持此任务
 	SupportedBy(client llms.ModelClient) bool

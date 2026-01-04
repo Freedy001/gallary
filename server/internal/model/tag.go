@@ -15,6 +15,8 @@ const (
 	TagTypeDevice TagType = "device" // 设备标签
 )
 
+const MainCategoryMarker = "__main_category__" // 主分类向量的特殊标记
+
 // AlbumMetadata 相册元数据
 type AlbumMetadata struct {
 	CoverImageID *int64  `json:"cover_image_id,omitempty"` // 封面图片ID

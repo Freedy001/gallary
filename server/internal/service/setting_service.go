@@ -563,8 +563,10 @@ func (s *settingService) UpdateAIConfig(ctx context.Context, config *model.AIPo)
 			return fmt.Errorf("不支持的模型提供者: %s", m.Provider)
 		}
 		if m.Provider == model.SelfHosted {
-			m.ModelName = "Self Hosted"
-			m.ApiModelName = "Self Hosted"
+			m.Models = []*model.ModelItem{{
+				ApiModelName: "Self Hosted",
+				ModelName:    "Self Hosted",
+			}}
 		}
 	}
 

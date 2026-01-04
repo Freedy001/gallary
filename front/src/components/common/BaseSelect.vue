@@ -15,7 +15,7 @@
       <!-- Button -->
       <ListboxButton
         :class="[
-          'relative w-full cursor-pointer rounded-lg bg-white/5 border border-white/10 py-2.5 pl-4 pr-10 text-left text-sm text-white shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500',
+          'relative w-full cursor-pointer rounded-lg bg-white/5 border border-white/10 py-2.5 pl-4 pr-7 text-left text-sm text-white shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500',
           isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10',
           open ? 'border-primary-500 ring-1 ring-primary-500' : '',
           buttonClass

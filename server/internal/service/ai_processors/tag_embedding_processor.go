@@ -67,7 +67,7 @@ func (p *TagEmbeddingProcessor) FindPendingItems(ctx context.Context, modelName 
 }
 
 func (p *TagEmbeddingProcessor) tagImage(ctx context.Context, limit int) {
-	tagModelName := internal.PlatConfig.GetDefaultTagName()
+	tagModelName := internal.PlatConfig.AIPo.GetDefaultTagModelName()
 	if tagModelName == "" {
 		return
 	}
@@ -96,7 +96,7 @@ func (p *TagEmbeddingProcessor) SupportedBy(client llms.ModelClient) bool {
 	return client.SupportEmbedding()
 }
 
-func (p *TagEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64, client llms.ModelClient, config *model.ModelConfig) error {
+func (p *TagEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64, client llms.ModelClient, config *model.ModelConfig, modelItem *model.ModelItem) error {
 	// 1. 获取标签
 	tag, err := p.tagRepo.FindByID(ctx, itemID)
 	if err != nil {
@@ -111,20 +111,15 @@ func (p *TagEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64, c
 	}
 
 	// 2. 使用文本生成向量
-	var embedding []float32
-	if selfHost, ok := client.(*llms.SelfHostedClient); ok {
-		embedding, err = selfHost.EmbeddingWithPromptConfig(ctx, nil, *tag.VectorDescription, nil)
-	} else {
-		embedding, err = client.Embedding(ctx, nil, *tag.VectorDescription)
-	}
+	embedding, err := client.Embedding(ctx, nil, *tag.VectorDescription)
 	if err != nil {
 		return fmt.Errorf("生成标签向量失败: %v", err)
 	}
 
 	tagEmbedding := &model.TagEmbedding{
 		TagID:     tag.ID,
-		ModelName: config.ModelName,
-		ModelId:   config.ID,
+		ModelName: modelItem.ModelName,
+		ModelId:   string(model.CreateModelId(config.ID, modelItem.ApiModelName)),
 		Dimension: len(embedding),
 		Embedding: model.Vector(embedding),
 	}

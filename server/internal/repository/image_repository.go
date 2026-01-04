@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"gallary/server/pkg/database"
@@ -155,6 +156,10 @@ func (r *imageRepository) List(ctx context.Context, page, pageSize int) ([]*mode
 		return nil, 0, err
 	}
 
+	for _, image := range images {
+		slices.SortFunc(image.Tags, func(a, b model.Tag) int { return b.CreatedAt.Compare(a.CreatedAt) })
+	}
+
 	return images, total, nil
 }
 
@@ -267,7 +272,7 @@ func (r *imageRepository) SearchIDs(ctx context.Context, params *model.SearchPar
 
 func (r *imageRepository) buildSearchCondition(params *model.SearchParams, query *gorm.DB) {
 	// 关键词搜索（搜索文件名）
-	if params.Keyword != "" {
+	if params.Keyword != "" && params.ModelName == "" {
 		query = query.Where("original_name ILIKE ?", "%"+params.Keyword+"%")
 	}
 
@@ -295,9 +300,7 @@ func (r *imageRepository) buildSearchCondition(params *model.SearchParams, query
 
 	// 标签搜索
 	if len(params.Tags) > 0 {
-		query = query.Joins("JOIN image_tags ON images.id = image_tags.image_id").
-			Where("image_tags.tag_id IN ?", params.Tags).
-			Distinct("images.id")
+		query = query.Where("id IN (select image_id from image_tags where tag_id in ?)", params.Tags)
 	}
 }
 

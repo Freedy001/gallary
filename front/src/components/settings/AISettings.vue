@@ -13,7 +13,7 @@
           <div>
             <BaseSelect
                 v-model="config.global_config!.default_search_model_id"
-                :options="enabledModelOptions"
+                :options="embeddingModelOptions"
                 label="默认搜索模型"
                 placeholder="选择默认搜索模型"
             />
@@ -24,11 +24,42 @@
           <div>
             <BaseSelect
                 v-model="config.global_config!.default_tag_model_id"
-                :options="enabledModelOptions"
+                :options="embeddingModelOptions"
                 label="默认打标签模型"
                 placeholder="选择默认打标签模型"
             />
             <p class="mt-1 text-xs text-gray-500">用于自动生成图片标签的默认模型</p>
+          </div>
+
+          <!-- 默认提示词优化模型 -->
+          <div>
+            <BaseSelect
+                v-model="config.global_config!.default_prompt_optimize_model_id"
+                :options="llmsModelOptions"
+                label="默认提示词优化模型"
+                placeholder="选择默认提示词优化模型"
+            />
+            <p class="mt-1 text-xs text-gray-500">用于搜索提示词优化默认模型</p>
+          </div>
+        </div>
+
+        <!-- 提示词优化配置 -->
+        <div class="pt-4 border-t border-white/5">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h4 class="text-sm font-medium text-white">搜索提示词优化</h4>
+            </div>
+          </div>
+
+          <!-- 系统提示词输入框 -->
+          <div>
+            <textarea
+                v-model="config.global_config!.prompt_optimize_system_prompt"
+                class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm resize-none"
+                placeholder="留空使用默认提示词..."
+                rows="4"
+            />
+            <p class="mt-1 text-xs text-gray-500">默认提示词会将中文搜索词翻译为英文并扩展为详细的视觉描述</p>
           </div>
         </div>
       </div>
@@ -42,11 +73,11 @@
           <p class="mt-1 text-sm text-gray-500">配置用于图片向量嵌入和美学评分的模型（OpenAI 兼容格式），支持多模型配置</p>
         </div>
         <button
-            @click="addModel"
+            @click="addProvider"
             class="px-3 py-1.5 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 ring-1 ring-primary-500/30 transition-all duration-300 text-sm flex items-center gap-1"
         >
           <PlusIcon class="h-4 w-4"/>
-          添加模型
+          添加提供商
         </button>
       </div>
 
@@ -65,46 +96,39 @@
           暂无模型配置
         </div>
         <button
-            @click="addModel"
+            @click="addProvider"
             class="px-4 py-2 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 ring-1 ring-primary-500/30 transition-all duration-300 text-sm"
         >
-          添加第一个模型
+          添加第一个提供商
         </button>
       </div>
 
       <div v-else class="divide-y divide-white/5">
-        <div v-for="(model, index) in config.models" :key="model.id" class="p-6">
+        <div v-for="(provider, index) in config.models" :key="index" class="p-6">
           <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3">
               <!-- 启用开关 -->
               <button
-                  @click="model.enabled = !model.enabled"
                   :class="[
                     'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                    model.enabled ? 'bg-primary-500' : 'bg-gray-600'
+                    provider.enabled ? 'bg-primary-500' : 'bg-gray-600'
                   ]"
+                  @click="provider.enabled = !provider.enabled"
               >
                 <span
                     :class="[
                       'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                      model.enabled ? 'translate-x-4' : 'translate-x-0'
+                      provider.enabled ? 'translate-x-4' : 'translate-x-0'
                     ]"
                 />
               </button>
-              <span class="text-white font-medium">{{ model.model_name || '未命名模型' }}</span>
-              <span v-if="model.provider === 'selfHosted'"
+              <span class="text-white font-medium">{{ provider.id || '未命名提供商' }}</span>
+              <span v-if="provider.provider === 'selfHosted'"
                     class="px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-400">自托管</span>
             </div>
             <div class="flex items-center gap-2">
               <button
-                  @click="testModelConnection(model.id)"
-                  :disabled="testing === model.id"
-                  class="px-2 py-1 rounded text-xs text-gray-400 hover:text-green-400 hover:bg-white/5 transition-colors disabled:opacity-50"
-              >
-                {{ testing === model.id ? '测试中...' : '测试连接' }}
-              </button>
-              <button
-                  @click="removeModel(index)"
+                  @click="removeProvider(index)"
                   class="p-1 rounded text-gray-400 hover:text-red-400 hover:bg-white/5 transition-colors"
               >
                 <TrashIcon class="h-4 w-4"/>
@@ -115,96 +139,73 @@
           <div class="grid grid-cols-2 gap-4">
             <div>
               <BaseSelect
-                  v-model="model.provider"
+                  v-model="provider.provider"
                   :options="providerOptions"
-                  label="提供商"
-                  @update:model-value="onProviderChange(model)"
+                  label="提供商类型"
+                  @update:model-value="onProviderChange(provider)"
               />
             </div>
-            <div v-if="model.provider !== 'selfHosted'">
-              <label class="block text-sm font-medium text-gray-400 mb-1.5">模型 ID</label>
+            <div v-if="provider.provider !== 'selfHosted'">
+              <label class="block text-sm font-medium text-gray-400 mb-1.5">提供商 ID</label>
               <input
-                  v-model="model.id"
+                  v-model="provider.id"
                   type="text"
-                  placeholder="用于区分添加的不同模型"
+                  placeholder="用于区分不同提供商配置"
                   class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm"
               />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-400 mb-1.5">API 端点</label>
               <input
-                  v-model="model.endpoint"
+                  v-model="provider.endpoint"
                   type="text"
                   placeholder="如: http://localhost:8100"
-                  class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm"
-              />
-            </div>
-            <div v-if="model.provider !== 'selfHosted'">
-              <label class="block text-sm font-medium text-gray-400 mb-1.5">api模型名称</label>
-              <input
-                  v-model="model.api_model_name"
-                  @input="onApiModelNameChange(model)"
-                  type="text"
-                  placeholder="调用api时使用的模型名称，如: gemini"
-                  class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm"
-              />
-            </div>
-            <div v-if="model.provider !== 'selfHosted'">
-              <label class="block text-sm font-medium text-gray-400 mb-1.5">模型名称(区分模型)</label>
-              <input
-                  v-model="model.model_name"
-                  @input="userModifiedModelName[model.id] = model.model_name !== model.api_model_name;"
-                  type="text"
-                  placeholder="相通模型名称的provider将作为一组，被负载均衡器调用"
                   class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm"
               />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-400 mb-1.5">API Key</label>
               <input
-                  v-model="model.api_key"
+                  v-model="provider.api_key"
                   type="password"
                   placeholder="留空则无需认证"
                   class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm"
               />
             </div>
 
-            <!-- 提示词优化配置（仅自托管模型） -->
-            <div v-if="model.provider === 'selfHosted'" class="col-span-2 mt-1">
-              <div class="flex items-center justify-between mb-3">
-                <div>
-                  <h4 class="text-sm font-medium text-white">提示词优化</h4>
-                  <p class="text-xs text-gray-500">将中文搜索词转换为适合模型理解的英文描述</p>
-                </div>
-                <!-- 启用开关 -->
+            <!-- 模型列表（非自托管模型） -->
+            <div v-if="provider.provider !== 'selfHosted'" class="col-span-2">
+              <label class="block text-sm font-medium text-gray-400 mb-1.5">模型列表</label>
+              <p class="text-xs text-gray-500 mb-2">同一提供商可配置多个模型，相同 model_name 的模型将被负载均衡</p>
+
+              <!-- 已添加的模型标签 -->
+              <div v-if="provider.models?.length" class="flex flex-wrap gap-2 mb-3">
                 <button
-                    @click="togglePromptOptimizer(model)"
-                    :class="[
-                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                      getPromptOptimizer(model).enabled ? 'bg-primary-500' : 'bg-gray-600'
-                    ]"
+                    v-for="(model, idx) in provider.models"
+                    :key="idx"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-500/20 text-primary-300 text-sm border border-primary-500/30 hover:bg-primary-500/30 hover:border-primary-500/50 transition-colors cursor-pointer"
+                    @click="openEditModelDialog(provider, idx)"
                 >
+                  <span class="font-medium">{{ model.api_model_name }}</span>
+                  <span v-if="model.model_name !== model.api_model_name"
+                        class="text-gray-400 text-xs">({{ model.model_name }})</span>
                   <span
-                      :class="[
-                        'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                        getPromptOptimizer(model).enabled ? 'translate-x-4' : 'translate-x-0'
-                      ]"
-                  />
+                      class="ml-1 hover:text-red-400 transition-colors"
+                      @click.stop="removeModelFromProvider(provider, idx)"
+                  >
+                    <XMarkIcon class="h-3.5 w-3.5"/>
+                  </span>
                 </button>
               </div>
 
-              <!-- 系统提示词输入框 -->
-              <div v-if="getPromptOptimizer(model).enabled">
-                <label class="block text-sm font-medium text-gray-400 mb-1.5">系统提示词</label>
-                <textarea
-                    :value="getPromptOptimizer(model).system_prompt"
-                    @input="updateSystemPrompt(model, ($event.target as HTMLTextAreaElement).value)"
-                    placeholder="留空使用默认提示词..."
-                    rows="4"
-                    class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm resize-none"
-                />
-                <p class="mt-1 text-xs text-gray-500">默认提示词会将中文搜索词翻译为英文并扩展为详细的视觉描述</p>
-              </div>
+              <!-- 添加模型按钮 -->
+              <button
+                  class="mt-5 px-3 py-1.5 rounded-lg bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/10 transition-colors text-sm flex items-center gap-1"
+                  @click="openAddModelDialog(provider)"
+              >
+                <PlusIcon class="h-4 w-4"/>
+                添加模型
+              </button>
             </div>
           </div>
         </div>
@@ -222,55 +223,136 @@
       </div>
     </div>
 
+    <!-- 添加/编辑模型对话框 -->
+    <Modal v-model="showAddModelDialog" :title="isEditMode ? '编辑模型' : '添加模型'" size="sm">
+      <form class="space-y-4" @submit.prevent="confirmAddModel">
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">API 模型名称 *</label>
+          <input
+              v-model="newModel.api_model_name"
+              class="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors outline-none"
+              placeholder="调用 API 时使用的模型名称，如: gemini-2.5-flash"
+              required
+              type="text"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">内部模型名称</label>
+          <input
+              v-model="newModel.model_name"
+              :placeholder="newModel.api_model_name || '默认与 API 模型名称相同'"
+              class="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors outline-none"
+              type="text"
+          />
+          <p class="mt-2 text-xs text-gray-500">相同名称的模型会被负载均衡，留空则与 API 模型名称相同</p>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4">
+          <button
+              class="px-5 py-2.5 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 transition-colors"
+              type="button"
+              @click="closeAddModelDialog"
+          >
+            取消
+          </button>
+          <button
+              :disabled="!newModel.api_model_name"
+              class="px-5 py-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              type="submit"
+          >
+            {{ isEditMode ? '保存' : '添加' }}
+          </button>
+        </div>
+      </form>
+    </Modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import {onMounted, reactive, ref} from 'vue'
-import {PlusIcon, TrashIcon} from '@heroicons/vue/24/outline'
+import {computed, onMounted, reactive, ref} from 'vue'
+import {PlusIcon, TrashIcon, XMarkIcon} from '@heroicons/vue/24/outline'
 import {useDialogStore} from '@/stores/dialog'
-import type {AIConfig, ExtraConfig, ModelConfig, PromptOptimizerConfig} from '@/types/ai'
+import type {AIConfig, ModelConfig, ModelItem} from '@/types/ai'
+import {createModelId} from '@/types/ai'
 import type {SelectOption} from '@/components/common/BaseSelect.vue'
 import BaseSelect from '@/components/common/BaseSelect.vue'
+import Modal from '@/components/common/Modal.vue'
 import {aiApi} from "@/api/ai.ts";
 
 const dialogStore = useDialogStore()
 
 const loading = ref(true)
 const saving = ref(false)
-const testing = ref<string | null>(null)
 
 // 使用本地状态避免直接修改 store
 const config = reactive<AIConfig>({
   models: [],
   global_config: {
     default_search_model_id: '',
-    default_tag_model_id: ''
+    default_tag_model_id: '',
+    default_prompt_optimize_model_id: '',
+    prompt_optimize_system_prompt: '',
   }
 })
 
 // 计算启用的模型选项（用于全局设置下拉框）
-const enabledModelOptions = ref<SelectOption[]>([])
+// 生成所有 providerId,apiModelName 的组合
+const embeddingModelOptions = computed<SelectOption[]>(() => {
+  const options: SelectOption[] = []
+
+  for (const provider of config.models) {
+    if (!provider.enabled) continue
+    if (provider.provider != 'openAI') {
+      for (const model of (provider.models || [])) {
+        const compositeId = createModelId(provider.id, model.api_model_name)
+        options.push({
+          label: `${model.api_model_name} (${provider.id})`,
+          value: compositeId
+        })
+      }
+    }
+
+  }
+
+  return options
+})
+
+const llmsModelOptions = computed<SelectOption[]>(() => {
+  const options: SelectOption[] = []
+
+  for (const provider of config.models) {
+    if (!provider.enabled) continue
+    if (provider.provider == 'openAI') {
+      for (const model of (provider.models || [])) {
+        const compositeId = createModelId(provider.id, model.api_model_name)
+        options.push({
+          label: `${model.api_model_name} (${provider.id})`,
+          value: compositeId
+        })
+      }
+    }
+
+  }
+
+  return options
+})
 
 async function loadSettings() {
   loading.value = true
   try {
     const response = await aiApi.getSettings()
     if (response.data) {
+      // 迁移每个模型配置到新格式
       config.models = response.data.models || []
-      config.global_config = response.data.global_config || {
-        default_search_model_id: config.models[0]?.id || '',
-        default_tag_model_id: config.models[0]?.id || ''
+      config.global_config = {
+        default_search_model_id: response.data.global_config?.default_search_model_id || '',
+        default_tag_model_id: response.data.global_config?.default_tag_model_id || '',
+        default_prompt_optimize_model_id: response.data.global_config?.default_prompt_optimize_model_id || '',
+        prompt_optimize_system_prompt: response.data.global_config?.prompt_optimize_system_prompt || 'You are a prompt optimizer for image search. Convert Chinese queries into English descriptions for SigLIP model.\nRules:\n1. Translate Chinese to English accurately\n2. Expand into detailed visual descriptions (1-2 sentences)\n3. Include visual attributes: colors, lighting, style, mood\n4. Output ONLY the English prompt, nothing else\n\nExamples:\n- "日落海滩" -> "A beautiful sunset at the beach with warm orange and pink sky reflecting on calm ocean waves"\n- "可爱的猫咪" -> "An adorable cute cat with fluffy fur and expressive eyes in a cozy home setting"\n- "城市夜景" -> "Urban cityscape at night with illuminated skyscrapers and city lights"'
       }
     }
-
-    config.models.forEach(m => {
-      enabledModelOptions.value.push({
-        label: m.model_name || m.id,
-        value: m.id
-      })
-    })
-    console.log(enabledModelOptions.value)
+    console.log(embeddingModelOptions.value)
   } catch (error) {
     console.error('Failed to load AI settings:', error)
   } finally {
@@ -278,40 +360,37 @@ async function loadSettings() {
   }
 }
 
-function addModel() {
-  const newModel: ModelConfig = {
-    id: `model-${Date.now()}`,
-    api_model_name: '',
-    model_name: '',
+function addProvider() {
+  const newProvider: ModelConfig = {
+    id: SELF_HOSTED_ID,
+    models: [],
     endpoint: 'http://localhost:8100',
     api_key: '',
     provider: 'selfHosted',
     enabled: false,
   }
-  config.models.push(newModel)
+  config.models.push(newProvider)
 }
 
-function removeModel(index: number) {
-  const model = config.models[index]
-  if (!model) return
+function removeProvider(index: number) {
   config.models.splice(index, 1)
 }
 
-// 自托管模型的默认 ID（模型名称由用户自行配置）
-const SELF_HOSTED_ID = 'self-hosted'
-const SELF_HOSTED_MODEL_NAME = 'google/siglip-so400m-patch14-384'
+// 自托管模型的默认 ID
+const SELF_HOSTED_ID = 'Self Hosted'
 
-function onProviderChange(model: ModelConfig) {
-  if (model.provider === 'selfHosted') {
-    // 切换到自托管模型时，设置固定的 ID 和模型名称
-    model.id = SELF_HOSTED_ID
-    model.model_name = SELF_HOSTED_MODEL_NAME
-    model.api_model_name = SELF_HOSTED_MODEL_NAME
+function onProviderChange(provider: ModelConfig) {
+  if (provider.provider === 'selfHosted') {
+    // 切换到自托管模型时，设置固定的 ID 和模型
+    provider.id = SELF_HOSTED_ID
+  } else {
+    // 切换到非自托管模型时，清空模型列表
+    if (provider.id === SELF_HOSTED_ID) {
+      provider.id = `provider-${Date.now()}`
+    }
+    provider.models = []
   }
 }
-
-// 记录用户是否手动修改过 model_name
-const userModifiedModelName = reactive<Record<string, boolean>>({})
 
 // 提供商选项
 const providerOptions: SelectOption[] = [
@@ -320,75 +399,115 @@ const providerOptions: SelectOption[] = [
   {label: '阿里云Multimodal Embedding', value: 'alyunMultimodalEmbedding'}
 ]
 
-function onApiModelNameChange(model: ModelConfig) {
-  // 如果用户没有手动修改过 model_name，则智能同步
-  if (!userModifiedModelName[model.id]) {
-    model.model_name = model.api_model_name
+// ================== 添加/编辑模型对话框 ==================
+
+const showAddModelDialog = ref(false)
+const currentProviderForAddModel = ref<ModelConfig | null>(null)
+const editingModelIndex = ref<number | null>(null)  // null 表示添加模式，否则表示编辑模式
+const newModel = reactive<ModelItem>({
+  api_model_name: '',
+  model_name: ''
+})
+
+// 是否处于编辑模式
+const isEditMode = computed(() => editingModelIndex.value !== null)
+
+function openAddModelDialog(provider: ModelConfig) {
+  currentProviderForAddModel.value = provider
+  editingModelIndex.value = null
+  newModel.api_model_name = ''
+  newModel.model_name = ''
+  showAddModelDialog.value = true
+}
+
+function openEditModelDialog(provider: ModelConfig, index: number) {
+  currentProviderForAddModel.value = provider
+  editingModelIndex.value = index
+  const model = provider.models?.[index]
+  if (model) {
+    newModel.api_model_name = model.api_model_name
+    newModel.model_name = model.model_name
   }
+  showAddModelDialog.value = true
 }
 
-// ================== 提示词优化器配置 ==================
+function closeAddModelDialog() {
+  showAddModelDialog.value = false
+  currentProviderForAddModel.value = null
+  editingModelIndex.value = null
+}
 
-// 解析 extra_config JSON
-function parseExtraConfig(model: ModelConfig): ExtraConfig {
-  if (!model.extra_config) return {}
-  try {
-    return JSON.parse(model.extra_config)
-  } catch {
-    return {}
+function confirmAddModel() {
+  if (!currentProviderForAddModel.value || !newModel.api_model_name) return
+
+  if (!currentProviderForAddModel.value.models) {
+    currentProviderForAddModel.value.models = []
   }
-}
 
-// 序列化 extra_config
-function stringifyExtraConfig(config: ExtraConfig): string {
-  return JSON.stringify(config)
-}
+  if (isEditMode.value) {
+    // 编辑模式：更新现有模型
+    const idx = editingModelIndex.value!
+    const existingModel = currentProviderForAddModel.value.models[idx]
+    if (!existingModel) return
 
-// 获取提示词优化器配置
-function getPromptOptimizer(model: ModelConfig): PromptOptimizerConfig {
-  const extra = parseExtraConfig(model)
-  return extra.prompt_optimizer ?? {enabled: true, system_prompt: ''}
-}
+    // 检查是否与其他模型重名（排除自己）
+    const exists = currentProviderForAddModel.value.models.some(
+        (m, i) => i !== idx && m.api_model_name === newModel.api_model_name
+    )
+    if (exists) {
+      dialogStore.notify({title: '提示', message: '该模型名称已存在', type: 'warning'})
+      return
+    }
 
-// 更新提示词优化器配置
-function updatePromptOptimizer(model: ModelConfig, config: Partial<PromptOptimizerConfig>) {
-  const extra = parseExtraConfig(model)
-  extra.prompt_optimizer = {
-    ...getPromptOptimizer(model),
-    ...config
+    existingModel.api_model_name = newModel.api_model_name
+    existingModel.model_name = newModel.model_name || newModel.api_model_name
+  } else {
+    // 添加模式：检查是否已存在
+    const exists = currentProviderForAddModel.value.models.some(
+        m => m.api_model_name === newModel.api_model_name
+    )
+    if (exists) {
+      dialogStore.notify({title: '提示', message: '该模型已存在', type: 'warning'})
+      return
+    }
+
+    currentProviderForAddModel.value.models.push({
+      api_model_name: newModel.api_model_name,
+      model_name: newModel.model_name || newModel.api_model_name
+    })
   }
-  model.extra_config = stringifyExtraConfig(extra)
+
+  closeAddModelDialog()
 }
 
-// 切换提示词优化器启用状态
-function togglePromptOptimizer(model: ModelConfig) {
-  const current = getPromptOptimizer(model)
-  updatePromptOptimizer(model, {enabled: !current.enabled})
-}
-
-// 更新系统提示词
-function updateSystemPrompt(model: ModelConfig, value: string) {
-  updatePromptOptimizer(model, {system_prompt: value})
-}
-
-async function testModelConnection(modelId: string) {
-  testing.value = modelId
-  try {
-    const response = await aiApi.testConnection({id: modelId})
-    dialogStore.notify({title: '成功', message: response.data?.message || '连接成功', type: 'success'})
-  } catch (error: any) {
-    dialogStore.notify({title: '连接失败', message: error.message || '无法连接到模型服务', type: 'error'})
-  } finally {
-    testing.value = null
-  }
+function removeModelFromProvider(provider: ModelConfig, index: number) {
+  provider.models?.splice(index, 1)
 }
 
 async function handleSave() {
   // 验证：至少需要有一个模型
   if (config.models.length === 0) {
-    dialogStore.notify({title: '提示', message: '请至少添加一个模型配置', type: 'warning'})
+    dialogStore.notify({title: '提示', message: '请至少添加一个提供商配置', type: 'warning'})
     return
   }
+
+  if (embeddingModelOptions.value.length > 0) {
+    if (!config?.global_config?.default_search_model_id) {
+      dialogStore.notify({title: '提示', message: '请设置默认的搜索模型', type: 'warning'})
+      return
+    }
+    if (!config?.global_config?.default_tag_model_id) {
+      dialogStore.notify({title: '提示', message: '请设置默认打标签模型', type: 'warning'})
+      return
+    }
+  }
+  if (llmsModelOptions.value.length > 0) {
+    if (!config?.global_config?.default_prompt_optimize_model_id) {
+      dialogStore.notify({title: '提示', message: '请设置默认的提示词优化模型', type: 'warning'})
+      return
+    }
+  }
+
 
   saving.value = true
   try {

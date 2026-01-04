@@ -157,6 +157,12 @@ func SetupRouter(
 			// 获取可用的嵌入模型列表
 			ai.GET("/embedding-models", aiHandler.GetEmbeddingModels)
 
+			// 获取支持 ChatCompletion 的模型列表
+			ai.GET("/chat-completion-models", aiHandler.GetChatCompletionModels)
+
+			// 提示词优化
+			ai.POST("/optimize-prompt", aiHandler.OptimizePrompt)
+
 			// AI 队列管理
 			ai.GET("/queues", aiHandler.GetQueueStatus)                   // 获取所有队列状态
 			ai.GET("/queues/:id", aiHandler.GetQueueDetail)               // 获取队列详情

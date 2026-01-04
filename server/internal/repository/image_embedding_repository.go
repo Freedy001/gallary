@@ -62,20 +62,6 @@ func (r *imageEmbeddingRepository) FindByImageAndModel(ctx context.Context, imag
 	return &embedding, nil
 }
 
-// Delete 删除向量嵌入
-
-// DeleteByImageID 删除图片的所有向量嵌入
-
-// SaveBatch 批量保存向量嵌入
-
-// FindByImageIDs 批量查找图片的向量嵌入
-
-// VectorSearch 向量相似性搜索
-
-// VectorSearchByModelName 根据模型名称进行向量相似性搜索
-
-// VectorSearchWithDistance 向量相似性搜索（返回距离）
-
 // VectorSearchWithinIDs 在指定图片ID范围内进行向量相似性搜索
 func (r *imageEmbeddingRepository) VectorSearchWithinIDs(ctx context.Context, modelName string, embedding []float32, candidateIDs []int64, limit int) ([]EmbeddingWithDistance, error) {
 	if candidateIDs != nil && len(candidateIDs) == 0 {
@@ -101,6 +87,7 @@ func (r *imageEmbeddingRepository) VectorSearchWithinIDs(ctx context.Context, mo
 	err := db.Order("distance ASC").
 		Limit(limit).
 		Preload("Image").
+		Preload("Image.Tags").
 		Find(&results).Error
 
 	if err != nil {

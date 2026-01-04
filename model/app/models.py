@@ -115,10 +115,6 @@ class MultimodalEmbeddingRequest(BaseModel):
         ...,
         description="输入内容"
     )
-    prompt_optimizer: Optional["PromptOptimizerSettings"] = Field(
-        default=None,
-        description="提示词优化器配置（可选），如果提供则使用此配置覆盖服务端默认设置"
-    )
 
 
 class MultimodalEmbeddingItem(BaseModel):

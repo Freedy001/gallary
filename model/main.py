@@ -18,7 +18,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.models import HealthResponse
-from app.prompt_optimizer import prompt_optimizer_service
 from app.routers import aesthetics_router, embeddings_router, multimodal_embedding_router
 from app.services import model_service, BackendType
 
@@ -52,11 +51,6 @@ async def lifespan(_):
         lora_weights_path=lora_weights_path,
         onnx_model_path=onnx_model_path,
     )
-
-    # 加载提示词优化模型（可选，通过环境变量控制）
-    if os.environ.get("ENABLE_PROMPT_OPTIMIZER", "true").lower() == "true":
-        prompt_optimizer_service.initialize(device=device, gguf_model_path="/Users/wuyuejiang/.cache/huggingface/hub/models--Qwen--Qwen3-0.6B-GGUF/blobs/9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031")
-
     yield
     # 关闭时清理（如果需要）
 

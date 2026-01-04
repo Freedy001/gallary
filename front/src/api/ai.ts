@@ -2,6 +2,19 @@ import http from './http'
 import type {ApiResponse} from '@/types'
 import type {AIConfig, AIQueueDetail, TestConnectionRequest,} from '@/types/ai'
 
+// 优化提示词请求
+export interface OptimizePromptRequest {
+  query: string
+  system_prompt?: string
+  model_id?: string
+}
+
+// 优化提示词响应
+export interface OptimizePromptResponse {
+  original_query: string
+  optimized_prompt: string
+}
+
 export const aiApi = {
   // 获取 AI 配置（通过 settings API）
   getSettings(): Promise<ApiResponse<AIConfig>> {
@@ -21,6 +34,16 @@ export const aiApi = {
   // 获取可用的嵌入模型列表
   getEmbeddingModels(): Promise<ApiResponse<string[]>> {
     return http.get('/api/ai/embedding-models')
+  },
+
+  // 获取支持 ChatCompletion 的模型列表
+  getChatCompletionModels(): Promise<ApiResponse<string[]>> {
+    return http.get('/api/ai/chat-completion-models')
+  },
+
+  // 优化提示词
+  optimizePrompt(request: OptimizePromptRequest): Promise<ApiResponse<OptimizePromptResponse>> {
+    return http.post('/api/ai/optimize-prompt', request)
   },
 
   // ================== 队列管理 ==================

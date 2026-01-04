@@ -27,6 +27,7 @@ const Endpoint = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/mult
 // AliyunMultimodalEmbedding 阿里云多模态向量客户端
 type AliyunMultimodalEmbedding struct {
 	config     *model.ModelConfig
+	modelItem  *model.ModelItem
 	httpClient *http.Client
 	manager    *storage.StorageManager
 }
@@ -36,9 +37,10 @@ func (c *AliyunMultimodalEmbedding) UpdateConfig(config *model.ModelConfig) {
 }
 
 // NewAliyunMultimodalEmbedding 创建阿里云客户端
-func NewAliyunMultimodalEmbedding(config *model.ModelConfig, httpClient *http.Client, manager *storage.StorageManager) *AliyunMultimodalEmbedding {
+func NewAliyunMultimodalEmbedding(provider *model.ModelConfig, modelItem *model.ModelItem, httpClient *http.Client, manager *storage.StorageManager) *AliyunMultimodalEmbedding {
 	return &AliyunMultimodalEmbedding{
-		config:     config,
+		config:     provider,
+		modelItem:  modelItem,
 		httpClient: httpClient,
 		manager:    manager,
 	}
@@ -56,6 +58,16 @@ func (c *AliyunMultimodalEmbedding) SupportsTextEmbedding() bool {
 // SupportAesthetics 阿里云不支持美学评分
 func (c *AliyunMultimodalEmbedding) SupportAesthetics() bool {
 	return false
+}
+
+// SupportChatCompletion 阿里云多模态嵌入不支持 Chat Completion
+func (c *AliyunMultimodalEmbedding) SupportChatCompletion() bool {
+	return false
+}
+
+// ChatCompletion 阿里云多模态嵌入不支持 Chat Completion
+func (c *AliyunMultimodalEmbedding) ChatCompletion(_ context.Context, _ []ChatMessage) (string, error) {
+	return "", fmt.Errorf("阿里云多模态嵌入不支持 Chat Completion")
 }
 
 // Embedding 计算嵌入向量
@@ -82,7 +94,7 @@ func (c *AliyunMultimodalEmbedding) Embedding(ctx context.Context, imageData []b
 }
 
 // Aesthetics 阿里云不支持美学评分
-func (c *AliyunMultimodalEmbedding) Aesthetics(ctx context.Context, imageData []byte) (float64, error) {
+func (c *AliyunMultimodalEmbedding) Aesthetics(_ context.Context, _ []byte) (float64, error) {
 	return 0, fmt.Errorf("阿里云客户端不支持美学评分")
 }
 
@@ -95,7 +107,7 @@ func (c *AliyunMultimodalEmbedding) callMultimodalEmbedding(ctx context.Context,
 			Contents []map[string]string `json:"contents"`
 		} `json:"input"`
 	}{
-		Model: c.config.ApiModelName,
+		Model: c.modelItem.ApiModelName,
 	}
 	reqBody.Input.Contents = contents
 

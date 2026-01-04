@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"gallary/server/internal"
 	"gallary/server/internal/llms"
 	"gallary/server/internal/websocket"
 	"sync"
@@ -40,6 +41,12 @@ type AIService interface {
 
 	// 获取可用的嵌入模型列表
 	GetEmbeddingModels(ctx context.Context) ([]string, error)
+
+	// 获取支持 ChatCompletion 的模型列表
+	GetChatCompletionModels(ctx context.Context) ([]string, error)
+
+	// 优化提示词
+	OptimizePrompt(ctx context.Context, query string) (string, error)
 }
 
 type aiService struct {
@@ -87,7 +94,7 @@ func NewAIService(
 
 // TestConnection 测试连接
 func (s *aiService) TestConnection(ctx context.Context, id string) error {
-	client, _, err := s.loadBalancer.GetClientByID(id)
+	client, err := s.loadBalancer.GetClientByID(id)
 	if err != nil {
 		return err
 	}
@@ -323,6 +330,7 @@ func (s *aiService) aiTaskAdder() {
 				}
 			}
 		}
+		s.notifyStatusChange(ctx)
 	}
 
 	// ========== 4. 遍历所有处理器，为每个模型同步任务项 ==========
@@ -331,7 +339,7 @@ func (s *aiService) aiTaskAdder() {
 
 		for _, modelName := range models {
 			// 检查模型是否支持此任务类型
-			client, _, err := s.loadBalancer.GetClientByName(modelName)
+			client, err := s.loadBalancer.GetClientByName(modelName)
 			if err != nil || !processor.SupportedBy(client) {
 				continue
 			}
@@ -372,6 +380,7 @@ func (s *aiService) aiTaskAdder() {
 					zap.String("task_type", string(taskType)),
 					zap.String("model_name", modelName),
 					zap.Int("added_count", added))
+				s.notifyStatusChange(ctx)
 			}
 		}
 	}
@@ -429,7 +438,7 @@ func (s *aiService) processQueue(ctx context.Context, queue *model.AIQueue) {
 	}
 
 	// 验证 ModelName 可以获取 client
-	_, _, err = s.loadBalancer.GetClientByName(queue.ModelName)
+	_, err = s.loadBalancer.GetClientByName(queue.ModelName)
 	if err != nil {
 		logger.Error("获取模型客户端失败", zap.String("model_name", queue.ModelName), zap.Error(err))
 		// 将所有待处理任务项标记为失败
@@ -461,11 +470,11 @@ func (s *aiService) processQueue(ctx context.Context, queue *model.AIQueue) {
 
 		//根据队列的任务类型获取对应的处理器，并调用处理器的 ProcessItem 方法
 		// 执行处理（带重试，尝试所有提供商）
-		err := s.loadBalancer.TryAllProviders(queue.ModelName, func(client llms.ModelClient, config *model.ModelConfig) error {
+		err := s.loadBalancer.TryAllProviders(queue.ModelName, func(client llms.ModelClient, config *model.ModelConfig, modelItem *model.ModelItem) error {
 			if !processor.SupportedBy(client) {
-				return fmt.Errorf("模型 %s 不支持任务类型 %s", config.ModelName, queue.TaskType)
+				return fmt.Errorf("模型 %s 不支持任务类型 %s", modelItem.ModelName, queue.TaskType)
 			}
-			return processor.ProcessItem(ctx, taskItem.ItemID, client, config)
+			return processor.ProcessItem(ctx, taskItem.ItemID, client, config, modelItem)
 		})
 
 		if err != nil {
@@ -485,7 +494,7 @@ func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byt
 	}
 
 	// 通过 ModelName 获取 client（支持负载均衡）
-	client, modelConfig, err := s.loadBalancer.GetClientByName(modelName)
+	client, err := s.loadBalancer.GetClientByName(modelName)
 	if err != nil {
 		return nil, err
 	}
@@ -496,8 +505,8 @@ func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byt
 		return nil, fmt.Errorf("生成查询向量失败: %v", err)
 	}
 
-	// 在指定ID范围内执行向量搜索
-	results, err := s.embeddingRepo.VectorSearchWithinIDs(ctx, modelConfig.ModelName, queryEmbedding, candidateIDs, limit)
+	// 在指定ID范围内执行向量搜索（使用 modelItem.ModelName 作为内部标识）
+	results, err := s.embeddingRepo.VectorSearchWithinIDs(ctx, modelName, queryEmbedding, candidateIDs, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -551,6 +560,56 @@ func (s *aiService) notifyStatusChange(ctx context.Context) {
 }
 
 // GetEmbeddingModels 获取可用的嵌入模型列表
-func (s *aiService) GetEmbeddingModels(ctx context.Context) ([]string, error) {
+func (s *aiService) GetEmbeddingModels(_ context.Context) ([]string, error) {
+	models, err := s.loadBalancer.GetAllEmbeddingModels()
+	if err != nil {
+		return models, err
+	}
+
+	for i, m := range models {
+		if m == internal.PlatConfig.GlobalConfig.DefaultSearchModelId {
+			temp := models[i]
+			models[i] = models[0]
+			models[0] = temp
+			break
+		}
+	}
+
 	return s.loadBalancer.GetAllEmbeddingModels()
+}
+
+// GetChatCompletionModels 获取支持 ChatCompletion 的模型列表
+func (s *aiService) GetChatCompletionModels(_ context.Context) ([]string, error) {
+	return s.loadBalancer.GetAllChatCompletionModels()
+}
+
+// OptimizePrompt 优化提示词
+func (s *aiService) OptimizePrompt(ctx context.Context, query string) (string, error) {
+	if internal.PlatConfig.GlobalConfig == nil {
+		return "", fmt.Errorf("未配置模型")
+	}
+
+	// 获取支持 ChatCompletion 的模型客户端
+	client, err := s.loadBalancer.GetClientByID(internal.PlatConfig.GlobalConfig.DefaultPromptOptimizeModelId)
+	if err != nil {
+		return "", fmt.Errorf("获取模型失败: %v", err)
+	}
+
+	if !client.SupportChatCompletion() {
+		return "", fmt.Errorf("模型不支持 ChatCompletion")
+	}
+
+	// 构建消息
+	messages := []llms.ChatMessage{
+		{
+			Role:    "system",
+			Content: internal.PlatConfig.GlobalConfig.PromptOptimizeSystemPrompt,
+		},
+		{
+			Role:    "user",
+			Content: query,
+		},
+	}
+
+	return client.ChatCompletion(ctx, messages)
 }

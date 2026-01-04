@@ -13,7 +13,6 @@ from ..models import (
     MultimodalEmbeddingItem,
     MultimodalEmbeddingUsage,
 )
-from ..prompt_optimizer import prompt_optimizer_service
 from ..services import model_service
 
 router = APIRouter(tags=["multimodal-embedding"])
@@ -68,22 +67,7 @@ async def create_multimodal_embedding(
         if texts:
             # 确定是否启用提示词优化及使用哪个配置
             # 优先使用请求中的配置，否则使用服务端默认配置
-            if req.prompt_optimizer is not None and req.prompt_optimizer.enabled and prompt_optimizer_service.is_loaded:
-                optimized_texts = []
-                for text in texts:
-                    try:
-                        optimized = prompt_optimizer_service.optimize_prompt(text, req.prompt_optimizer.system_prompt)
-                        print(f"[Prompt Optimizer] '{text}' -> '{optimized}'")
-                        optimized_texts.append(optimized)
-                    except Exception as e:
-                        # 优化失败时使用原始文本
-                        print(f"[Prompt Optimizer] Failed to optimize '{text}': {e}")
-                        optimized_texts.append(text)
-                texts_for_embedding = optimized_texts
-            else:
-                texts_for_embedding = texts
-
-            text_embeddings = model_service.infer_text(texts_for_embedding)
+            text_embeddings = model_service.infer_text(texts)
             for i, (text_idx, embedding) in enumerate(zip(text_indices, text_embeddings)):
                 embeddings_result.append(
                     MultimodalEmbeddingItem(

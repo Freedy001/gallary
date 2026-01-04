@@ -7,12 +7,20 @@ import (
 	"net/http"
 )
 
+// ChatMessage Chat 消息结构
+type ChatMessage struct {
+	Role    string `json:"role"` // "system", "user", "assistant"
+	Content string `json:"content"`
+}
+
 // ModelClient 统一模型客户端接口
 type ModelClient interface {
 	// SupportEmbedding 是否支持向量嵌入
 	SupportEmbedding() bool
 	// SupportAesthetics 是否支持美学评分
 	SupportAesthetics() bool
+	// SupportChatCompletion 是否支持 Chat Completion
+	SupportChatCompletion() bool
 
 	// Embedding 嵌入向量计算
 	// imageData: 图片二进制数据 (可为 nil)
@@ -21,6 +29,8 @@ type ModelClient interface {
 	// Aesthetics 美学评分
 	// imageData: 图片二进制数据 (必须提供)
 	Aesthetics(ctx context.Context, imageData []byte) (score float64, err error)
+	// ChatCompletion 执行 Chat Completion 请求
+	ChatCompletion(ctx context.Context, messages []ChatMessage) (string, error)
 
 	// TestConnection 连接测试
 	TestConnection(ctx context.Context) error
@@ -32,14 +42,16 @@ type ModelClient interface {
 // ================== 客户端工厂 ==================
 
 // CreateModelClient 根据配置创建模型客户端
-func CreateModelClient(config *model.ModelConfig, httpClient *http.Client, manager *storage.StorageManager) ModelClient {
-	switch config.Provider {
+// provider: 提供商配置
+// modelItem: 具体的模型项（包含 ApiModelName 和 ModelName）
+func CreateModelClient(provider *model.ModelConfig, modelItem *model.ModelItem, httpClient *http.Client, manager *storage.StorageManager) ModelClient {
+	switch provider.Provider {
 	case model.SelfHosted:
-		return NewSelfHostedClient(config, httpClient, manager)
+		return NewSelfHostedClient(provider, modelItem, httpClient, manager)
 	case model.OpenAI:
-		return NewOpenAIClient(config, httpClient)
+		return NewOpenAIClient(provider, modelItem, httpClient)
 	case model.AliyunMultimodalEmbedding:
-		return NewAliyunMultimodalEmbedding(config, httpClient, manager)
+		return NewAliyunMultimodalEmbedding(provider, modelItem, httpClient, manager)
 	default:
 		return nil
 	}

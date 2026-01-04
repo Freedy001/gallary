@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"errors"
-
 	"gallary/server/internal/model"
 	"gallary/server/pkg/database"
 
@@ -22,6 +21,7 @@ type TagRepository interface {
 	FindTagsNeedingEmbedding(ctx context.Context, modelName string) ([]*model.Tag, error)
 	// 查找有向量但没有普通标签的图片ID（用于自动打标签队列）
 	FindImagesWithoutTags(ctx context.Context, modelName string, limit int) ([]int64, error)
+	FindMainCategoryTag(ctx context.Context, categoryId string) (*model.Tag, error)
 }
 
 type tagRepository struct{}
@@ -156,4 +156,16 @@ func (r *tagRepository) FindImagesWithoutTags(ctx context.Context, modelName str
 		Pluck("image_id", &imageIDs).Error
 
 	return imageIDs, err
+}
+
+func (r *tagRepository) FindMainCategoryTag(ctx context.Context, categoryId string) (*model.Tag, error) {
+	var tag model.Tag
+	err := database.GetDB(ctx).WithContext(ctx).
+		Where("source_category_id = ?", categoryId).
+		Where("sub_category_id = ?", model.MainCategoryMarker).
+		First(&tag).Error
+	if err != nil {
+		return nil, err
+	}
+	return &tag, nil
 }

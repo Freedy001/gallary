@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/samber/lo"
 )
 
 // Setting 系统设置模型
@@ -366,15 +368,45 @@ const (
 	AliyunMultimodalEmbedding Provider = "alyunMultimodalEmbedding"
 )
 
+// ModelId 模型组合标识符（提供商ID,api_model_name）
+type ModelId string
+
+// Parse 解析组合ID，返回提供商ID和api模型名称
+func (id ModelId) Parse() (providerId string, modelName string) {
+	parts := strings.SplitN(string(id), ",", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return string(id), ""
+}
+
+// CreateModelId 创建组合ID
+func CreateModelId(providerId, modelName string) ModelId {
+	return ModelId(providerId + "," + modelName)
+}
+
+// ModelItem 单个模型配置项
+type ModelItem struct {
+	ApiModelName string `json:"api_model_name"` // API 调用时使用的模型名称
+	ModelName    string `json:"model_name"`     // 内部标识/负载均衡分组
+}
+
 type ModelConfig struct {
-	ID           string   `json:"id"`
-	Provider     Provider `json:"provider"`
-	ModelName    string   `json:"model_name"`
-	ApiModelName string   `json:"api_model_name"`
-	Endpoint     string   `json:"endpoint"`
-	APIKey       string   `json:"api_key"`
-	Enabled      bool     `json:"enabled"`
-	ExtraConfig  string   `json:"extra_config"`
+	ID          string       `json:"id"`
+	Provider    Provider     `json:"provider"`
+	Models      []*ModelItem `json:"models"` // 模型列表（新）
+	Endpoint    string       `json:"endpoint"`
+	APIKey      string       `json:"api_key"`
+	Enabled     bool         `json:"enabled"`
+	ExtraConfig string       `json:"extra_config"`
+}
+
+// GetFirstModelItem 获取第一个模型项
+func (m *ModelConfig) GetFirstModelItem() *ModelItem {
+	if len(m.Models) > 0 {
+		return m.Models[0]
+	}
+	return nil
 }
 
 func (m *ModelConfig) Hash() string {
@@ -382,10 +414,14 @@ func (m *ModelConfig) Hash() string {
 	fields := []string{
 		m.ID,
 		string(m.Provider),
-		m.ApiModelName,
+		strconv.FormatBool(m.Enabled),
 		m.Endpoint,
 		m.APIKey,
 		m.ExtraConfig,
+	}
+	// 添加所有模型项
+	for _, item := range m.Models {
+		fields = append(fields, item.ApiModelName, item.ModelName)
 	}
 	// 将所有字段连接成一个字符串
 	combined := strings.Join(fields, "|")
@@ -397,8 +433,10 @@ func (m *ModelConfig) Hash() string {
 
 // AIGlobalConfig AI 全局配置
 type AIGlobalConfig struct {
-	DefaultSearchModelId string `json:"default_search_model_id"` // 默认搜索模型 ID
-	DefaultTagModelId    string `json:"default_tag_model_id"`    // 默认打标签模型 ID
+	DefaultSearchModelId         string `json:"default_search_model_id"`          // 默认搜索模型 ID
+	DefaultTagModelId            string `json:"default_tag_model_id"`             // 默认打标签模型 ID
+	DefaultPromptOptimizeModelId string `json:"default_prompt_optimize_model_id"` // 默认打标签模型 ID
+	PromptOptimizeSystemPrompt   string `json:"prompt_optimize_system_prompt"`
 }
 
 // AIPo AI 配置 PO
@@ -415,70 +453,69 @@ func (a AIPo) ToSettings() []*Setting {
 	return toSetting(a)
 }
 
-// GetEnabledModels 获取所有启用的模型配置（包括自托管模型）
-func (a AIPo) GetEnabledModels() []*ModelConfig {
-	var models []*ModelConfig
-
-	// 添加其他启用的模型
-	for i := range a.Models {
-		if a.Models[i].Enabled {
-			models = append(models, a.Models[i])
-		}
-	}
-
-	return models
+// GetEnabled 获取所有启用的模型配置（包括自托管模型）
+func (a AIPo) GetEnabled() []*ModelConfig {
+	return lo.Filter(a.Models, func(item *ModelConfig, index int) bool { return item.Enabled })
 }
 
-// FindModelById 根据名称查找模型配置
-func (a AIPo) FindModelById(id string) *ModelConfig {
-	// 检查其他模型
-	for i := range a.Models {
-		if a.Models[i].ID == id {
-			return a.Models[i]
-		}
+// FindById 根据组合ID查找模型配置和模型项
+// compositeId 格式: "providerId,apiModelName" 或旧格式 "providerId"
+func (a AIPo) FindById(compositeId string) (*ModelConfig, *ModelItem) {
+	providerId, modelName := ModelId(compositeId).Parse()
+
+	provider, find := lo.Find(a.GetEnabled(), func(item *ModelConfig) bool { return item.ID == providerId })
+	if !find {
+		return nil, nil
 	}
 
-	return nil
+	// 如果指定了 modelName，查找对应的模型项
+	if modelName != "" {
+		modelItem, find := lo.Find(provider.Models, func(item *ModelItem) bool { return item.ModelName == modelName })
+		if find {
+			return provider, modelItem
+		}
+		return nil, nil
+	}
+
+	// 未指定 modelName，返回第一个模型项
+	return provider, provider.GetFirstModelItem()
 }
 
-// FindModelsByName 根据 ModelName 查找所有启用的模型配置（用于负载均衡）
-func (a AIPo) FindModelsByName(modelName string) []*ModelConfig {
-	var models []*ModelConfig
-	for i := range a.Models {
-		if a.Models[i].ModelName == modelName && a.Models[i].Enabled {
-			models = append(models, a.Models[i])
-		}
-	}
-	return models
+// ProviderWithModelItem 提供商配置和模型项的组合
+type ProviderWithModelItem struct {
+	Provider  *ModelConfig
+	ModelItem *ModelItem
 }
 
-// GetDefaultSearchModel 获取默认搜索模型
-func (a AIPo) GetDefaultSearchModel() *ModelConfig {
-	if a.GlobalConfig != nil && a.GlobalConfig.DefaultSearchModelId != "" {
-		if model := a.FindModelById(a.GlobalConfig.DefaultSearchModelId); model != nil && model.Enabled {
-			return model
-		}
-	}
-	// 回退到第一个启用的模型
-	models := a.GetEnabledModels()
-	if len(models) > 0 {
-		return models[0]
-	}
-	return nil
+// FindModelConfigByModelName 根据 ModelName 查找所有启用的提供商配置（用于负载均衡）
+// 返回所有包含指定 ModelName 的提供商配置及对应的模型项
+func (a AIPo) FindModelConfigByModelName(modelName string) []*ProviderWithModelItem {
+	return lo.FlatMap(a.GetEnabled(), func(provider *ModelConfig, index int) []*ProviderWithModelItem {
+		return lo.FilterMap(provider.Models, func(item *ModelItem, index int) (*ProviderWithModelItem, bool) {
+			if item.ModelName == modelName {
+				return &ProviderWithModelItem{
+					Provider:  provider,
+					ModelItem: item,
+				}, true
+			}
+			return nil, false
+		})
+	})
 }
 
-// GetDefaultTagName 获取默认打标签模型
-func (a AIPo) GetDefaultTagName() string {
+// GetDefaultTagModelName 获取默认打标签模型的 ModelName（用于负载均衡）
+func (a AIPo) GetDefaultTagModelName() string {
 	if a.GlobalConfig != nil && a.GlobalConfig.DefaultTagModelId != "" {
-		if model := a.FindModelById(a.GlobalConfig.DefaultTagModelId); model != nil && model.Enabled {
-			return model.ModelName
+		provider, modelItem := a.FindById(a.GlobalConfig.DefaultTagModelId)
+		if provider != nil && provider.Enabled && modelItem != nil {
+			return modelItem.ModelName
 		}
 	}
 
-	// 回退到第一个启用的模型
-	models := a.GetEnabledModels()
-	if len(models) > 0 {
-		return models[0].ApiModelName
+	// 回退到第一个启用的模型的第一个模型项
+	models := a.GetEnabled()
+	if len(models) > 0 && len(models[0].Models) > 0 {
+		return models[0].Models[0].ModelName
 	}
 
 	return ""

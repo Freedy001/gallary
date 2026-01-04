@@ -41,7 +41,7 @@ func (p *AestheticScoringProcessor) SupportedBy(client llms.ModelClient) bool {
 	return client.SupportAesthetics()
 }
 
-func (p *AestheticScoringProcessor) ProcessItem(ctx context.Context, itemID int64, client llms.ModelClient, _ *model.ModelConfig) error {
+func (p *AestheticScoringProcessor) ProcessItem(ctx context.Context, itemID int64, client llms.ModelClient, _ *model.ModelConfig, _ *model.ModelItem) error {
 	// 1. 获取图片
 	image, err := p.imageRepo.FindByID(ctx, itemID)
 	if err != nil {

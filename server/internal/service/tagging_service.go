@@ -11,7 +11,9 @@ import (
 	"gallary/server/pkg/logger"
 	"os"
 	"path/filepath"
+	"slices"
 
+	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
@@ -20,10 +22,7 @@ type TaggingService interface {
 	// SyncTagsIfChanged 同步tag
 	SyncTagsIfChanged(ctx context.Context) error
 
-	// MatchTagIDsForImage 返回匹配的标签ID列表（简化版本，用于处理器）
-	MatchTagIDsForImage(ctx context.Context, imageID int64, modelName string) ([]int64, error)
-
-	//
+	// TaggingImage给图片打标机
 	TaggingImage(ctx context.Context, imageID int64, modelName string) error
 }
 
@@ -184,7 +183,7 @@ func (s *taggingService) loadTagsFromJSON() ([]model.SourceTag, error) {
 				NameEn:            category.NameEn,
 				VectorDescription: category.VectorDescription,
 				CategoryId:        category.ID,
-				SubCategoryId:     mainCategoryMarker, // 使用特殊标记
+				SubCategoryId:     model.MainCategoryMarker, // 使用特殊标记
 			}
 			allTags = append(allTags, mainCategoryTag)
 		}
@@ -275,17 +274,8 @@ func (s *taggingService) GetTagFilesHash(ctx context.Context) (string, error) {
 
 // 默认配置
 const (
-	defaultSimilarityThreshold = 0.3                 // 相似度阈值
-	defaultMaxTagsPerCategory  = 10                  // 每个主分类最大标签数
-	mainCategoryMarker         = "__main_category__" // 主分类向量的特殊标记
+	defaultMaxTagsPerCategory = 3 // 每个主分类最大标签数
 )
-
-// 三个主分类的 category_id
-var mainCategories = []string{
-	"portrait_photography",   // 人像摄影
-	"humanities_documentary", // 人文与社会纪实摄影
-	"landscape_photography",  // 风光摄影
-}
 
 // MatchedTag 匹配结果
 type MatchedTag struct {
@@ -297,8 +287,8 @@ type MatchedTag struct {
 	Score         float64 `json:"score"`           // 相似度分数
 }
 
-// MatchTagsForImage 为图片匹配标签
-func (s *taggingService) MatchTagsForImage(ctx context.Context, imageID int64, modelName string) ([]MatchedTag, error) {
+// matchTagIdsForImage 为图片匹配标签
+func (s *taggingService) matchTagIdsForImage(ctx context.Context, imageID int64, modelName string) ([]int64, error) {
 	// 1. 获取图片向量
 	imageEmbedding, err := s.embeddingRepo.FindByImageAndModel(ctx, imageID, modelName)
 	if err != nil {
@@ -309,138 +299,58 @@ func (s *taggingService) MatchTagsForImage(ctx context.Context, imageID int64, m
 	}
 	imageVector := []float32(imageEmbedding.Embedding)
 
-	// 2. 使用数据库向量搜索确定最匹配的主分类
-	mainCategory, err := s.findBestMainCategory(ctx, imageVector, modelName)
-	if err != nil {
-		return nil, err
-	}
-
-	logger.Debug("选定主分类",
-		zap.Int64("image_id", imageID),
-		zap.String("main_category", mainCategory))
-
 	// 3. 使用数据库向量搜索获取匹配的标签
-	tagResults, err := s.tagEmbeddingRepo.VectorSearchByCategory(
-		ctx, modelName, mainCategory, imageVector,
-		defaultSimilarityThreshold, 100, // 先获取足够多的候选
-	)
+	tagResults, err := s.tagEmbeddingRepo.VectorSearchByCategory(ctx, modelName, imageVector, 100)
 	if err != nil {
 		return nil, fmt.Errorf("向量搜索标签失败: %v", err)
 	}
 
-	// 4. 转换为 MatchedTag 并按子分类去重
-	candidates := s.convertToMatchedTags(tagResults)
-	results := s.deduplicateBySubCategory(candidates)
+	results := s.deduplicateBySubCategory(ctx, tagResults)
 
 	logger.Info("标签匹配完成",
 		zap.Int64("image_id", imageID),
-		zap.String("main_category", mainCategory),
-		zap.Int("candidates_count", len(candidates)),
-		zap.Int("results_count", len(results)))
+		zap.Int("candidates_count", len(tagResults)),
+		zap.Any("results", lo.Map(results, func(item *model.Tag, index int) string { return item.Name })),
+	)
 
-	return results, nil
+	return lo.Map(results, func(item *model.Tag, index int) int64 { return item.ID }), nil
 }
 
-// findBestMainCategory 使用数据库向量搜索选择最匹配的主分类
-func (s *taggingService) findBestMainCategory(ctx context.Context, imageVector []float32, modelName string) (string, error) {
-	// 使用数据库搜索主分类向量
-	results, err := s.tagEmbeddingRepo.VectorSearchMainCategories(ctx, modelName, imageVector, mainCategories)
-	if err != nil {
-		return "", fmt.Errorf("搜索主分类向量失败: %v", err)
+// deduplicateBySubCategory 将向量搜索结果转换为 MatchedTag
+func (s *taggingService) deduplicateBySubCategory(ctx context.Context, candidates []repository.TagEmbeddingWithDistance) []*model.Tag {
+	if len(candidates) == 0 {
+		return make([]*model.Tag, 0)
 	}
 
-	if len(results) == 0 {
-		return "", fmt.Errorf("无法确定主分类，可能没有主分类向量")
-	}
+	slices.SortFunc(candidates, func(a, b repository.TagEmbeddingWithDistance) int {
+		return int((a.Distance - b.Distance) * 1000)
+	})
 
-	// 第一个结果就是最相似的（已按距离升序排列）
-	bestCategory := results[0].TagEmbedding.Tag.SourceCategoryId
-
-	logger.Debug("主分类向量搜索结果",
-		zap.String("best_category", *bestCategory),
-		zap.Float64("similarity", results[0].Similarity))
-
-	for _, r := range results {
-		logger.Debug("主分类相似度",
-			zap.String("category", *r.TagEmbedding.Tag.SourceCategoryId),
-			zap.Float64("similarity", r.Similarity),
-			zap.Float64("distance", r.Distance))
-	}
-
-	return *bestCategory, nil
-}
-
-// convertToMatchedTags 将向量搜索结果转换为 MatchedTag
-func (s *taggingService) convertToMatchedTags(results []repository.TagEmbeddingWithDistance) []MatchedTag {
-	var candidates []MatchedTag
-
-	for _, r := range results {
-		if r.TagEmbedding == nil || r.TagEmbedding.Tag == nil {
-			continue
-		}
-		tag := r.TagEmbedding.Tag
-		subCategoryId := ""
-		if tag.SubCategoryId != nil {
-			subCategoryId = *tag.SubCategoryId
-		}
-		tagNameEn := ""
-		if tag.NameEn != nil {
-			tagNameEn = *tag.NameEn
-		}
-		candidates = append(candidates, MatchedTag{
-			TagID:         r.TagEmbedding.TagID,
-			TagName:       tag.Name,
-			TagNameEn:     tagNameEn,
-			CategoryId:    *r.TagEmbedding.Tag.SubCategoryId,
-			SubCategoryId: subCategoryId,
-			Score:         r.Similarity,
-		})
-	}
-
-	return candidates
-}
-
-// deduplicateBySubCategory 按子分类去重，每个子分类只保留最高分
-func (s *taggingService) deduplicateBySubCategory(candidates []MatchedTag) []MatchedTag {
 	seen := make(map[string]bool)
-	var results []MatchedTag
+	result := lo.FilterMap(candidates, func(item repository.TagEmbeddingWithDistance, index int) (*model.Tag, bool) {
+		subcategory := *item.TagEmbedding.Tag.SubCategoryId
+		if !seen[subcategory] {
+			seen[subcategory] = true
+			return item.TagEmbedding.Tag, true
+		}
+		return nil, false
+	})
 
-	// candidates 已按分数降序排列，所以第一个遇到的就是该子分类的最高分
-	for _, tag := range candidates {
-		key := tag.SubCategoryId
-		if key == "" {
-			// 如果没有子分类，用标签名作为唯一标识（允许所有无子分类的标签）
-			key = tag.TagName
-		}
-		if !seen[key] {
-			seen[key] = true
-			results = append(results, tag)
-		}
+	tag, err := s.tagRepo.FindMainCategoryTag(ctx, *candidates[0].TagEmbedding.Tag.SourceCategoryId)
+	if err == nil && tag != nil {
+		result = append([]*model.Tag{tag}, result...)
 	}
 
 	// 限制最大返回数量
-	if len(results) > defaultMaxTagsPerCategory {
-		return results[:defaultMaxTagsPerCategory]
-	}
-	return results
-}
-
-// MatchTagIDsForImage 返回匹配的标签ID列表（简化版本，用于处理器）
-func (s *taggingService) MatchTagIDsForImage(ctx context.Context, imageID int64, modelName string) ([]int64, error) {
-	matchedTags, err := s.MatchTagsForImage(ctx, imageID, modelName)
-	if err != nil {
-		return nil, err
+	if len(result) > defaultMaxTagsPerCategory {
+		return result[:defaultMaxTagsPerCategory]
 	}
 
-	tagIDs := make([]int64, len(matchedTags))
-	for i, tag := range matchedTags {
-		tagIDs[i] = tag.TagID
-	}
-	return tagIDs, nil
+	return result
 }
 
 func (s *taggingService) TaggingImage(ctx context.Context, imageID int64, modelName string) error {
-	tagIDs, err := s.MatchTagIDsForImage(ctx, imageID, modelName)
+	tagIDs, err := s.matchTagIdsForImage(ctx, imageID, modelName)
 	if err != nil {
 		return fmt.Errorf("匹配标签失败: %v image_id=%d", err, imageID)
 	}

@@ -29,8 +29,26 @@
                   @keydown.enter="executeSearch"
               />
 
+              <!-- 提示词优化按钮 -->
+              <tooltip :content="isOptimizing ? '正在优化...' : '优化提示词（将中文转换为更精确的英文描述）'">
+                <button
+                    v-if="isSemanticSearch && imageStore.searchFilters.keyword && hasChatCompletionModel"
+                    :class="[
+                    'flex items-center justify-center w-8 rounded-lg transition-all duration-200 shrink-0',
+                    isOptimizing
+                      ? 'bg-primary-500/20 cursor-wait'
+                      : 'bg-white/5 hover:bg-primary-500/20 hover:text-primary-400'
+                  ]"
+                    :disabled="isOptimizing"
+                    @click="optimizePrompt"
+                >
+                  <BoltIcon v-if="!isOptimizing" class="h-4 w-4" />
+                  <span v-else class="h-4 w-4 animate-spin rounded-full border-2 border-primary-400 border-t-transparent"></span>
+                </button>
+              </tooltip>
+
               <!-- 嵌入模型选择器 -->
-              <div v-if="isSemanticSearch && embeddingModels.length > 1" class="w-48">
+              <div v-if="isSemanticSearch && embeddingModels.length > 1" class="w-38">
                 <BaseSelect
                     v-model="selectedEmbeddingModel"
                     :options="embeddingModelOptions"
@@ -109,7 +127,7 @@
           </div>
 
           <!-- 图片上传区域（仅在语义搜索开启时显示） -->
-          <div v-if="isSemanticSearch" class="border-b border-white/5 px-5 py-4 bg-white/1">
+          <div v-if="isSemanticSearch" class="border-b border-white/5 px-5 py-4 bg-black/20 ">
             <label class="mb-3 block text-xs font-medium text-gray-400">以图搜图（可选）</label>
 
             <!-- 已选择图片预览 -->
@@ -159,7 +177,7 @@
 
           <!-- 筛选器详细配置 -->
           <div v-if="activeFilters.size > 0"
-               class="border-b border-white/5 bg-black/20 px-5 py-6 animate-slide-in-top max-h-[60vh] overflow-y-auto custom-scrollbar">
+               class="border-b border-white/5 bg-black/20 px-5 py-6 animate-slide-in-top max-h-[50vh] overflow-y-auto custom-scrollbar">
             <!-- 日期筛选 -->
             <div v-if="activeFilters.has('date')" class="mb-6 last:mb-0">
               <label class="mb-3 block text-sm font-medium text-gray-300">日期范围</label>
@@ -319,6 +337,7 @@ import LocationPicker from '@/components/common/LocationPicker.vue'
 import type {SelectOption} from '@/components/common/BaseSelect.vue'
 import BaseSelect from '@/components/common/BaseSelect.vue'
 import {
+  BoltIcon,
   CalendarIcon,
   CheckIcon,
   MagnifyingGlassIcon,
@@ -332,6 +351,7 @@ import type {SearchParams, Tag} from '@/types'
 import {imageApi} from "@/api/image.ts"
 import {aiApi} from "@/api/ai.ts"
 import {useDialogStore} from "@/stores/dialog.ts";
+import Tooltip from "@/components/common/Tooltip.vue";
 
 const router = useRouter()
 const uiStore = useUIStore()
@@ -434,7 +454,57 @@ const hasEmbeddingModel = computed(() => {
   return embeddingModels.value.length > 0
 })
 
+// ChatCompletion 模型相关状态
+const chatCompletionModels = ref<string[]>([])
+const isOptimizing = ref(false)
+
+// 是否有可用的 ChatCompletion 模型
+const hasChatCompletionModel = computed(() => {
+  return chatCompletionModels.value.length > 0
+})
+
 let first = true
+
+// 加载 ChatCompletion 模型列表
+async function loadChatCompletionModels() {
+  try {
+    const response = await aiApi.getChatCompletionModels()
+    if (response.data) {
+      chatCompletionModels.value = response.data
+    }
+  } catch (error) {
+    console.error('加载 ChatCompletion 模型列表失败:', error)
+  }
+}
+
+// 优化提示词
+async function optimizePrompt() {
+  const query = imageStore.searchFilters.keyword?.trim()
+  if (!query || isOptimizing.value) return
+
+  isOptimizing.value = true
+  try {
+    const response = await aiApi.optimizePrompt({ query })
+    if (response.data?.optimized_prompt) {
+      // 将优化后的提示词填充到搜索框
+      imageStore.searchFilters.keyword = response.data.optimized_prompt
+
+      dialogStore.notify({
+        title: '提示词已优化',
+        message: `"${query}" → "${response.data.optimized_prompt}"`,
+        type: 'success'
+      })
+    }
+  } catch (error) {
+    dialogStore.notify({
+      title: '优化失败',
+      message: (error as Error).message,
+      type: 'error'
+    })
+  } finally {
+    isOptimizing.value = false
+  }
+}
 
 // 加载嵌入模型列表
 async function loadEmbeddingModels() {
@@ -535,6 +605,8 @@ watch(() => uiStore.commandPaletteOpen, (isOpen) => {
     })
     // 加载嵌入模型列表
     loadEmbeddingModels()
+    // 加载 ChatCompletion 模型列表
+    loadChatCompletionModels()
     // 加载标签列表
     loadTags()
   }

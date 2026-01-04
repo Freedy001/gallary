@@ -14,24 +14,29 @@ export interface ExtraConfig {
   prompt_optimizer?: PromptOptimizerConfig
 }
 
+// 单个模型项（一个提供商可配置多个模型）
+export interface ModelItem {
+  api_model_name: string  // API 调用时使用的模型名称
+  model_name: string      // 内部标识/负载均衡分组
+}
+
 // 通用模型配置（与后端 ModelConfig 对应）
 export interface ModelConfig {
-  id: string             // 唯一标识
-  provider: Provider     // 提供商
-  model_name: string     // 模型名称
-  api_model_name: string     // 模型名称
+  id: string             // 提供商配置唯一标识
+  provider: Provider     // 提供商类型
+  models: ModelItem[]    // 模型列表（新）
   endpoint: string       // API 端点
   api_key: string        // API Key
   enabled: boolean       // 是否启用
   extra_config?: string  // 额外配置
-  // 前端扩展字段（用于显示）
-  dimension?: number     // 向量维度
 }
 
 // AI 全局配置
 export interface AIGlobalConfig {
-  default_search_model_id: string  // 默认搜索模型 ID
-  default_tag_model_id: string     // 默认打标签模型 ID
+  default_search_model_id: string  // 默认搜索模型 ID（组合格式: providerId,apiModelName）
+  default_tag_model_id: string     // 默认打标签模型 ID（组合格式: providerId,apiModelName）
+  default_prompt_optimize_model_id: string     // 默认打标签模型 ID（组合格式: providerId,apiModelName）
+  prompt_optimize_system_prompt: string  // 提示词优化配置
 }
 
 // AI 配置（与后端 AIPo 对应）
@@ -39,6 +44,14 @@ export interface AIConfig {
   models: ModelConfig[]           // 模型配置列表
   global_config?: AIGlobalConfig  // 全局配置
 }
+
+// ================== 模型 ID 辅助函数 ==================
+
+// 创建组合ID
+export function createModelId(providerId: string, apiModelName: string): string {
+  return `${providerId},${apiModelName}`
+}
+
 
 // ================== 队列相关类型 ==================
 
@@ -88,7 +101,7 @@ export interface AITaskItemInfo {
 
 // 测试连接请求
 export interface TestConnectionRequest {
-  id: string  // 模型ID
+  id: string  // 组合模型ID（providerId,apiModelName）
 }
 
 // 语义搜索请求
