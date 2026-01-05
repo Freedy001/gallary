@@ -18,6 +18,9 @@ type Notifier interface {
 
 	// NotifyImageCount 通知图片总数变化
 	NotifyImageCount(count int64)
+
+	// NotifySmartAlbumProgress 通知智能相册任务进度
+	NotifySmartAlbumProgress(progress *model.SmartAlbumProgressVO)
 }
 
 // hubNotifier Hub 实现的通知器
@@ -46,10 +49,15 @@ func (n *hubNotifier) NotifyImageCount(count int64) {
 	n.hub.Broadcast(NewMessage(MsgTypeImageCount, count))
 }
 
+func (n *hubNotifier) NotifySmartAlbumProgress(progress *model.SmartAlbumProgressVO) {
+	n.hub.Broadcast(NewMessage(MsgTypeSmartAlbumProgress, progress))
+}
+
 // NoopNotifier 空实现（用于不需要 WebSocket 的场景）
 type NoopNotifier struct{}
 
-func (n *NoopNotifier) OnClientSetup(func(notifier Notifier))         {}
-func (n *NoopNotifier) NotifyAIQueueStatus(*model.AIQueueStatus)      {}
-func (n *NoopNotifier) NotifyStorageStats(*storage.MultiStorageStats) {}
-func (n *NoopNotifier) NotifyImageCount(int64)                        {}
+func (n *NoopNotifier) OnClientSetup(func(notifier Notifier))                {}
+func (n *NoopNotifier) NotifyAIQueueStatus(*model.AIQueueStatus)             {}
+func (n *NoopNotifier) NotifyStorageStats(*storage.MultiStorageStats)        {}
+func (n *NoopNotifier) NotifyImageCount(int64)                               {}
+func (n *NoopNotifier) NotifySmartAlbumProgress(*model.SmartAlbumProgressVO) {}

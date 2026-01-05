@@ -49,18 +49,6 @@ const routes: RouteRecordRaw[] = [
     meta: {requiresAuth: false},
   },
   {
-    path: '/gallery/people',
-    name: 'People',
-    component: () => import('@/views/PeopleView.vue'),
-    meta: {requiresAuth: true, disabled: true},
-  },
-  {
-    path: '/gallery/timeline',
-    name: 'Timeline',
-    component: () => import('@/views/TimelineView.vue'),
-    meta: {requiresAuth: true, disabled: true},
-  },
-  {
     path: '/gallery/trash',
     name: 'Trash',
     component: () => import('@/views/TrashView.vue'),

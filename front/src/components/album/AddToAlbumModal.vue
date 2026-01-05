@@ -105,18 +105,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
-import { albumApi } from '@/api/album'
-import type { Album } from '@/types'
+import {computed, ref, watch} from 'vue'
+import {albumApi} from '@/api/album'
+import type {Album} from '@/types'
 import Modal from '@/components/common/Modal.vue'
 import EditAlbumModal from './EditAlbumModal.vue'
-import {
-  PhotoIcon,
-  RectangleStackIcon,
-  CheckIcon,
-  PlusIcon
-} from '@heroicons/vue/24/outline'
+import {CheckIcon, PhotoIcon, PlusIcon, RectangleStackIcon} from '@heroicons/vue/24/outline'
 import {useDialogStore} from "@/stores/dialog.ts";
+
 const dialogStore = useDialogStore();
 
 const props = defineProps<{
@@ -147,7 +143,8 @@ const filteredAlbums = computed(() => {
 async function loadAlbums() {
   try {
     loading.value = true
-    const { data } = await albumApi.getList(1, 100) // 获取所有相册
+    // 只获取普通相册，排除智能相册
+    const { data } = await albumApi.getList({ page: 1, pageSize: 100, isSmart: false })
     albums.value = data.list
   } catch (err) {
     dialogStore.alert({ title: '错误', message: '加载相册列表失败', type: 'error' })

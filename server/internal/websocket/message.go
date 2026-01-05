@@ -7,9 +7,10 @@ type MessageType string
 
 const (
 	// 服务端推送消息类型
-	MsgTypeAIQueueStatus MessageType = "ai_queue_status" // AI 队列状态更新
-	MsgTypeStorageStats  MessageType = "storage_stats"   // 存储统计更新
-	MsgTypeImageCount    MessageType = "image_count"     // 图片总数更新
+	MsgTypeAIQueueStatus      MessageType = "ai_queue_status"      // AI 队列状态更新
+	MsgTypeStorageStats       MessageType = "storage_stats"        // 存储统计更新
+	MsgTypeImageCount         MessageType = "image_count"          // 图片总数更新
+	MsgTypeSmartAlbumProgress MessageType = "smart_album_progress" // 智能相册任务进度
 
 	// 客户端请求消息类型
 	MsgTypePing MessageType = "ping" // 心跳 ping

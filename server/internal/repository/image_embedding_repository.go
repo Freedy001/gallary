@@ -20,6 +20,9 @@ type ImageEmbeddingRepository interface {
 
 	// 查询未处理的图片
 	FindImagesWithoutEmbedding(ctx context.Context, modelName string, limit int) ([]int64, error)
+
+	// 获取指定模型的所有向量嵌入（用于聚类）
+	GetAllEmbeddingsByModel(ctx context.Context, modelName string) ([]*model.ImageEmbedding, error)
 }
 
 // EmbeddingWithDistance 带距离的嵌入结果
@@ -126,4 +129,16 @@ func (r *imageEmbeddingRepository) FindImagesWithoutEmbedding(ctx context.Contex
 		Pluck("id", &imageIDs).Error
 
 	return imageIDs, err
+}
+
+// GetAllEmbeddingsByModel 获取指定模型的所有向量嵌入（用于聚类）
+func (r *imageEmbeddingRepository) GetAllEmbeddingsByModel(ctx context.Context, modelName string) ([]*model.ImageEmbedding, error) {
+	var embeddings []*model.ImageEmbedding
+
+	err := database.GetDB(ctx).WithContext(ctx).
+		Where("model_name = ?", modelName).
+		Joins("JOIN images ON images.id = image_embeddings.image_id AND images.deleted_at IS NULL").
+		Find(&embeddings).Error
+
+	return embeddings, err
 }

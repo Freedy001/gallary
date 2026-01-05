@@ -3,6 +3,8 @@ package model
 import (
 	"fmt"
 	"time"
+
+	"gorm.io/datatypes"
 )
 
 // AI 任务类型常量
@@ -12,6 +14,7 @@ const (
 	ImageEmbeddingTaskType   TaskType = "image-embedding"   // 向量嵌入
 	TagEmbeddingTaskType     TaskType = "tag-embedding"     // LLM 描述
 	AestheticScoringTaskType TaskType = "aesthetic-scoring" // 美学评分
+	SmartAlbumTaskType       TaskType = "smart-album"       // 智能相册生成
 )
 
 // AI 队列状态常量（队列永久存在，只有 idle 和 processing 两种状态）
@@ -22,8 +25,12 @@ const (
 
 // AI 任务项状态常量
 const (
-	AITaskItemStatusPending = "pending" // 待处理
-	AITaskItemStatusFailed  = "failed"  // 失败
+	AITaskItemStatusPending    = "pending"    // 待处理
+	AITaskItemStatusCollecting = "collecting" // 收集向量中（智能相册专用）
+	AITaskItemStatusClustering = "clustering" // 聚类中（智能相册专用）
+	AITaskItemStatusCreating   = "creating"   // 创建相册中（智能相册专用）
+	AITaskItemStatusCompleted  = "completed"  // 完成（智能相册专用）
+	AITaskItemStatusFailed     = "failed"     // 失败
 )
 
 // AIQueue AI 队列（永久存在，一个模型名称一个队列）
@@ -55,15 +62,16 @@ func GenerateQueueKey(taskType TaskType, modelName string) string {
 // 成功处理后删除记录，失败则保留
 // 支持任意实体类型：图片、标签等
 type AITaskItem struct {
-	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
-	TaskID    int64     `gorm:"not null;index" json:"task_id"`                        // 关联的队列 ID
-	ItemID    int64     `gorm:"not null;uniqueIndex:idx_task_item" json:"item_id"`    // 实体 ID（图片ID、标签ID等）
-	TaskType  TaskType  `gorm:"type:varchar(20);not null" json:"task_type"`           // 实体类型（image、tag等）
-	QueueKey  string    `gorm:"type:varchar(200);uniqueIndex:idx_task_item" json:"-"` // 队列标识（用于去重）
-	Status    string    `gorm:"type:varchar(20);default:pending;index" json:"status"` // pending, failed
-	Error     *string   `gorm:"type:text" json:"error,omitempty"`                     // 错误信息
-	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
+	ID        int64          `gorm:"primaryKey;autoIncrement" json:"id"`
+	TaskID    int64          `gorm:"not null;index" json:"task_id"`                        // 关联的队列 ID
+	ItemID    int64          `gorm:"not null;uniqueIndex:idx_task_item" json:"item_id"`    // 实体 ID（图片ID、标签ID等）
+	TaskType  TaskType       `gorm:"type:varchar(20);not null" json:"task_type"`           // 实体类型（image、tag等）
+	QueueKey  string         `gorm:"type:varchar(200);uniqueIndex:idx_task_item" json:"-"` // 队列标识（用于去重）
+	Status    string         `gorm:"type:varchar(20);default:pending;index" json:"status"` // pending, failed, collecting, clustering, creating, completed
+	Error     *string        `gorm:"type:text" json:"error,omitempty"`                     // 错误信息
+	Extra     datatypes.JSON `gorm:"type:jsonb" json:"extra,omitempty"`                    // 扩展信息（配置、进度、结果等）
+	CreatedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`
+	UpdatedAt time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP" json:"updated_at"`
 
 	// 关联
 	Queue *AIQueue `gorm:"foreignKey:TaskID" json:"queue,omitempty"`
@@ -125,4 +133,50 @@ func (ti *AITaskItem) ToInfo() AITaskItemInfo {
 		Error:     ti.Error,
 		CreatedAt: ti.CreatedAt.Format(time.RFC3339),
 	}
+}
+
+// ================== 智能相册任务专用结构体 ==================
+
+// HDBSCANParamsDTO HDBSCAN 聚类参数
+type HDBSCANParamsDTO struct {
+	MinClusterSize          int     `json:"min_cluster_size"`
+	MinSamples              *int    `json:"min_samples,omitempty"`
+	ClusterSelectionEpsilon float64 `json:"cluster_selection_epsilon"`
+	ClusterSelectionMethod  string  `json:"cluster_selection_method"`
+	Metric                  string  `json:"metric"`
+	UMAPEnabled             bool    `json:"umap_enabled"`
+	UMAPComponents          int     `json:"umap_n_components,omitempty"`
+	UMAPNeighbors           int     `json:"umap_n_neighbors,omitempty"`
+}
+
+// AITaskItemExtra 任务扩展信息（存储在 AITaskItem.Extra 字段）
+type AITaskItemExtra struct {
+	// 通用字段
+	Progress     int    `json:"progress,omitempty"`       // 进度 0-100
+	Message      string `json:"message,omitempty"`        // 当前阶段描述
+	PythonTaskID string `json:"python_task_id,omitempty"` // Python 任务 ID
+
+	// 智能相册专用 - 配置
+	ModelName     string            `json:"model_name,omitempty"`
+	Algorithm     string            `json:"algorithm,omitempty"`
+	HDBSCANParams *HDBSCANParamsDTO `json:"hdbscan_params,omitempty"`
+
+	// 智能相册专用 - 结果
+	AlbumIDs     []int64 `json:"album_ids,omitempty"`     // 创建的相册 ID 列表
+	ClusterCount int     `json:"cluster_count,omitempty"` // 聚类数量
+	NoiseCount   int     `json:"noise_count,omitempty"`   // 噪声点数量
+	TotalImages  int     `json:"total_images,omitempty"`  // 总图片数
+}
+
+// SmartAlbumProgressVO 智能相册任务进度（WebSocket 推送）
+type SmartAlbumProgressVO struct {
+	TaskID       int64   `json:"task_id"`
+	Status       string  `json:"status"`                  // pending, collecting, clustering, creating, completed, failed
+	Progress     int     `json:"progress"`                // 0-100
+	Message      string  `json:"message"`                 // 当前阶段描述
+	Error        *string `json:"error,omitempty"`         // 错误信息
+	AlbumIDs     []int64 `json:"album_ids,omitempty"`     // 创建的相册 ID 列表
+	ClusterCount int     `json:"cluster_count,omitempty"` // 聚类数量
+	NoiseCount   int     `json:"noise_count,omitempty"`   // 噪声点数量
+	TotalImages  int     `json:"total_images,omitempty"`  // 总图片数
 }

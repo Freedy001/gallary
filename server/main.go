@@ -61,7 +61,7 @@ func main() {
 	// 创建通知器
 	notifier := websocket.NewNotifier(wsHub)
 
-	settingService, migrationService, imageService, shareService, albumService, aiService := initService(cfg, notifier)
+	settingService, migrationService, imageService, shareService, albumService, aiService, smartAlbumService := initService(cfg, notifier)
 
 	// 11. 设置路由
 	r := router.SetupRouter(
@@ -69,12 +69,13 @@ func main() {
 		handler.NewAuthHandler(),
 		handler.NewImageHandler(imageService),
 		handler.NewShareHandler(shareService),
-		handler.NewAlbumHandler(albumService),
+		handler.NewAlbumHandler(albumService, smartAlbumService),
 		handler.NewSettingHandler(settingService),
 		handler.NewStorageHandler(settingService.GetStorageManager(), settingService),
 		handler.NewMigrationHandler(migrationService),
 		handler.NewAIHandler(aiService),
 		handler.NewWebSocketHandler(wsHub),
+		handler.NewSmartAlbumHandler(smartAlbumService),
 	)
 
 	// 12. 启动 AI 处理器
@@ -125,7 +126,7 @@ func main() {
 	logger.Info("服务器已关闭")
 }
 
-func initService(cfg *config.Config, notifier websocket.Notifier) (service.SettingService, service.MigrationService, service.ImageService, service.ShareService, service.AlbumService, service.AIService) {
+func initService(cfg *config.Config, notifier websocket.Notifier) (service.SettingService, service.MigrationService, service.ImageService, service.ShareService, service.AlbumService, service.AIService, service.SmartAlbumService) {
 	var err error
 	// 6. 初始化Repository层
 	imageRepo, shareRepo, settingRepo, migrationRepo, albumRepo := repository.NewImageRepository(), repository.NewShareRepository(), repository.NewSettingRepository(), repository.NewMigrationRepository(), repository.NewAlbumRepository()
@@ -193,6 +194,16 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 		storageManager,
 	))
 
+	// 智能相册处理器
+	service.RegisterProcessor(ai_processors.NewSmartAlbumProcessor(
+		albumRepo,
+		embeddingRepo,
+		aiTaskRepo,
+		loadBalancer,
+		storageManager,
+		notifier,
+	))
+
 	// 9.4 初始化 AIService
 	aiService := service.NewAIService(
 		aiTaskRepo,
@@ -208,6 +219,7 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 	imageService := service.NewImageService(imageRepo, albumRepo, storageManager, cfg, notifier, aiService)
 	shareService := service.NewShareService(shareRepo, storageManager)
 	albumService := service.NewAlbumService(albumRepo, storageManager)
+	smartAlbumService := service.NewSmartAlbumService(albumRepo, embeddingRepo, aiTaskRepo, loadBalancer, storageManager, notifier)
 
 	notifier.OnClientSetup(func(notifier websocket.Notifier) {
 		stats := settingService.GetStorageManager().GetMultiStorageStats(context.Background())
@@ -228,7 +240,7 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 	// 10. 初始化Handler层
 	// 10.1 连接 SettingService 和 MigrationService
 	settingService.SetMigrationService(migrationService)
-	return settingService, migrationService, imageService, shareService, albumService, aiService
+	return settingService, migrationService, imageService, shareService, albumService, aiService, smartAlbumService
 }
 
 func initPlatformConfig(settingService service.SettingService) {

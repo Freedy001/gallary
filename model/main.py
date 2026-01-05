@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.models import HealthResponse
-from app.routers import aesthetics_router, embeddings_router, multimodal_embedding_router
+from app.routers import aesthetics_router, clustering_router, embeddings_router, multimodal_embedding_router
 from app.services import model_service, BackendType
 
 
@@ -102,6 +102,7 @@ app.add_middleware(
 app.include_router(embeddings_router, prefix="/v1")
 app.include_router(aesthetics_router, prefix="/v1")
 app.include_router(multimodal_embedding_router, prefix="/v1")
+app.include_router(clustering_router, prefix="/v1")
 
 
 @app.get("/health", response_model=HealthResponse, tags=["health"])

@@ -410,7 +410,7 @@ func (h *ImageHandler) Search(c *gin.Context) {
 //	@Tags			图片管理
 //	@Accept			json
 //	@Produce		json
-//	@Param			request	body		service.UpdateMetadataRequest	true	"批量元数据更新请求"
+//	@Param			request	body		albumService.UpdateMetadataRequest	true	"批量元数据更新请求"
 //	@Success		200		{object}	utils.Response{data=[]int64}	"更新成功"
 //	@Failure		400		{object}	utils.Response					"无效的参数"
 //	@Failure		500		{object}	utils.Response					"更新失败"

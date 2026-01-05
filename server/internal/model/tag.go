@@ -17,11 +17,36 @@ const (
 
 const MainCategoryMarker = "__main_category__" // 主分类向量的特殊标记
 
+// HDBSCANParams HDBSCAN 聚类参数
+type HDBSCANParams struct {
+	MinClusterSize          int     `json:"min_cluster_size"`
+	MinSamples              *int    `json:"min_samples,omitempty"`
+	ClusterSelectionEpsilon float64 `json:"cluster_selection_epsilon"`
+	ClusterSelectionMethod  string  `json:"cluster_selection_method"`
+	Metric                  string  `json:"metric"`
+	UMAPEnabled             bool    `json:"umap_enabled"`
+	UMAPComponents          int     `json:"umap_n_components,omitempty"`
+	UMAPNeighbors           int     `json:"umap_n_neighbors,omitempty"`
+}
+
+// SmartAlbumConfig 智能相册配置
+type SmartAlbumConfig struct {
+	ModelName      string         `json:"model_name"`               // 使用的嵌入模型
+	Algorithm      string         `json:"algorithm"`                // 算法名称 (hdbscan)
+	ClusterID      int            `json:"cluster_id"`               // 原始聚类 ID
+	GeneratedAt    time.Time      `json:"generated_at"`             // 生成时间
+	HDBSCANParams  *HDBSCANParams `json:"hdbscan_params,omitempty"` // HDBSCAN 参数
+	ImageCount     int            `json:"image_count"`              // 生成时的图片数量
+	AvgProbability float64        `json:"avg_probability"`          // 聚类平均概率 (0-1)
+}
+
 // AlbumMetadata 相册元数据
 type AlbumMetadata struct {
-	CoverImageID *int64  `json:"cover_image_id,omitempty"` // 封面图片ID
-	Description  *string `json:"description,omitempty"`    // 相册描述
-	SortOrder    int     `json:"sort_order"`               // 排序顺序
+	CoverImageID     *int64            `json:"cover_image_id,omitempty"`     // 封面图片ID
+	Description      *string           `json:"description,omitempty"`        // 相册描述
+	SortOrder        int               `json:"sort_order"`                   // 排序顺序
+	IsSmartAlbum     bool              `json:"is_smart_album,omitempty"`     // 是否智能相册
+	SmartAlbumConfig *SmartAlbumConfig `json:"smart_album_config,omitempty"` // 智能相册配置
 }
 
 // Scan 实现 sql.Scanner 接口
@@ -38,7 +63,7 @@ func (m *AlbumMetadata) Scan(value interface{}) error {
 
 // Value 实现 driver.Valuer 接口
 func (m AlbumMetadata) Value() (driver.Value, error) {
-	if m.CoverImageID == nil && m.Description == nil && m.SortOrder == 0 {
+	if m.CoverImageID == nil && m.Description == nil && m.SortOrder == 0 && !m.IsSmartAlbum {
 		return nil, nil
 	}
 	return json.Marshal(m)

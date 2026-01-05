@@ -1,4 +1,5 @@
-import type { Image } from './image'
+import type {Image} from './image'
+import type {SmartAlbumConfig} from './smart-album'
 
 // 相册类型
 export interface Album {
@@ -6,8 +7,11 @@ export interface Album {
   name: string
   description?: string
   cover_image?: Image
+  cover_image_id?: number  // 自定义封面ID，如果为null则使用自动封面
   image_count: number
   sort_order: number
+  is_smart_album: boolean
+  smart_album_config?: SmartAlbumConfig
   created_at: string
   updated_at: string
 }

@@ -26,7 +26,7 @@ func NewShareHandler(service service.ShareService) *ShareHandler {
 //	@Tags			分享管理
 //	@Accept			json
 //	@Produce		json
-//	@Param			request	body		service.CreateShareRequest			true	"创建分享请求"
+//	@Param			request	body		albumService.CreateShareRequest			true	"创建分享请求"
 //	@Success		200		{object}	utils.Response{data=model.Share}	"创建成功"
 //	@Failure		400		{object}	utils.Response						"无效的参数"
 //	@Failure		500		{object}	utils.Response						"创建失败"

@@ -3,6 +3,7 @@ export type MessageType =
   | 'ai_queue_status'
   | 'storage_stats'
   | 'image_count'
+  | 'smart_album_progress'
   | 'ping'
   | 'pong'
 

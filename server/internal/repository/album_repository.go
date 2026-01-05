@@ -16,7 +16,7 @@ import (
 type AlbumRepository interface {
 	Create(ctx context.Context, album *model.Tag) error
 	FindByID(ctx context.Context, id int64) (*model.Tag, error)
-	List(ctx context.Context, page, pageSize int) ([]*model.Tag, int64, error)
+	List(ctx context.Context, page, pageSize int, isSmart *bool) ([]*model.Tag, int64, error)
 	Update(ctx context.Context, album *model.Tag) error
 	Delete(ctx context.Context, id int64) error
 
@@ -30,6 +30,7 @@ type AlbumRepository interface {
 	// 封面
 	GetCoverImage(ctx context.Context, coverImageID int64) (*model.Image, error)
 	GetFirstImages(ctx context.Context, albumIDs []int64) (map[int64]*model.Image, error)
+	FindBestCoverByAverageVector(ctx context.Context, albumID int64, modelName string) (int64, error)
 }
 
 type albumRepository struct{}
@@ -63,7 +64,8 @@ func (r *albumRepository) FindByID(ctx context.Context, id int64) (*model.Tag, e
 }
 
 // List 分页获取相册列表
-func (r *albumRepository) List(ctx context.Context, page, pageSize int) ([]*model.Tag, int64, error) {
+// isSmart: nil-不过滤, true-只返回智能相册, false-只返回普通相册
+func (r *albumRepository) List(ctx context.Context, page, pageSize int, isSmart *bool) ([]*model.Tag, int64, error) {
 	var albums []*model.Tag
 	var total int64
 
@@ -71,6 +73,15 @@ func (r *albumRepository) List(ctx context.Context, page, pageSize int) ([]*mode
 
 	db := database.GetDB(ctx).WithContext(ctx).Model(&model.Tag{}).
 		Where("type = ?", model.TagTypeAlbum)
+
+	// 根据 isSmart 参数过滤智能相册
+	if isSmart != nil {
+		if *isSmart {
+			db = db.Where("metadata->>'is_smart_album' = 'true'")
+		} else {
+			db = db.Where("metadata->>'is_smart_album' IS NULL OR metadata->>'is_smart_album' = 'false'")
+		}
+	}
 
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -289,4 +300,46 @@ func (r *albumRepository) GetFirstImages(ctx context.Context, albumIDs []int64) 
 	}
 
 	return resultMap, nil
+}
+
+// FindBestCoverByAverageVector 通过平均向量查找最佳封面
+// 计算相册中所有图片向量的平均值，然后找到与平均值最接近的图片作为封面
+func (r *albumRepository) FindBestCoverByAverageVector(ctx context.Context, albumID int64, modelName string) (int64, error) {
+	// 使用 pgvector 的聚合函数计算平均向量并找到最接近的图片
+	// 只计算指定模型的向量
+	type result struct {
+		ImageID int64
+	}
+
+	var res result
+	err := database.GetDB(ctx).WithContext(ctx).Raw(`
+		WITH avg_vector AS (
+			-- 计算指定模型的所有图片向量的平均值
+			SELECT AVG(embedding) as avg_emb
+			FROM image_embeddings ie
+			JOIN image_tags it ON ie.image_id = it.image_id
+			WHERE it.tag_id = $1 AND ie.model_name = $2
+		)
+		-- 找到与平均向量余弦距离最小的图片
+		SELECT ie.image_id
+		FROM image_embeddings ie
+		JOIN image_tags it ON ie.image_id = it.image_id
+		CROSS JOIN avg_vector av
+		WHERE it.tag_id = $1 AND ie.model_name = $2
+		ORDER BY ie.embedding <=> av.avg_emb  -- 余弦距离
+		LIMIT 1
+	`, albumID, modelName).Scan(&res).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, fmt.Errorf("该相册中没有使用模型 %s 的向量数据", modelName)
+		}
+		return 0, fmt.Errorf("查询平均向量封面失败: %w", err)
+	}
+
+	if res.ImageID == 0 {
+		return 0, fmt.Errorf("该相册中没有使用模型 %s 的向量数据", modelName)
+	}
+
+	return res.ImageID, nil
 }

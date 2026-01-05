@@ -147,35 +147,6 @@
         <!-- 分隔线 -->
         <div class="my-4 border-t border-white/5 mx-2"></div>
 
-        <!-- 人物 (预留) -->
-        <button
-          disabled
-          :class="[
-            'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors opacity-40',
-            'cursor-not-allowed text-gray-500',
-             uiStore.sidebarCollapsed ? 'justify-center' : ''
-          ]"
-        >
-          <UserGroupIcon class="h-5 w-5 flex-shrink-0" />
-          <span v-if="!uiStore.sidebarCollapsed">智能人物</span>
-        </button>
-
-        <!-- 时间线 (预留) -->
-        <button
-          disabled
-          :class="[
-            'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors opacity-40',
-            'cursor-not-allowed text-gray-500',
-             uiStore.sidebarCollapsed ? 'justify-center' : ''
-          ]"
-        >
-          <CalendarIcon class="h-5 w-5 flex-shrink-0" />
-          <span v-if="!uiStore.sidebarCollapsed">时光轴</span>
-        </button>
-
-        <!-- 分隔线 -->
-        <div class="my-4 border-t border-white/5 mx-2"></div>
-
         <!-- 最近删除 -->
         <router-link
           to="/gallery/trash"
@@ -269,7 +240,6 @@ import StorageUsage from '@/components/widgets/StorageUsage.vue'
 import AIQueueStatus from '@/components/widgets/AIQueueStatus.vue'
 import {
   Bars3Icon,
-  CalendarIcon,
   ChevronLeftIcon,
   Cog6ToothIcon,
   MapPinIcon,
@@ -277,7 +247,6 @@ import {
   RectangleStackIcon,
   ShareIcon,
   TrashIcon,
-  UserGroupIcon,
 } from '@heroicons/vue/24/outline'
 
 const router = useRouter()

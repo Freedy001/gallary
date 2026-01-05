@@ -1,11 +1,22 @@
 import http from './http'
-import type { Album, CreateAlbumRequest, UpdateAlbumRequest, Image, Pageable } from '@/types'
+import type {Album, CreateAlbumRequest, Image, Pageable, UpdateAlbumRequest} from '@/types'
+
+export interface AlbumListParams {
+  page?: number
+  pageSize?: number
+  isSmart?: boolean  // true-只返回智能相册，false-只返回普通相册，不传-返回全部
+}
 
 export const albumApi = {
   // 获取相册列表
-  getList(page: number = 1, pageSize: number = 20) {
+  getList(params: AlbumListParams = {}) {
+    const { page = 1, pageSize = 20, isSmart } = params
     return http.get<Pageable<Album>>('/api/albums', {
-      params: { page, page_size: pageSize }
+      params: {
+        page,
+        page_size: pageSize,
+        ...(isSmart !== undefined && { is_smart: isSmart })
+      }
     })
   },
 
@@ -47,5 +58,15 @@ export const albumApi = {
   // 设置相册封面
   setCover(id: number, imageId: number) {
     return http.put(`/api/albums/${id}/cover`, { image_id: imageId })
+  },
+
+  // 移除相册封面
+  removeCover(id: number) {
+    return http.delete(`/api/albums/${id}/cover`)
+  },
+
+  // 设置平均向量封面
+  setAverageCover(id: number, modelName: string) {
+    return http.put(`/api/albums/${id}/cover/average`, { model_name: modelName })
   },
 }

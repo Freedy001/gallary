@@ -22,6 +22,7 @@ func SetupRouter(
 	migrationHandler *handler.MigrationHandler,
 	aiHandler *handler.AIHandler,
 	wsHandler *handler.WebSocketHandler,
+	smartAlbumHandler *handler.SmartAlbumHandler,
 ) *gin.Engine {
 	configCompose := internal.PlatConfig
 	// 设置运行模式
@@ -105,6 +106,12 @@ func SetupRouter(
 			albums.POST("/:id/images", albumHandler.AddImages)
 			albums.DELETE("/:id/images", albumHandler.RemoveImages)
 			albums.PUT("/:id/cover", albumHandler.SetCover)
+			albums.DELETE("/:id/cover", albumHandler.RemoveCover)
+			albums.PUT("/:id/cover/average", albumHandler.SetAverageCover)
+			albums.POST("/smart-generate", albumHandler.GenerateSmartAlbums)
+
+			// 智能相册异步任务路由
+			albums.POST("/smart-tasks", smartAlbumHandler.SubmitTask) // 提交智能相册任务（进度通过 WebSocket 推送）
 		}
 
 		// 设置路由（无需认证）

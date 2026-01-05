@@ -16,7 +16,7 @@ import (
 // AlbumService 相册服务接口
 type AlbumService interface {
 	Create(ctx context.Context, req *CreateAlbumRequest) (*model.AlbumVO, error)
-	List(ctx context.Context, page, pageSize int) ([]*model.AlbumVO, int64, error)
+	List(ctx context.Context, page, pageSize int, isSmart *bool) ([]*model.AlbumVO, int64, error)
 	Update(ctx context.Context, id int64, req *UpdateAlbumRequest) (*model.AlbumVO, error)
 	Delete(ctx context.Context, id int64) error
 
@@ -25,6 +25,8 @@ type AlbumService interface {
 	AddImages(ctx context.Context, albumID int64, imageIDs []int64) error
 	RemoveImages(ctx context.Context, albumID int64, imageIDs []int64) error
 	SetCover(ctx context.Context, albumID int64, imageID int64) error
+	RemoveCover(ctx context.Context, albumID int64) error
+	SetAverageCover(ctx context.Context, albumID int64, modelName string) error
 }
 
 // CreateAlbumRequest 创建相册请求
@@ -76,7 +78,8 @@ func (s *albumService) Create(ctx context.Context, req *CreateAlbumRequest) (*mo
 }
 
 // List 获取相册列表
-func (s *albumService) List(ctx context.Context, page, pageSize int) ([]*model.AlbumVO, int64, error) {
+// isSmart: nil-不过滤, true-只返回智能相册, false-只返回普通相册
+func (s *albumService) List(ctx context.Context, page, pageSize int, isSmart *bool) ([]*model.AlbumVO, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -84,7 +87,7 @@ func (s *albumService) List(ctx context.Context, page, pageSize int) ([]*model.A
 		pageSize = 20
 	}
 
-	albums, total, err := s.repo.List(ctx, page, pageSize)
+	albums, total, err := s.repo.List(ctx, page, pageSize, isSmart)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -222,6 +225,33 @@ func (s *albumService) SetCover(ctx context.Context, albumID int64, imageID int6
 	album.Metadata.CoverImageID = &imageID
 
 	return s.repo.Update(ctx, album)
+}
+
+// RemoveCover 移除相册自定义封面
+func (s *albumService) RemoveCover(ctx context.Context, albumID int64) error {
+	album, err := s.repo.FindByID(ctx, albumID)
+	if err != nil {
+		return err
+	}
+
+	if album.Metadata == nil {
+		return nil // 没有设置封面，无需移除
+	}
+
+	album.Metadata.CoverImageID = nil
+	return s.repo.Update(ctx, album)
+}
+
+// SetAverageCover 设置平均向量封面
+func (s *albumService) SetAverageCover(ctx context.Context, albumID int64, modelName string) error {
+	// 获取最适合的封面图片ID
+	bestImageID, err := s.repo.FindBestCoverByAverageVector(ctx, albumID, modelName)
+	if err != nil {
+		return fmt.Errorf("计算平均向量封面失败: %w", err)
+	}
+
+	// 设置封面
+	return s.SetCover(ctx, albumID, bestImageID)
 }
 
 // toVO 转换为 AlbumVO

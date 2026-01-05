@@ -139,26 +139,26 @@ export const useImageStore = defineStore('image', () => {
 
   return {
     // State
-    images,
-    viewerIndex,
-    selectedImages,
-    loading,
-    currentPage,
-    total,
-    isSearchMode,
-    searchDescription,
-    searchFilters,
+    images: images,
+    viewerIndex: viewerIndex,
+    selectedImages: selectedImages,
+    loading: loading,
+    currentPage: currentPage,
+    total: total,
+    isSearchMode: isSearchMode,
+    searchDescription: searchDescription,
+    searchFilters: searchFilters,
     // Computed
-    selectedCount,
-    selectedIds,
+    selectedCount: selectedCount,
+    selectedIds: selectedIds,
 
     // Actions
-    fetchImages,
-    refreshImages,
-    exitSearch,
-    deleteBatch,
-    selectImage,
-    toggleSelect,
-    clearSelection,
+    fetchImages: fetchImages,
+    refreshImages: refreshImages,
+    exitSearch: exitSearch,
+    deleteBatch: deleteBatch,
+    selectImage: selectImage,
+    toggleSelect: toggleSelect,
+    clearSelection: clearSelection,
   }
 })

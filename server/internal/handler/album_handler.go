@@ -13,12 +13,13 @@ import (
 
 // AlbumHandler 相册处理器
 type AlbumHandler struct {
-	service service.AlbumService
+	albumService      service.AlbumService
+	smartAlbumService service.SmartAlbumService
 }
 
 // NewAlbumHandler 创建相册处理器实例
-func NewAlbumHandler(service service.AlbumService) *AlbumHandler {
-	return &AlbumHandler{service: service}
+func NewAlbumHandler(service service.AlbumService, smartAlbumService service.SmartAlbumService) *AlbumHandler {
+	return &AlbumHandler{albumService: service, smartAlbumService: smartAlbumService}
 }
 
 // Create 创建相册
@@ -28,7 +29,7 @@ func NewAlbumHandler(service service.AlbumService) *AlbumHandler {
 //	@Tags			相册管理
 //	@Accept			json
 //	@Produce		json
-//	@Param			request	body		service.CreateAlbumRequest				true	"创建相册请求"
+//	@Param			request	body		albumService.CreateAlbumRequest				true	"创建相册请求"
 //	@Success		200		{object}	utils.Response{data=model.AlbumVO}		"创建成功"
 //	@Failure		400		{object}	utils.Response							"无效的参数"
 //	@Failure		500		{object}	utils.Response							"创建失败"
@@ -40,7 +41,7 @@ func (h *AlbumHandler) Create(c *gin.Context) {
 		return
 	}
 
-	album, err := h.service.Create(c.Request.Context(), &req)
+	album, err := h.albumService.Create(c.Request.Context(), &req)
 	if err != nil {
 		logger.Error("创建相册失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
@@ -58,6 +59,7 @@ func (h *AlbumHandler) Create(c *gin.Context) {
 //	@Produce		json
 //	@Param			page		query		int															false	"页码"	default(1)
 //	@Param			page_size	query		int															false	"每页数量"	default(20)
+//	@Param			is_smart	query		bool														false	"是否智能相册（true-只返回智能相册，false-只返回普通相册，不传-返回全部）"
 //	@Success		200			{object}	utils.Response{data=utils.PageData{list=model.AlbumVO}}	"相册列表"
 //	@Failure		500			{object}	utils.Response												"获取失败"
 //	@Router			/api/albums [get]
@@ -65,7 +67,14 @@ func (h *AlbumHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-	albums, total, err := h.service.List(c.Request.Context(), page, pageSize)
+	// 解析 is_smart 查询参数
+	var isSmart *bool
+	if isSmartStr := c.Query("is_smart"); isSmartStr != "" {
+		val := isSmartStr == "true"
+		isSmart = &val
+	}
+
+	albums, total, err := h.albumService.List(c.Request.Context(), page, pageSize, isSmart)
 	if err != nil {
 		logger.Error("获取相册列表失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
@@ -83,7 +92,7 @@ func (h *AlbumHandler) List(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			id		path		int										true	"相册ID"
-//	@Param			request	body		service.UpdateAlbumRequest				true	"更新相册请求"
+//	@Param			request	body		albumService.UpdateAlbumRequest				true	"更新相册请求"
 //	@Success		200		{object}	utils.Response{data=model.AlbumVO}		"更新成功"
 //	@Failure		400		{object}	utils.Response							"无效的参数"
 //	@Failure		404		{object}	utils.Response							"相册不存在"
@@ -102,7 +111,7 @@ func (h *AlbumHandler) Update(c *gin.Context) {
 		return
 	}
 
-	album, err := h.service.Update(c.Request.Context(), id, &req)
+	album, err := h.albumService.Update(c.Request.Context(), id, &req)
 	if err != nil {
 		logger.Error("更新相册失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
@@ -130,7 +139,7 @@ func (h *AlbumHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.Delete(c.Request.Context(), id); err != nil {
+	if err := h.albumService.Delete(c.Request.Context(), id); err != nil {
 		logger.Error("删除相册失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
 		return
@@ -162,7 +171,7 @@ func (h *AlbumHandler) GetImages(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-	images, total, err := h.service.GetImages(c.Request.Context(), id, page, pageSize)
+	images, total, err := h.albumService.GetImages(c.Request.Context(), id, page, pageSize)
 	if err != nil {
 		logger.Error("获取相册图片失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
@@ -200,7 +209,7 @@ func (h *AlbumHandler) AddImages(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.AddImages(c.Request.Context(), id, req.ImageIDs); err != nil {
+	if err := h.albumService.AddImages(c.Request.Context(), id, req.ImageIDs); err != nil {
 		logger.Error("添加图片到相册失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
 		return
@@ -237,7 +246,7 @@ func (h *AlbumHandler) RemoveImages(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.RemoveImages(c.Request.Context(), id, req.ImageIDs); err != nil {
+	if err := h.albumService.RemoveImages(c.Request.Context(), id, req.ImageIDs); err != nil {
 		logger.Error("从相册移除图片失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
 		return
@@ -274,11 +283,104 @@ func (h *AlbumHandler) SetCover(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.SetCover(c.Request.Context(), id, req.ImageID); err != nil {
+	if err := h.albumService.SetCover(c.Request.Context(), id, req.ImageID); err != nil {
 		logger.Error("设置相册封面失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
 		return
 	}
 
 	utils.SuccessWithMessage(c, "设置成功", nil)
+}
+
+// RemoveCover 移除相册封面
+//
+//	@Summary		移除相册封面
+//	@Description	移除相册的自定义封面，恢复使用美学评分最高的图片作为封面
+//	@Tags			相册管理
+//	@Produce		json
+//	@Param			id	path		int				true	"相册ID"
+//	@Success		200	{object}	utils.Response	"移除成功"
+//	@Failure		400	{object}	utils.Response	"无效的相册ID"
+//	@Failure		500	{object}	utils.Response	"移除失败"
+//	@Router			/api/albums/{id}/cover [delete]
+func (h *AlbumHandler) RemoveCover(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的相册ID")
+		return
+	}
+
+	if err := h.albumService.RemoveCover(c.Request.Context(), id); err != nil {
+		logger.Error("移除相册封面失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "移除成功", nil)
+}
+
+// SetAverageCover 设置平均向量封面
+//
+//	@Summary		设置平均向量封面
+//	@Description	计算相册中所有图片的平均向量，选择最接近平均向量的图片作为封面
+//	@Tags			相册管理
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		int								true	"相册ID"
+//	@Param			request	body		object{model_name=string}		true	"模型名称"
+//	@Success		200		{object}	utils.Response					"设置成功"
+//	@Failure		400		{object}	utils.Response					"无效的参数"
+//	@Failure		500		{object}	utils.Response					"设置失败"
+//	@Router			/api/albums/{id}/cover/average [put]
+func (h *AlbumHandler) SetAverageCover(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的相册ID")
+		return
+	}
+
+	var req struct {
+		ModelName string `json:"model_name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数: "+err.Error())
+		return
+	}
+
+	if err := h.albumService.SetAverageCover(c.Request.Context(), id, req.ModelName); err != nil {
+		logger.Error("设置平均向量封面失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "设置成功", nil)
+}
+
+// GenerateSmartAlbums 生成智能相册
+//
+//	@Summary		生成智能相册
+//	@Description	使用 HDBSCAN 算法对图片进行聚类，生成智能相册
+//	@Tags			智能相册
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		albumService.GenerateSmartAlbumsRequest					true	"生成请求"
+//	@Success		200		{object}	utils.Response{data=albumService.GenerateSmartAlbumsResponse}	"生成成功"
+//	@Failure		400		{object}	utils.Response										"无效的参数"
+//	@Failure		500		{object}	utils.Response										"生成失败"
+//	@Router			/api/smart-albums/generate [post]
+func (h *AlbumHandler) GenerateSmartAlbums(c *gin.Context) {
+	var req service.GenerateSmartAlbumsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数: "+err.Error())
+		return
+	}
+
+	result, err := h.smartAlbumService.GenerateSmartAlbums(c.Request.Context(), &req)
+	if err != nil {
+		logger.Error("生成智能相册失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "智能相册生成成功", result)
 }

@@ -52,7 +52,7 @@ func (h *SettingHandler) GetByCategory(c *gin.Context) {
 //	@Tags			设置
 //	@Accept			json
 //	@Produce		json
-//	@Param			request	body		service.PasswordUpdateDTO	true	"密码更新信息"
+//	@Param			request	body		albumService.PasswordUpdateDTO	true	"密码更新信息"
 //	@Success		200		{object}	utils.Response				"更新成功"
 //	@Failure		400		{object}	utils.Response				"请求参数错误"
 //	@Failure		500		{object}	utils.Response				"服务器错误"
@@ -80,7 +80,7 @@ func (h *SettingHandler) UpdatePassword(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			request	body		model.StorageConfigPO	true	"存储配置"
-//	@Success		200		{object}	utils.Response{data=service.StorageUpdateResult}	"更新结果"
+//	@Success		200		{object}	utils.Response{data=albumService.StorageUpdateResult}	"更新结果"
 //	@Failure		400		{object}	utils.Response				"请求参数错误"
 //	@Failure		423		{object}	utils.Response				"迁移进行中，配置被锁定"
 //	@Failure		500		{object}	utils.Response				"服务器错误"
@@ -176,7 +176,7 @@ type AddStorageRequest struct {
 //	@Accept			json
 //	@Produce		json
 //	@Param			request	body		AddStorageRequest	true	"存储配置"
-//	@Success		200		{object}	utils.Response{data=service.StorageUpdateResult}	"添加结果"
+//	@Success		200		{object}	utils.Response{data=albumService.StorageUpdateResult}	"添加结果"
 //	@Failure		400		{object}	utils.Response				"请求参数错误"
 //	@Failure		500		{object}	utils.Response				"服务器错误"
 //	@Router			/api/settings/storage [post]

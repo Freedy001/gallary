@@ -266,7 +266,7 @@ import MetadataEditor from './menu/MetadataEditor.vue'
 import CreateShare from '@/components/gallery/menu/CreateShare.vue'
 import AddToAlbumModal from '@/components/album/AddToAlbumModal.vue'
 import ImageViewer from "@/components/gallery/ImageViewer.vue";
-import {useBoxSelection} from '@/composables/useBoxSelection'
+import {useGenericBoxSelection} from '@/composables/useGenericBoxSelection'
 import {useAlbumStore} from '@/stores/album'
 import {albumApi} from '@/api/album'
 
@@ -514,9 +514,15 @@ const {
   selectionBoxStyle,
   handleMouseDown,
   isDragOperation
-} = useBoxSelection({
+} = useGenericBoxSelection<Image | null>({
   containerRef,
   itemRefs,
+  getItems: () => imageStore.images,
+  getItemId: (item) => item?.id ?? -1,
+  toggleSelection: (id) => {
+    if (id === -1) return
+    imageStore.toggleSelect(id)
+  },
   onSelectionEnd: () => {
     uiStore.setSelectionMode(true)
   },

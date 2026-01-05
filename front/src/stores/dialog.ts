@@ -86,11 +86,11 @@ export const useDialogStore = defineStore('dialog', () => {
   return {
     state,
     notifications,
-    confirm,
-    alert,
-    notify,
     removeNotification,
     handleConfirm,
-    handleCancel
+    handleCancel,
+    confirm: confirm,
+    alert: alert,
+    notify: notify,
   }
 })

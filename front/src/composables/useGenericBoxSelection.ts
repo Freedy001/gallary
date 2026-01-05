@@ -1,24 +1,26 @@
-import {ref, computed, onUnmounted} from 'vue'
 import type {Ref} from 'vue'
-import {useImageStore} from "@/stores/image.ts";
+import {computed, onUnmounted, ref} from 'vue'
 
-const imageStore = useImageStore()
-
-export interface BoxSelectionOptions {
+export interface GenericBoxSelectionOptions<T> {
   containerRef: Ref<HTMLElement | null | undefined>
-  // Callback to get item rects, called on mouse down
+  // Map of item index to element
   itemRefs: Map<number, HTMLElement>
+  // Get the list of items
+  getItems: () => T[]
+  // Get item ID
+  getItemId: (item: T) => number
+  // Toggle selection for an ID
+  toggleSelection: (id: number) => void
   onSelectionStart?: () => void
-  // Callback when selection ends (optional)
   onSelectionEnd?: () => void
   // Whether to use scroll position in calculations (for scrollable containers)
   useScroll?: boolean
 }
 
-export function useBoxSelection(options: BoxSelectionOptions) {
+export function useGenericBoxSelection<T>(options: GenericBoxSelectionOptions<T>) {
   const isSelecting = ref(false)
-  const selectionStart = ref({x: 0, y: 0})
-  const selectionCurrent = ref({x: 0, y: 0})
+  const selectionStart = ref({ x: 0, y: 0 })
+  const selectionCurrent = ref({ x: 0, y: 0 })
   let isDragOperation = false
 
   const selectionBoxStyle = computed(() => {
@@ -38,7 +40,7 @@ export function useBoxSelection(options: BoxSelectionOptions) {
   })
 
   function getPointInContainer(e: MouseEvent) {
-    if (!options.containerRef.value) return {x: 0, y: 0}
+    if (!options.containerRef.value) return { x: 0, y: 0 }
 
     const containerRect = options.containerRef.value.getBoundingClientRect()
 
@@ -50,20 +52,17 @@ export function useBoxSelection(options: BoxSelectionOptions) {
       y += options.containerRef.value.scrollTop
     }
 
-    return {x, y}
+    return { x, y }
   }
 
   function handleMouseDown(e: MouseEvent) {
     if (e.button !== 0 || !options.containerRef.value) return
 
-    // Don't start if clicking on scrollbar (simplified check, usually handled by browser but good to be safe)
-    // Or if target is interactive? For now assume caller handles filters
-
     isDragOperation = false
 
-    const {x, y} = getPointInContainer(e)
-    selectionStart.value = {x, y}
-    selectionCurrent.value = {x, y}
+    const { x, y } = getPointInContainer(e)
+    selectionStart.value = { x, y }
+    selectionCurrent.value = { x, y }
 
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
@@ -71,7 +70,7 @@ export function useBoxSelection(options: BoxSelectionOptions) {
 
   function handleMouseMove(e: MouseEvent) {
     if (!isSelecting.value) {
-      const {x, y} = getPointInContainer(e)
+      const { x, y } = getPointInContainer(e)
       const dx = x - selectionStart.value.x
       const dy = y - selectionStart.value.y
 
@@ -84,9 +83,8 @@ export function useBoxSelection(options: BoxSelectionOptions) {
       }
     }
 
-    const {x, y} = getPointInContainer(e)
-    selectionCurrent.value = {x, y}
-    // updateSelection()
+    const { x, y } = getPointInContainer(e)
+    selectionCurrent.value = { x, y }
   }
 
   function handleMouseUp() {
@@ -96,7 +94,6 @@ export function useBoxSelection(options: BoxSelectionOptions) {
     if (isSelecting.value) {
       isSelecting.value = false
       isDragOperation = true
-      // Reset flag on next tick to allow click handlers to know it was a drag
       setTimeout(() => {
         isDragOperation = false
       }, 0)
@@ -111,9 +108,12 @@ export function useBoxSelection(options: BoxSelectionOptions) {
     const right = Math.max(selectionStart.value.x, selectionCurrent.value.x)
     const bottom = Math.max(selectionStart.value.y, selectionCurrent.value.y)
 
+    const items = options.getItems()
+
     options.itemRefs.forEach((el, index) => {
-      const image = imageStore.images[index]
-      if (!image) return
+      const item = items[index]
+      if (!item) return
+
       const rect = {
         left: el.offsetLeft,
         top: el.offsetTop,
@@ -127,14 +127,10 @@ export function useBoxSelection(options: BoxSelectionOptions) {
         rect.bottom < top ||
         rect.top > bottom
       )
-      if (!isIntersecting) return;
+      if (!isIntersecting) return
 
-      const id = image.id;
-      if (imageStore.selectedImages.has(id)) {
-        imageStore.selectedImages.delete(id)
-      } else {
-        imageStore.selectedImages.add(id)
-      }
+      const id = options.getItemId(item)
+      options.toggleSelection(id)
     })
   }
 
@@ -147,7 +143,7 @@ export function useBoxSelection(options: BoxSelectionOptions) {
   return {
     selectionBoxStyle,
     handleMouseDown,
-    // Expose check for drag operation so click handlers can ignore clicks after drag
+    isSelecting,
     isDragOperation: () => isDragOperation
   }
 }

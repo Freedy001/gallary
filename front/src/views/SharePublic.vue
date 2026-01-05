@@ -256,7 +256,7 @@
 </template>
 
 <script setup lang="ts">
-import {ref, onMounted, onUnmounted, nextTick} from 'vue'
+import {nextTick, onMounted, onUnmounted, ref} from 'vue'
 import {useRoute} from 'vue-router'
 import {shareApi} from '@/api/share'
 import {imageApi} from '@/api/image'
@@ -264,21 +264,21 @@ import {useImageStore} from '@/stores/image'
 import {useUIStore} from '@/stores/ui'
 import ImageViewer from '@/components/gallery/ImageViewer.vue'
 import {
-  LockClosedIcon,
-  ExclamationTriangleIcon,
-  PhotoIcon,
-  ClockIcon,
+  ArchiveBoxArrowDownIcon,
   ArrowDownTrayIcon,
   CheckIcon,
-  SparklesIcon,
+  ClockIcon,
+  ExclamationTriangleIcon,
   EyeIcon,
-  ArchiveBoxArrowDownIcon
+  LockClosedIcon,
+  PhotoIcon,
+  SparklesIcon
 } from '@heroicons/vue/24/outline'
 import ContextMenu from '@/components/common/ContextMenu.vue'
 import ContextMenuItem from '@/components/common/ContextMenuItem.vue'
 import SelectionBox from '@/components/common/SelectionBox.vue'
 import type {Image, SharePublicInfo} from '@/types'
-import {useBoxSelection} from '@/composables/useBoxSelection'
+import {useGenericBoxSelection} from '@/composables/useGenericBoxSelection'
 
 const route = useRoute()
 const imageStore = useImageStore()
@@ -305,9 +305,15 @@ const {
   selectionBoxStyle,
   handleMouseDown,
   isDragOperation
-} = useBoxSelection({
+} = useGenericBoxSelection<Image | null>({
   containerRef: scrollContainerRef,
   itemRefs,
+  getItems: () => imageStore.images,
+  getItemId: (item) => item?.id ?? -1,
+  toggleSelection: (id) => {
+    if (id === -1) return
+    imageStore.toggleSelect(id)
+  },
   onSelectionEnd: () => {
     uiStore.setSelectionMode(true)
   },

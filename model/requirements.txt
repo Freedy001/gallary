@@ -6,6 +6,7 @@ protobuf>=3.20.0
 pillow>=9.0.0
 numpy>=1.24.0
 requests>=2.28.0
+httpx>=0.25.0
 
 # LoRA 推理
 peft>=0.7.0
@@ -24,3 +25,7 @@ huggingface_hub>=0.20.0
 
 # llama-cpp-python CPU 加速（推荐用于 CPU 服务器）
 llama-cpp-python
+
+# 聚类算法
+hdbscan>=0.8.33
+umap-learn>=0.5.4
