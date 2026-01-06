@@ -18,6 +18,7 @@ const AITaskTypeTagEmbedding = "tag_embedding"
 
 // TagEmbeddingProcessor 标签向量嵌入处理器
 type TagEmbeddingProcessor struct {
+	service.BaseProcessor[llms.EmbeddingClient]
 	tagRepo          repository.TagRepository
 	taggingService   service.TaggingService
 	tagEmbeddingRepo repository.TagEmbeddingRepository
@@ -92,10 +93,6 @@ func (p *TagEmbeddingProcessor) tagImage(ctx context.Context, limit int) {
 	return
 }
 
-func (p *TagEmbeddingProcessor) SupportedBy(client llms.ModelClient) bool {
-	return client.SupportEmbedding()
-}
-
 func (p *TagEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64, client llms.ModelClient, config *model.ModelConfig, modelItem *model.ModelItem) error {
 	// 1. 获取标签
 	tag, err := p.tagRepo.FindByID(ctx, itemID)
@@ -111,7 +108,7 @@ func (p *TagEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64, c
 	}
 
 	// 2. 使用文本生成向量
-	embedding, err := client.Embedding(ctx, nil, *tag.VectorDescription)
+	embedding, err := p.Cast(client).Embedding(ctx, nil, *tag.VectorDescription)
 	if err != nil {
 		return fmt.Errorf("生成标签向量失败: %v", err)
 	}

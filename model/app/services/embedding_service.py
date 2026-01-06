@@ -18,7 +18,7 @@ import numpy as np
 import requests
 from PIL import Image
 
-from .backends import (
+from ..backends import (
     AestheticResult,
     BackendType,
     BaseBackend,

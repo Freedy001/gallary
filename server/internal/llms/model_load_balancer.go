@@ -98,12 +98,12 @@ func (lb *ModelLoadBalancer) selectProviderByRoundRobin(modelName string, provid
 }
 
 func (lb *ModelLoadBalancer) GetAllEmbeddingModels() ([]string, error) {
-	return lb.selectModel(func(client ModelClient) bool { return client.SupportEmbedding() })
+	return lb.selectModel(func(client ModelClient) bool { _, ok := client.(EmbeddingClient); return ok })
 }
 
 // GetAllChatCompletionModels 获取所有支持 ChatCompletion 的模型名称
 func (lb *ModelLoadBalancer) GetAllChatCompletionModels() ([]string, error) {
-	return lb.selectModel(func(client ModelClient) bool { return client.SupportChatCompletion() })
+	return lb.selectModel(func(client ModelClient) bool { _, ok := client.(LLMSClient); return ok })
 }
 
 func (lb *ModelLoadBalancer) selectModel(support func(client ModelClient) bool) ([]string, error) {
@@ -234,4 +234,36 @@ func (lb *ModelLoadBalancer) TryAllProviders(modelName string, operation func(Mo
 	}
 
 	return fmt.Errorf("未找到可用的提供商")
+}
+
+// CreateTemporaryClient 创建临时客户端用于测试连接
+// 不缓存客户端，每次调用都创建新的实例
+func (lb *ModelLoadBalancer) CreateTemporaryClient(provider *model.ModelConfig, modelItem *model.ModelItem) (ModelClient, error) {
+	if provider == nil {
+		return nil, fmt.Errorf("provider 配置不能为空")
+	}
+
+	// 对于自托管模型，不需要 modelItem
+	if provider.Provider == model.SelfHosted {
+		// 创建一个默认的 modelItem
+		if modelItem == nil {
+			modelItem = &model.ModelItem{
+				ApiModelName: "self-hosted",
+				ModelName:    "self-hosted",
+			}
+		}
+	} else {
+		// 非自托管模型必须有 modelItem
+		if modelItem == nil {
+			return nil, fmt.Errorf("非自托管模型必须指定 model")
+		}
+	}
+
+	// 直接创建客户端，不缓存
+	client := CreateModelClient(provider, modelItem, lb.httpClient, lb.storageManager)
+	if client == nil {
+		return nil, fmt.Errorf("不支持的提供商类型: %s", provider.Provider)
+	}
+
+	return client, nil
 }

@@ -18,6 +18,7 @@ import (
 
 // ImageEmbeddingProcessor 图片向量嵌入处理器
 type ImageEmbeddingProcessor struct {
+	service.BaseProcessor[llms.EmbeddingClient]
 	imageEmbeddingRepository repository.ImageEmbeddingRepository
 	imageRepo                repository.ImageRepository
 	storageManager           *storage.StorageManager
@@ -47,10 +48,6 @@ func (p *ImageEmbeddingProcessor) FindPendingItems(ctx context.Context, modelNam
 	return p.imageEmbeddingRepository.FindImagesWithoutEmbedding(ctx, modelName, limit)
 }
 
-func (p *ImageEmbeddingProcessor) SupportedBy(client llms.ModelClient) bool {
-	return client.SupportEmbedding()
-}
-
 func (p *ImageEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64, client llms.ModelClient, config *model.ModelConfig, modelItem *model.ModelItem) error {
 	// 1. 获取图片
 	image, err := p.imageRepo.FindByID(ctx, itemID)
@@ -68,7 +65,7 @@ func (p *ImageEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64,
 	}
 
 	// 3. 计算嵌入向量
-	embedding, err := client.Embedding(ctx, imageData, "")
+	embedding, err := p.Cast(client).Embedding(ctx, imageData, "")
 	if err != nil {
 		return err
 	}

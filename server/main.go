@@ -69,13 +69,12 @@ func main() {
 		handler.NewAuthHandler(),
 		handler.NewImageHandler(imageService),
 		handler.NewShareHandler(shareService),
-		handler.NewAlbumHandler(albumService, smartAlbumService),
+		handler.NewAlbumHandler(albumService),
 		handler.NewSettingHandler(settingService),
 		handler.NewStorageHandler(settingService.GetStorageManager(), settingService),
 		handler.NewMigrationHandler(migrationService),
-		handler.NewAIHandler(aiService),
+		handler.NewAIHandler(aiService, smartAlbumService),
 		handler.NewWebSocketHandler(wsHub),
-		handler.NewSmartAlbumHandler(smartAlbumService),
 	)
 
 	// 12. 启动 AI 处理器
@@ -194,16 +193,6 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 		storageManager,
 	))
 
-	// 智能相册处理器
-	service.RegisterProcessor(ai_processors.NewSmartAlbumProcessor(
-		albumRepo,
-		embeddingRepo,
-		aiTaskRepo,
-		loadBalancer,
-		storageManager,
-		notifier,
-	))
-
 	// 9.4 初始化 AIService
 	aiService := service.NewAIService(
 		aiTaskRepo,
@@ -219,7 +208,7 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 	imageService := service.NewImageService(imageRepo, albumRepo, storageManager, cfg, notifier, aiService)
 	shareService := service.NewShareService(shareRepo, storageManager)
 	albumService := service.NewAlbumService(albumRepo, storageManager)
-	smartAlbumService := service.NewSmartAlbumService(albumRepo, embeddingRepo, aiTaskRepo, loadBalancer, storageManager, notifier)
+	smartAlbumService := service.NewSmartAlbumService(albumRepo, embeddingRepo, loadBalancer, notifier)
 
 	notifier.OnClientSetup(func(notifier websocket.Notifier) {
 		stats := settingService.GetStorageManager().GetMultiStorageStats(context.Background())

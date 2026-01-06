@@ -1,6 +1,7 @@
 import http from './http'
 import type {ApiResponse} from '@/types'
 import type {AIConfig, AIQueueDetail, TestConnectionRequest,} from '@/types/ai'
+import type {GenerateSmartAlbumsRequest, SmartAlbumTaskVO} from "@/types/smart-album.ts";
 
 // 优化提示词请求
 export interface OptimizePromptRequest {
@@ -26,9 +27,9 @@ export const aiApi = {
     return http.put('/api/settings/ai', config)
   },
 
-  // 测试连接
+  // 测试连接（传入完整配置，后端临时创建客户端测试）
   testConnection(request: TestConnectionRequest): Promise<ApiResponse<{ message: string }>> {
-    return http.post('/api/ai/test', request)
+    return http.post('/api/ai/test-connection', request)
   },
 
   // 获取可用的嵌入模型列表
@@ -70,4 +71,9 @@ export const aiApi = {
   ignoreTaskImage(taskImageId: number): Promise<ApiResponse<null>> {
     return http.post(`/api/ai/task-images/${taskImageId}/ignore`)
   },
+
+  // 提交智能相册任务（异步接口，进度通过 WebSocket 推送）
+  generateSmartAlbum(request: GenerateSmartAlbumsRequest): Promise<ApiResponse<SmartAlbumTaskVO>> {
+    return http.post('/api/ai/smart-albums-generate', request)
+  }
 }

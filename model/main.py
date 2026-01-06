@@ -6,6 +6,7 @@ Image Aesthetic & Embedding Service
     python main.py                              # 默认 PyTorch 后端
     BACKEND=onnx python main.py                 # 使用 ONNX 后端
     PORT=8080 python main.py                    # 自定义端口
+    GRPC_PORT=50051 python main.py              # 自定义 gRPC 端口
     uvicorn main:app --host 0.0.0.0 --port 8100
 """
 
@@ -17,14 +18,20 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.grpc import create_grpc_server
 from app.models import HealthResponse
 from app.routers import aesthetics_router, clustering_router, embeddings_router, multimodal_embedding_router
 from app.services import model_service, BackendType
 
+# gRPC 服务器实例
+grpc_server = None
+
 
 @asynccontextmanager
 async def lifespan(_):
-    """应用生命周期管理 - 启动时加载模型"""
+    """应用生命周期管理 - 启动时加载模型和 gRPC 服务"""
+    global grpc_server
+
     # 获取配置
     device = os.environ.get("DEVICE", None)
     if device is None:
@@ -51,8 +58,19 @@ async def lifespan(_):
         lora_weights_path=lora_weights_path,
         onnx_model_path=onnx_model_path,
     )
+
+    # 启动 gRPC 服务器
+    grpc_port = int(os.environ.get("GRPC_PORT", 50051))
+    grpc_server = create_grpc_server(port=grpc_port)
+    grpc_server.start()
+    print(f"gRPC server started on port {grpc_port}")
+
     yield
-    # 关闭时清理（如果需要）
+
+    # 关闭时清理
+    if grpc_server:
+        grpc_server.stop(grace=5)
+        print("gRPC server stopped")
 
 
 # 创建 FastAPI 应用
@@ -119,6 +137,7 @@ async def health_check() -> HealthResponse:
 @app.get("/", tags=["root"])
 async def root():
     """根路径 - API 信息"""
+    grpc_port = int(os.environ.get("GRPC_PORT", 50051))
     return {
         "name": "Image Aesthetic & Embedding Service",
         "version": "2.0.0",
@@ -128,15 +147,26 @@ async def root():
             "backend": model_service.backend.backend_type if model_service.backend else "not initialized",
         },
         "endpoints": {
-            "embeddings": "/v1/embeddings",
-            "aesthetics": "/v1/aesthetics",
-            "multimodal_embedding": "/v1/multimodal-embedding",
-            "health": "/health",
-            "docs": "/docs",
-        },
-        "prompt_optimizer": {
-            "enabled": prompt_optimizer_service.is_loaded,
-            "model": "Qwen/Qwen3-0.6B",
+            "http": {
+                "embeddings": "/v1/embeddings",
+                "aesthetics": "/v1/aesthetics",
+                "multimodal_embedding": "/v1/multimodal-embedding",
+                "clustering_submit": "/v1/clustering/submit",
+                "clustering_status": "/v1/clustering/status/{task_id}",
+                "health": "/health",
+                "docs": "/docs",
+            },
+            "grpc": {
+                "port": grpc_port,
+                "service": "ai.AIService",
+                "methods": [
+                    "Health",
+                    "CreateEmbedding",
+                    "EvaluateAesthetic",
+                    "CreateMultimodalEmbedding",
+                    "ClusterStream",
+                ],
+            },
         },
     }
 

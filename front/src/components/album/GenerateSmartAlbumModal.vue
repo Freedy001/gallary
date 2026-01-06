@@ -174,7 +174,6 @@
 import {computed, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
 import {CheckCircleIcon, ChevronDownIcon, XCircleIcon} from '@heroicons/vue/24/outline'
 import Modal from '@/components/common/Modal.vue'
-import {smartAlbumApi} from '@/api/smart-album'
 import {aiApi} from '@/api/ai'
 import type {GenerateSmartAlbumsRequest, SmartAlbumTaskStatus} from '@/types/smart-album'
 import {DEFAULT_HDBSCAN_PARAMS} from '@/types/smart-album'
@@ -309,7 +308,7 @@ async function handleSubmit() {
     result.value = null
     errorMessage.value = null
 
-    const res = await smartAlbumApi.submitTask(form)
+    const res = await aiApi.generateSmartAlbum(form)
     const taskVO = res.data as unknown as SmartAlbumProgressVO
     currentTaskId.value = taskVO.task_id
     currentProgress.value = taskVO

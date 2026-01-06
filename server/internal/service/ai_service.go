@@ -16,9 +16,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// TestConnectionRequest 测试连接请求
+type TestConnectionRequest struct {
+	Provider *model.ModelConfig `json:"provider"` // 完整的提供商配置
+	Model    *model.ModelItem   `json:"model"`    // 可选的模型项（非自托管模型时需要指定）
+}
+
 // AIService AI 服务接口
 type AIService interface {
-	TestConnection(ctx context.Context, id string) error
+	TestConnection(ctx context.Context, req *TestConnectionRequest) error
 
 	// 队列管理
 	GetQueueStatus(ctx context.Context) (*model.AIQueueStatus, error)
@@ -92,13 +98,24 @@ func NewAIService(
 
 // ================== 连接测试 ==================
 
-// TestConnection 测试连接
-func (s *aiService) TestConnection(ctx context.Context, id string) error {
-	client, err := s.loadBalancer.GetClientByID(id)
-	if err != nil {
-		return err
+// TestConnection 测试连接（使用临时配置创建客户端）
+func (s *aiService) TestConnection(ctx context.Context, req *TestConnectionRequest) error {
+	if req.Provider == nil {
+		return fmt.Errorf("provider 配置不能为空")
 	}
-	return client.TestConnection(ctx)
+
+	// 使用 LoadBalancer 创建临时客户端进行测试
+	client, err := s.loadBalancer.CreateTemporaryClient(req.Provider, req.Model)
+	if err != nil {
+		return fmt.Errorf("创建临时客户端失败: %v", err)
+	}
+
+	// 执行连接测试
+	modelName := ""
+	if req.Model != nil {
+		modelName = req.Model.ApiModelName
+	}
+	return client.TestConnection(ctx, modelName)
 }
 
 // ================== 队列管理 ==================
@@ -499,8 +516,13 @@ func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byt
 		return nil, err
 	}
 
+	embeddingClient, ok := client.(llms.EmbeddingClient)
+	if !ok {
+		return nil, fmt.Errorf("模型%s不是向量模型", modelName)
+	}
+
 	// 获取查询向量（图片+文本混合）
-	queryEmbedding, err := client.Embedding(ctx, imageData, text)
+	queryEmbedding, err := embeddingClient.Embedding(ctx, imageData, text)
 	if err != nil {
 		return nil, fmt.Errorf("生成查询向量失败: %v", err)
 	}
@@ -595,7 +617,8 @@ func (s *aiService) OptimizePrompt(ctx context.Context, query string) (string, e
 		return "", fmt.Errorf("获取模型失败: %v", err)
 	}
 
-	if !client.SupportChatCompletion() {
+	llmsClient, ok := client.(llms.LLMSClient)
+	if !ok {
 		return "", fmt.Errorf("模型不支持 ChatCompletion")
 	}
 
@@ -611,5 +634,5 @@ func (s *aiService) OptimizePrompt(ctx context.Context, query string) (string, e
 		},
 	}
 
-	return client.ChatCompletion(ctx, messages)
+	return llmsClient.ChatCompletion(ctx, messages)
 }

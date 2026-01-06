@@ -3,6 +3,7 @@ package ai_processors
 import (
 	"context"
 	"fmt"
+	"gallary/server/internal/service"
 	"io"
 
 	"gallary/server/internal/llms"
@@ -13,6 +14,7 @@ import (
 
 // AestheticScoringProcessor 美学评分处理器
 type AestheticScoringProcessor struct {
+	service.BaseProcessor[llms.SelfClient]
 	imageRepo      repository.ImageRepository
 	storageManager *storage.StorageManager
 }
@@ -37,10 +39,6 @@ func (p *AestheticScoringProcessor) FindPendingItems(ctx context.Context, _ stri
 	return p.imageRepo.FindImagesWithoutAIScore(ctx, limit)
 }
 
-func (p *AestheticScoringProcessor) SupportedBy(client llms.ModelClient) bool {
-	return client.SupportAesthetics()
-}
-
 func (p *AestheticScoringProcessor) ProcessItem(ctx context.Context, itemID int64, client llms.ModelClient, _ *model.ModelConfig, _ *model.ModelItem) error {
 	// 1. 获取图片
 	image, err := p.imageRepo.FindByID(ctx, itemID)
@@ -58,7 +56,7 @@ func (p *AestheticScoringProcessor) ProcessItem(ctx context.Context, itemID int6
 	}
 
 	// 3. 调用美学评分接口
-	score, err := client.Aesthetics(ctx, imageData)
+	score, err := p.Cast(client).Aesthetics(ctx, imageData)
 	if err != nil {
 		return err
 	}

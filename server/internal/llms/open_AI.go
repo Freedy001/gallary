@@ -62,37 +62,8 @@ func NewOpenAIClient(provider *model.ModelConfig, modelItem *model.ModelItem, ht
 	}
 }
 
-func (c *OpenAIClient) SupportEmbedding() bool {
-	return false
-}
-
-// SupportsTextEmbedding OpenAI 客户端当前不支持文本嵌入
-func (c *OpenAIClient) SupportsTextEmbedding() bool {
-	return false
-}
-
-// SupportAesthetics OpenAI 客户端不支持美学评分
-func (c *OpenAIClient) SupportAesthetics() bool {
-	return false
-}
-
-// SupportChatCompletion OpenAI 客户端支持 Chat Completion
-func (c *OpenAIClient) SupportChatCompletion() bool {
-	return true
-}
-
-// Embedding 计算嵌入向量
-func (c *OpenAIClient) Embedding(ctx context.Context, imageData []byte, text string) ([]float32, error) {
-	return nil, fmt.Errorf("OpenAI 客户端不支持嵌入")
-}
-
-// Aesthetics OpenAI 客户端不支持美学评分
-func (c *OpenAIClient) Aesthetics(ctx context.Context, imageData []byte) (float64, error) {
-	return 0, fmt.Errorf("OpenAI 客户端不支持美学评分")
-}
-
 // TestConnection 测试连接
-func (c *OpenAIClient) TestConnection(ctx context.Context) error {
+func (c *OpenAIClient) TestConnection(ctx context.Context, model_name string) error {
 	url := c.config.Endpoint + "/v1/models"
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"gallary/server/pkg/logger"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"gallary/server/internal/service"
 	"gallary/server/internal/utils"
@@ -11,18 +13,19 @@ import (
 
 // AIHandler AI 处理器
 type AIHandler struct {
-	service service.AIService
+	service           service.AIService
+	smartAlbumService service.SmartAlbumService
 }
 
 // NewAIHandler 创建 AI 处理器实例
-func NewAIHandler(service service.AIService) *AIHandler {
-	return &AIHandler{service: service}
+func NewAIHandler(service service.AIService, smartAlbumService service.SmartAlbumService) *AIHandler {
+	return &AIHandler{service: service, smartAlbumService: smartAlbumService}
 }
 
 // TestConnection 测试 AI 服务连接
 //
 //	@Summary		测试 AI 服务连接
-//	@Description	测试嵌入模型或 LLM 服务连接
+//	@Description	测试嵌入模型或 LLM 服务连接（使用传入的临时配置）
 //	@Tags			AI
 //	@Accept			json
 //	@Produce		json
@@ -30,18 +33,15 @@ func NewAIHandler(service service.AIService) *AIHandler {
 //	@Success		200		{object}	utils.Response			"连接成功"
 //	@Failure		400		{object}	utils.Response			"请求参数错误"
 //	@Failure		500		{object}	utils.Response			"连接失败"
-//	@Router			/api/ai/test [post]
+//	@Router			/api/ai/test-connection [post]
 func (h *AIHandler) TestConnection(c *gin.Context) {
-	type Body struct {
-		ID string `json:"id"`
-	}
-	var req Body
+	var req service.TestConnectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "请求参数错误: "+err.Error())
 		return
 	}
 
-	if err := h.service.TestConnection(c.Request.Context(), req.ID); err != nil {
+	if err := h.service.TestConnection(c.Request.Context(), &req); err != nil {
 		utils.InternalServerError(c, "连接测试失败: "+err.Error())
 		return
 	}
@@ -271,4 +271,33 @@ func (h *AIHandler) OptimizePrompt(c *gin.Context) {
 		OriginalQuery:   req.Query,
 		OptimizedPrompt: optimized,
 	})
+}
+
+// GenerateSmartAlbums 生成智能相册
+//
+//	@Summary		生成智能相册
+//	@Description	使用 HDBSCAN 算法对图片进行聚类，生成智能相册
+//	@Tags			智能相册
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		albumService.GenerateSmartAlbumsRequest					true	"生成请求"
+//	@Success		200		{object}	utils.Response{data=model.SmartAlbumProgressVO}		"生成成功"
+//	@Failure		400		{object}	utils.Response										"无效的参数"
+//	@Failure		500		{object}	utils.Response										"生成失败"
+//	@Router			/api/ai/smart-albums-generate [post]
+func (h *AIHandler) GenerateSmartAlbums(c *gin.Context) {
+	var req service.GenerateSmartAlbumsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数: "+err.Error())
+		return
+	}
+
+	result, err := h.smartAlbumService.SubmitSmartAlbumTask(c.Request.Context(), &req)
+	if err != nil {
+		logger.Error("生成智能相册失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "智能相册生成成功", result)
 }

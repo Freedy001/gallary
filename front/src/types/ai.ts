@@ -99,9 +99,10 @@ export interface AITaskItemInfo {
 
 // ================== 请求类型 ==================
 
-// 测试连接请求
+// 测试连接请求 - 传入完整的模型配置用于临时创建客户端测试
 export interface TestConnectionRequest {
-  id: string  // 组合模型ID（providerId,apiModelName）
+  provider: ModelConfig      // 完整的提供商配置
+  model?: ModelItem          // 可选的模型项（非自托管模型时需要指定）
 }
 
 // 语义搜索请求

@@ -1,0 +1,172 @@
+syntax = "proto3";
+
+package ai;
+
+option go_package = "github.com/gallery/proto/ai";
+
+// ============== 通用消息 ==============
+
+// 健康检查请求
+message HealthRequest {}
+
+// 健康检查响应
+message HealthResponse {
+  string status = 1;
+  bool model_loaded = 2;
+  string device = 3;
+  string backend = 4;
+}
+
+// ============== 嵌入服务 (Embeddings) ==============
+
+// 嵌入请求
+message EmbeddingRequest {
+  string model = 1;
+  repeated bytes images = 2;  // 图片二进制数据
+}
+
+// 单个嵌入结果
+message EmbeddingData {
+  int32 index = 1;
+  repeated float embedding = 2;
+}
+
+// 嵌入响应
+message EmbeddingResponse {
+  repeated EmbeddingData data = 1;
+  string model = 2;
+  int32 prompt_tokens = 3;
+  int32 total_tokens = 4;
+}
+
+// ============== 美学评分服务 (Aesthetics) ==============
+
+// 美学评分请求
+message AestheticRequest {
+  repeated bytes images = 1;  // 图片二进制数据
+  bool return_distribution = 2;  // 是否返回概率分布
+}
+
+// 单个美学评分结果
+message AestheticData {
+  int32 index = 1;
+  float score = 2;  // 1-10 分
+  string level = 3;  // 评分等级描述
+  repeated float distribution = 4;  // 10 类概率分布 (可选)
+}
+
+// 美学评分响应
+message AestheticResponse {
+  repeated AestheticData data = 1;
+  string model = 2;
+  string backend = 3;
+}
+
+// ============== 多模态嵌入服务 (Multimodal Embedding) ==============
+
+// 多模态内容项
+message MultimodalContent {
+  oneof content {
+    string text = 1;
+    bytes image = 2;  // 图片二进制数据
+  }
+}
+
+// 多模态嵌入请求
+message MultimodalEmbeddingRequest {
+  string model = 1;
+  repeated MultimodalContent contents = 2;
+}
+
+// 单个多模态嵌入结果
+message MultimodalEmbeddingItem {
+  int32 index = 1;
+  repeated float embedding = 2;
+  string type = 3;  // "text" 或 "image"
+}
+
+// 多模态嵌入响应
+message MultimodalEmbeddingResponse {
+  repeated MultimodalEmbeddingItem embeddings = 1;
+  string model = 2;
+  int32 input_tokens = 3;
+  int32 image_tokens = 4;
+}
+
+// ============== 聚类服务 (Clustering) ==============
+
+// HDBSCAN 参数配置
+message HDBSCANParams {
+  int32 min_cluster_size = 1;
+  optional int32 min_samples = 2;
+  float cluster_selection_epsilon = 3;
+  string cluster_selection_method = 4;
+  string metric = 5;
+}
+
+// UMAP 降维参数
+message UMAPParams {
+  bool enabled = 1;
+  int32 n_components = 2;
+  int32 n_neighbors = 3;
+  float min_dist = 4;
+}
+
+// 嵌入向量
+message Embedding {
+  repeated float values = 1;
+}
+
+// 聚类请求
+message ClusteringRequest {
+  repeated Embedding embeddings = 1;
+  repeated int64 image_ids = 2;
+  HDBSCANParams hdbscan_params = 3;
+  UMAPParams umap_params = 4;
+  int64 task_id = 5;  // 调用方任务 ID
+}
+
+// 单个聚类结果
+message ClusterResult {
+  int32 cluster_id = 1;
+  repeated int64 image_ids = 2;
+  float avg_probability = 3;
+}
+
+// 聚类响应
+message ClusteringResponse {
+  repeated ClusterResult clusters = 1;
+  repeated int64 noise_image_ids = 2;
+  int32 n_clusters = 3;
+  map<string, string> params_used = 4;
+}
+
+// 进度更新消息 (用于流式响应)
+message ProgressUpdate {
+  int64 task_id = 1;
+  string status = 2;  // pending | clustering | completed | failed
+  int32 progress = 3;  // 0-100
+  string message = 4;
+  ClusteringResponse result = 5;  // 仅在完成时填充
+  string error = 6;  // 仅在失败时填充
+}
+
+// ============== AI 服务定义 ==============
+
+// 原有服务（保留用于直接调用场景）
+service AIService {
+  // 健康检查
+  rpc Health(HealthRequest) returns (HealthResponse);
+
+  // 图片嵌入
+  rpc CreateEmbedding(EmbeddingRequest) returns (EmbeddingResponse);
+
+  // 美学评分
+  rpc EvaluateAesthetic(AestheticRequest) returns (AestheticResponse);
+
+  // 多模态嵌入 (文本+图片)
+  rpc CreateMultimodalEmbedding(MultimodalEmbeddingRequest) returns (MultimodalEmbeddingResponse);
+
+  // 流式聚类 - 返回进度更新流
+  rpc ClusterStream(ClusteringRequest) returns (stream ProgressUpdate);
+}

@@ -27,6 +27,20 @@ type AITaskProcessor interface {
 	SupportedBy(client llms.ModelClient) bool
 }
 
+// 基础实现：提供自动类型检查
+type BaseProcessor[T llms.ModelClient] struct {
+	prototype T // 零值，用于类型断言
+}
+
+func (b *BaseProcessor[T]) SupportedBy(client llms.ModelClient) bool {
+	_, ok := client.(T)
+	return ok
+}
+
+func (b *BaseProcessor[T]) Cast(client llms.ModelClient) T {
+	return client.(T)
+}
+
 // processorRegistry 全局处理器注册表
 var processorRegistry = make(map[model.TaskType]AITaskProcessor)
 var processorMu sync.RWMutex

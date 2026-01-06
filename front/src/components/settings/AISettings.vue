@@ -127,6 +127,15 @@
                     class="px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-400">自托管</span>
             </div>
             <div class="flex items-center gap-2">
+              <!-- 测试连接按钮 -->
+              <button
+                  :disabled="testingProvider === provider.id"
+                  class="px-2 py-1 rounded text-xs text-gray-400 hover:text-primary-400 hover:bg-white/5 transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  @click="testProviderConnection(provider)"
+              >
+                <span v-if="testingProvider === provider.id" class="h-3 w-3 animate-spin rounded-full border border-primary-400 border-t-transparent"></span>
+                <span v-else>测试连接</span>
+              </button>
               <button
                   @click="removeProvider(index)"
                   class="p-1 rounded text-gray-400 hover:text-red-400 hover:bg-white/5 transition-colors"
@@ -482,6 +491,42 @@ function confirmAddModel() {
 
 function removeModelFromProvider(provider: ModelConfig, index: number) {
   provider.models?.splice(index, 1)
+}
+
+// ================== 测试连接 ==================
+const testingProvider = ref<string | null>(null)
+
+async function testProviderConnection(provider: ModelConfig) {
+  // 验证基本配置
+  if (!provider.endpoint) {
+    dialogStore.notify({title: '提示', message: '请先配置 API 端点', type: 'warning'})
+    return
+  }
+
+  // 自托管模型不需要模型项，其他类型需要至少一个模型
+  if (provider.provider !== 'selfHosted' && (!provider.models || provider.models.length === 0)) {
+    dialogStore.notify({title: '提示', message: '请先添加至少一个模型', type: 'warning'})
+    return
+  }
+
+  testingProvider.value = provider.id
+  try {
+    // 构建测试连接请求
+    const request = {
+      provider: provider,
+      // 非自托管模型使用第一个模型进行测试
+      model: provider.provider !== 'selfHosted' && provider.models?.length
+          ? provider.models[0]
+          : undefined
+    }
+
+    await aiApi.testConnection(request)
+    dialogStore.notify({title: '成功', message: `${provider.id || '提供商'} 连接测试成功`, type: 'success'})
+  } catch (error: any) {
+    dialogStore.notify({title: '连接失败', message: error.message || '连接测试失败', type: 'error'})
+  } finally {
+    testingProvider.value = null
+  }
 }
 
 async function handleSave() {

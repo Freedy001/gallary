@@ -22,7 +22,6 @@ func SetupRouter(
 	migrationHandler *handler.MigrationHandler,
 	aiHandler *handler.AIHandler,
 	wsHandler *handler.WebSocketHandler,
-	smartAlbumHandler *handler.SmartAlbumHandler,
 ) *gin.Engine {
 	configCompose := internal.PlatConfig
 	// 设置运行模式
@@ -108,10 +107,6 @@ func SetupRouter(
 			albums.PUT("/:id/cover", albumHandler.SetCover)
 			albums.DELETE("/:id/cover", albumHandler.RemoveCover)
 			albums.PUT("/:id/cover/average", albumHandler.SetAverageCover)
-			albums.POST("/smart-generate", albumHandler.GenerateSmartAlbums)
-
-			// 智能相册异步任务路由
-			albums.POST("/smart-tasks", smartAlbumHandler.SubmitTask) // 提交智能相册任务（进度通过 WebSocket 推送）
 		}
 
 		// 设置路由（无需认证）
@@ -158,8 +153,8 @@ func SetupRouter(
 		ai := api.Group("/ai")
 		ai.Use(middleware.AuthMiddleware(configCompose.AdminConfig))
 		{
-			// AI 连接测试
-			ai.POST("/test", aiHandler.TestConnection)
+			// AI 连接测试（使用临时配置）
+			ai.POST("/test-connection", aiHandler.TestConnection)
 
 			// 获取可用的嵌入模型列表
 			ai.GET("/embedding-models", aiHandler.GetEmbeddingModels)
@@ -178,6 +173,8 @@ func SetupRouter(
 			// AI 任务项操作
 			ai.POST("/task-items/:id/retry", aiHandler.RetryTaskItem)   // 重试单个任务项
 			ai.POST("/task-items/:id/ignore", aiHandler.IgnoreTaskItem) // 忽略单个任务项
+			// 智能相册异步任务路由
+			ai.POST("/smart-albums-generate", aiHandler.GenerateSmartAlbums)
 		}
 	}
 

@@ -46,30 +46,6 @@ func NewAliyunMultimodalEmbedding(provider *model.ModelConfig, modelItem *model.
 	}
 }
 
-func (c *AliyunMultimodalEmbedding) SupportEmbedding() bool {
-	return true
-}
-
-// SupportsTextEmbedding 阿里云支持文本嵌入
-func (c *AliyunMultimodalEmbedding) SupportsTextEmbedding() bool {
-	return true
-}
-
-// SupportAesthetics 阿里云不支持美学评分
-func (c *AliyunMultimodalEmbedding) SupportAesthetics() bool {
-	return false
-}
-
-// SupportChatCompletion 阿里云多模态嵌入不支持 Chat Completion
-func (c *AliyunMultimodalEmbedding) SupportChatCompletion() bool {
-	return false
-}
-
-// ChatCompletion 阿里云多模态嵌入不支持 Chat Completion
-func (c *AliyunMultimodalEmbedding) ChatCompletion(_ context.Context, _ []ChatMessage) (string, error) {
-	return "", fmt.Errorf("阿里云多模态嵌入不支持 Chat Completion")
-}
-
 // Embedding 计算嵌入向量
 func (c *AliyunMultimodalEmbedding) Embedding(ctx context.Context, imageData []byte, text string) ([]float32, error) {
 	contents := make([]map[string]string, 0)
@@ -91,11 +67,6 @@ func (c *AliyunMultimodalEmbedding) Embedding(ctx context.Context, imageData []b
 	}
 
 	return c.callMultimodalEmbedding(ctx, contents)
-}
-
-// Aesthetics 阿里云不支持美学评分
-func (c *AliyunMultimodalEmbedding) Aesthetics(_ context.Context, _ []byte) (float64, error) {
-	return 0, fmt.Errorf("阿里云客户端不支持美学评分")
 }
 
 // callMultimodalEmbedding 调用阿里云多模态嵌入 API
@@ -282,7 +253,7 @@ func (c *AliyunMultimodalEmbedding) compressImage(data []byte, maxSize int) ([]b
 }
 
 // TestConnection 测试连接
-func (c *AliyunMultimodalEmbedding) TestConnection(ctx context.Context) error {
+func (c *AliyunMultimodalEmbedding) TestConnection(ctx context.Context, _ string) error {
 	// 发送简单的文本嵌入请求来测试连接
 	_, err := c.Embedding(ctx, nil, "测试连接")
 	return err

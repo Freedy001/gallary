@@ -13,13 +13,12 @@ import (
 
 // AlbumHandler 相册处理器
 type AlbumHandler struct {
-	albumService      service.AlbumService
-	smartAlbumService service.SmartAlbumService
+	albumService service.AlbumService
 }
 
 // NewAlbumHandler 创建相册处理器实例
-func NewAlbumHandler(service service.AlbumService, smartAlbumService service.SmartAlbumService) *AlbumHandler {
-	return &AlbumHandler{albumService: service, smartAlbumService: smartAlbumService}
+func NewAlbumHandler(service service.AlbumService) *AlbumHandler {
+	return &AlbumHandler{albumService: service}
 }
 
 // Create 创建相册
@@ -354,33 +353,4 @@ func (h *AlbumHandler) SetAverageCover(c *gin.Context) {
 	}
 
 	utils.SuccessWithMessage(c, "设置成功", nil)
-}
-
-// GenerateSmartAlbums 生成智能相册
-//
-//	@Summary		生成智能相册
-//	@Description	使用 HDBSCAN 算法对图片进行聚类，生成智能相册
-//	@Tags			智能相册
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body		albumService.GenerateSmartAlbumsRequest					true	"生成请求"
-//	@Success		200		{object}	utils.Response{data=albumService.GenerateSmartAlbumsResponse}	"生成成功"
-//	@Failure		400		{object}	utils.Response										"无效的参数"
-//	@Failure		500		{object}	utils.Response										"生成失败"
-//	@Router			/api/smart-albums/generate [post]
-func (h *AlbumHandler) GenerateSmartAlbums(c *gin.Context) {
-	var req service.GenerateSmartAlbumsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, "无效的参数: "+err.Error())
-		return
-	}
-
-	result, err := h.smartAlbumService.GenerateSmartAlbums(c.Request.Context(), &req)
-	if err != nil {
-		logger.Error("生成智能相册失败", zap.Error(err))
-		utils.Error(c, 500, err.Error())
-		return
-	}
-
-	utils.SuccessWithMessage(c, "智能相册生成成功", result)
 }

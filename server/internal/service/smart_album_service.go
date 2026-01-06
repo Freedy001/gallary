@@ -1,22 +1,18 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"regexp"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"gallary/server/internal/llms"
 	"gallary/server/internal/model"
 	"gallary/server/internal/repository"
-	"gallary/server/internal/storage"
 	"gallary/server/internal/websocket"
-	"gallary/server/pkg/database"
 	"gallary/server/pkg/logger"
 
 	"go.uber.org/zap"
@@ -24,11 +20,11 @@ import (
 
 // SmartAlbumService 智能相册服务接口
 type SmartAlbumService interface {
-	// GenerateSmartAlbums 生成智能相册（同步接口，保持向后兼容）
-	GenerateSmartAlbums(ctx context.Context, req *GenerateSmartAlbumsRequest) (*GenerateSmartAlbumsResponse, error)
-
 	// SubmitSmartAlbumTask 提交智能相册任务（异步接口）
 	SubmitSmartAlbumTask(ctx context.Context, req *GenerateSmartAlbumsRequest) (*model.SmartAlbumProgressVO, error)
+
+	// GetCurrentTaskStatus 获取当前任务状态
+	GetCurrentTaskStatus() *model.SmartAlbumProgressVO
 }
 
 // GenerateSmartAlbumsRequest 生成智能相册请求
@@ -38,57 +34,45 @@ type GenerateSmartAlbumsRequest struct {
 	HDBSCANParams *model.HDBSCANParamsDTO `json:"hdbscan_params"`
 }
 
-// GenerateSmartAlbumsResponse 生成智能相册响应
-type GenerateSmartAlbumsResponse struct {
-	Albums      []*model.AlbumVO `json:"albums"`       // 生成的相册列表
-	NoiseCount  int              `json:"noise_count"`  // 噪声点数量
-	TotalImages int              `json:"total_images"` // 总图片数
-}
-
-// ClusteringResult Python 聚类服务返回的结果
-type ClusteringResult struct {
-	Clusters      []ClusterItem `json:"clusters"`
-	NoiseImageIDs []int64       `json:"noise_image_ids"`
-	NClusters     int           `json:"n_clusters"`
-	ParamsUsed    interface{}   `json:"params_used"`
-}
-
-// ClusterItem 单个聚类结果
-type ClusterItem struct {
-	ClusterID      int     `json:"cluster_id"`
-	ImageIDs       []int64 `json:"image_ids"`
-	AvgProbability float64 `json:"avg_probability"`
+// SmartAlbumTask 内存中的智能相册任务
+type SmartAlbumTask struct {
+	ID           int64
+	Status       string // pending, collecting, clustering, creating, completed, failed
+	Progress     int
+	Message      string
+	Error        *string
+	AlbumIDs     []int64
+	ClusterCount int
+	NoiseCount   int
+	TotalImages  int
+	Params       *GenerateSmartAlbumsRequest
+	CreatedAt    time.Time
 }
 
 type smartAlbumService struct {
 	albumRepo     repository.AlbumRepository
 	embeddingRepo repository.ImageEmbeddingRepository
-	taskRepo      repository.AITaskRepository
 	loadBalancer  *llms.ModelLoadBalancer
-	storage       *storage.StorageManager
 	notifier      websocket.Notifier
-	httpClient    *http.Client
+
+	// 内存任务管理
+	taskMu      sync.RWMutex
+	currentTask *SmartAlbumTask
+	taskIDSeq   int64
 }
 
 // NewSmartAlbumService 创建智能相册服务实例
 func NewSmartAlbumService(
 	albumRepo repository.AlbumRepository,
 	embeddingRepo repository.ImageEmbeddingRepository,
-	taskRepo repository.AITaskRepository,
 	loadBalancer *llms.ModelLoadBalancer,
-	storage *storage.StorageManager,
 	notifier websocket.Notifier,
 ) SmartAlbumService {
 	return &smartAlbumService{
 		albumRepo:     albumRepo,
 		embeddingRepo: embeddingRepo,
-		taskRepo:      taskRepo,
 		loadBalancer:  loadBalancer,
-		storage:       storage,
 		notifier:      notifier,
-		httpClient: &http.Client{
-			Timeout: 5 * time.Minute,
-		},
 	}
 }
 
@@ -112,230 +96,266 @@ func (s *smartAlbumService) SubmitSmartAlbumTask(ctx context.Context, req *Gener
 		}
 	}
 
-	// 创建任务
-	extra := &model.AITaskItemExtra{
-		ModelName:     req.ModelName,
-		Algorithm:     req.Algorithm,
-		HDBSCANParams: req.HDBSCANParams,
-		Progress:      0,
-		Message:       "任务已创建",
+	// 检查是否有正在执行的任务
+	s.taskMu.Lock()
+	if s.currentTask != nil && s.currentTask.Status != "completed" && s.currentTask.Status != "failed" {
+		s.taskMu.Unlock()
+		return nil, fmt.Errorf("已有任务正在执行中，请等待完成后再试")
 	}
 
-	taskItem, err := s.taskRepo.CreateSmartAlbumTask(ctx, extra)
-	if err != nil {
-		return nil, fmt.Errorf("创建任务失败: %w", err)
+	// 创建新任务
+	taskID := atomic.AddInt64(&s.taskIDSeq, 1)
+	task := &SmartAlbumTask{
+		ID:        taskID,
+		Status:    "pending",
+		Progress:  0,
+		Message:   "任务已创建",
+		Params:    req,
+		CreatedAt: time.Now(),
 	}
+	s.currentTask = task
+	s.taskMu.Unlock()
 
 	logger.Info("智能相册任务已创建",
-		zap.Int64("task_id", taskItem.ID),
+		zap.Int64("task_id", task.ID),
 		zap.String("model_name", req.ModelName))
 
-	// 构建进度 VO
-	progressVO := &model.SmartAlbumProgressVO{
-		TaskID:   taskItem.ID,
-		Status:   taskItem.Status,
-		Progress: extra.Progress,
-		Message:  extra.Message,
-	}
+	// 推送初始状态
+	s.notifyProgress(task)
 
-	// 通过 WebSocket 推送任务创建通知
-	if s.notifier != nil {
-		s.notifier.NotifySmartAlbumProgress(progressVO)
-	}
+	// 异步执行任务
+	go s.processTask(context.Background(), task)
 
-	return progressVO, nil
+	return s.taskToVO(task), nil
 }
 
-// GenerateSmartAlbums 生成智能相册（同步接口，保持向后兼容）
-func (s *smartAlbumService) GenerateSmartAlbums(ctx context.Context, req *GenerateSmartAlbumsRequest) (*GenerateSmartAlbumsResponse, error) {
-	// 验证算法
-	if req.Algorithm != "hdbscan" {
-		return nil, fmt.Errorf("不支持的算法: %s，目前仅支持 hdbscan", req.Algorithm)
-	}
+// GetCurrentTaskStatus 获取当前任务状态
+func (s *smartAlbumService) GetCurrentTaskStatus() *model.SmartAlbumProgressVO {
+	s.taskMu.RLock()
+	defer s.taskMu.RUnlock()
 
-	// 设置默认参数
-	if req.HDBSCANParams == nil {
-		req.HDBSCANParams = &model.HDBSCANParamsDTO{
-			MinClusterSize:          5,
-			ClusterSelectionEpsilon: 0.0,
-			ClusterSelectionMethod:  "eom",
-			Metric:                  "cosine",
-			UMAPEnabled:             false,
-			UMAPComponents:          50,
-			UMAPNeighbors:           15,
+	if s.currentTask == nil {
+		return nil
+	}
+	return s.taskToVO(s.currentTask)
+}
+
+// processTask 处理任务（后台执行）
+func (s *smartAlbumService) processTask(ctx context.Context, task *SmartAlbumTask) {
+	defer func() {
+		if r := recover(); r != nil {
+			errMsg := fmt.Sprintf("任务执行发生 panic: %v", r)
+			s.updateTaskError(task, errMsg)
+			logger.Error("智能相册任务 panic", zap.Int64("task_id", task.ID), zap.Any("panic", r))
 		}
-	}
+	}()
 
-	// 1. 获取所有有向量的图片
-	embeddings, err := s.embeddingRepo.GetAllEmbeddingsByModel(ctx, req.ModelName)
+	// 1. 收集向量 (0-20%)
+	s.updateTask(task, "collecting", 5, "正在收集图片向量...")
+	embeddings, err := s.collectEmbeddings(ctx, task.Params.ModelName)
 	if err != nil {
-		return nil, fmt.Errorf("获取向量数据失败: %w", err)
+		s.updateTaskError(task, fmt.Sprintf("收集向量失败: %v", err))
+		return
 	}
 
 	if len(embeddings) < 2 {
-		return nil, fmt.Errorf("向量数据不足，至少需要 2 张图片，当前仅有 %d 张", len(embeddings))
+		s.updateTaskError(task, "图片数量不足，至少需要 2 张图片才能进行聚类")
+		return
 	}
 
-	logger.Info("开始生成智能相册",
-		zap.String("model_name", req.ModelName),
-		zap.Int("image_count", len(embeddings)))
+	task.TotalImages = len(embeddings)
+	s.updateTask(task, "collecting", 20, fmt.Sprintf("已收集 %d 张图片向量", len(embeddings)))
 
-	// 2. 获取 Python 服务端点
-	client, err := s.loadBalancer.GetClientByName(req.ModelName)
+	// 2. 执行聚类 (20-80%)
+	s.updateTask(task, "clustering", 25, "正在执行聚类分析...")
+	result, err := s.executeClustering(ctx, task, embeddings)
+	if err != nil {
+		s.updateTaskError(task, fmt.Sprintf("聚类失败: %v", err))
+		return
+	}
+
+	if result == nil || len(result.Clusters) == 0 {
+		s.updateTaskError(task, "聚类结果为空，无法创建相册")
+		return
+	}
+
+	task.ClusterCount = result.NClusters
+	task.NoiseCount = len(result.NoiseImageIDs)
+	s.updateTask(task, "clustering", 80, fmt.Sprintf("聚类完成，发现 %d 个分组", result.NClusters))
+
+	// 3. 创建相册 (80-100%)
+	s.updateTask(task, "creating", 85, "正在创建相册...")
+	albumIDs, err := s.createAlbumsFromClusters(ctx, result)
+	if err != nil {
+		s.updateTaskError(task, fmt.Sprintf("创建相册失败: %v", err))
+		return
+	}
+
+	// 4. 完成
+	task.AlbumIDs = albumIDs
+	s.updateTask(task, "completed", 100, fmt.Sprintf("已创建 %d 个智能相册", len(albumIDs)))
+
+	logger.Info("智能相册任务完成",
+		zap.Int64("task_id", task.ID),
+		zap.Int("album_count", len(albumIDs)),
+		zap.Int("noise_count", task.NoiseCount))
+}
+
+// collectEmbeddings 收集图片向量
+func (s *smartAlbumService) collectEmbeddings(ctx context.Context, modelName string) ([]*model.ImageEmbedding, error) {
+	// 获取所有该模型的图片向量
+	embeddings, err := s.embeddingRepo.GetAllEmbeddingsByModel(ctx, modelName)
+	if err != nil {
+		return nil, fmt.Errorf("查询向量失败: %w", err)
+	}
+	return embeddings, nil
+}
+
+// executeClustering 执行聚类（使用 gRPC 流式调用）
+func (s *smartAlbumService) executeClustering(ctx context.Context, task *SmartAlbumTask, embeddings []*model.ImageEmbedding) (*llms.ClusterResult, error) {
+	// 获取 SelfClient
+	client, err := s.loadBalancer.GetClientByName(task.Params.ModelName)
 	if err != nil {
 		return nil, fmt.Errorf("获取模型客户端失败: %w", err)
 	}
-	endpoint := client.GetConfig().Endpoint
 
-	// 3. 调用 Python 服务进行聚类
-	clusterResult, err := s.callClusteringService(ctx, endpoint, embeddings, req.HDBSCANParams)
-	if err != nil {
-		return nil, fmt.Errorf("聚类失败: %w", err)
+	selfClient, ok := client.(llms.SelfClient)
+	if !ok {
+		return nil, fmt.Errorf("模型 %s 不支持聚类功能", task.Params.ModelName)
 	}
 
-	logger.Info("聚类完成",
-		zap.Int("n_clusters", clusterResult.NClusters),
-		zap.Int("noise_count", len(clusterResult.NoiseImageIDs)))
+	// 构建请求
+	req := s.buildClusterRequest(task, embeddings)
 
-	if clusterResult.NClusters == 0 {
-		return &GenerateSmartAlbumsResponse{
-			Albums:      []*model.AlbumVO{},
-			NoiseCount:  len(clusterResult.NoiseImageIDs),
-			TotalImages: len(embeddings),
-		}, nil
-	}
+	// 创建进度通道
+	progressChan := make(chan *llms.ClusterProgress, 10)
 
-	// 4. 获取下一个智能相册编号
-	nextNumber, err := s.getNextSmartAlbumNumber(ctx)
-	if err != nil {
-		return nil, err
-	}
+	var result *llms.ClusterResult
+	var wg sync.WaitGroup
 
-	// 5. 在事务中创建相册
-	albums := make([]*model.AlbumVO, 0, len(clusterResult.Clusters))
+	// 启动 goroutine 处理进度
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for progress := range progressChan {
+			// 映射进度到 25-80% 区间
+			mappedProgress := 25 + (progress.Progress * 55 / 100)
+			s.updateTask(task, "clustering", mappedProgress, progress.Message)
 
-	err = database.Transaction0(ctx, func(ctx context.Context) error {
-		for i, cluster := range clusterResult.Clusters {
-			albumName := fmt.Sprintf("智能相册 #%d", nextNumber+i)
-
-			album := &model.Tag{
-				Name: albumName,
-				Type: model.TagTypeAlbum,
-				Metadata: &model.AlbumMetadata{
-					IsSmartAlbum: true,
-					SmartAlbumConfig: &model.SmartAlbumConfig{
-						ModelName:      req.ModelName,
-						Algorithm:      req.Algorithm,
-						ClusterID:      cluster.ClusterID,
-						GeneratedAt:    time.Now(),
-						HDBSCANParams:  s.convertHDBSCANParams(req.HDBSCANParams),
-						ImageCount:     len(cluster.ImageIDs),
-						AvgProbability: cluster.AvgProbability,
-					},
-				},
+			if progress.Result != nil {
+				result = progress.Result
 			}
-
-			if err := s.albumRepo.Create(ctx, album); err != nil {
-				return fmt.Errorf("创建相册失败: %w", err)
-			}
-
-			// 添加图片到相册
-			if err := s.albumRepo.AddImages(ctx, album.ID, cluster.ImageIDs); err != nil {
-				return fmt.Errorf("添加图片到相册失败: %w", err)
-			}
-
-			// 转换为 VO
-			albumVO := album.ToAlbumVO(nil, int64(len(cluster.ImageIDs)))
-			albums = append(albums, albumVO)
-
-			logger.Debug("创建智能相册",
-				zap.String("name", albumName),
-				zap.Int("image_count", len(cluster.ImageIDs)))
 		}
-		return nil
-	})
+	}()
+
+	// 调用 gRPC 流式聚类
+	err = selfClient.ClusterStream(ctx, req, progressChan)
+
+	// 等待进度处理完成
+	wg.Wait()
 
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Info("智能相册生成完成",
-		zap.Int("album_count", len(albums)),
-		zap.Int("noise_count", len(clusterResult.NoiseImageIDs)))
-
-	return &GenerateSmartAlbumsResponse{
-		Albums:      albums,
-		NoiseCount:  len(clusterResult.NoiseImageIDs),
-		TotalImages: len(embeddings),
-	}, nil
+	return result, nil
 }
 
-// callClusteringService 调用 Python 聚类服务
-func (s *smartAlbumService) callClusteringService(ctx context.Context, endpoint string, embeddings []*model.ImageEmbedding, params *model.HDBSCANParamsDTO) (*ClusteringResult, error) {
-	// 构建请求
+// buildClusterRequest 构建聚类请求
+func (s *smartAlbumService) buildClusterRequest(task *SmartAlbumTask, embeddings []*model.ImageEmbedding) *llms.ClusterStreamRequest {
+	// 转换嵌入向量
 	embeddingVectors := make([][]float32, len(embeddings))
 	imageIDs := make([]int64, len(embeddings))
 	for i, e := range embeddings {
-		embeddingVectors[i] = []float32(e.Embedding)
+		embeddingVectors[i] = e.Embedding
 		imageIDs[i] = e.ImageID
 	}
 
-	reqBody := map[string]interface{}{
-		"embeddings": embeddingVectors,
-		"image_ids":  imageIDs,
-		"hdbscan_params": map[string]interface{}{
-			"min_cluster_size":          params.MinClusterSize,
-			"min_samples":               params.MinSamples,
-			"cluster_selection_epsilon": params.ClusterSelectionEpsilon,
-			"cluster_selection_method":  params.ClusterSelectionMethod,
-			"metric":                    params.Metric,
+	params := task.Params.HDBSCANParams
+
+	return &llms.ClusterStreamRequest{
+		Embeddings: embeddingVectors,
+		ImageIDs:   imageIDs,
+		TaskID:     task.ID,
+		HDBSCANParams: &llms.HDBSCANParams{
+			MinClusterSize:          params.MinClusterSize,
+			MinSamples:              params.MinSamples,
+			ClusterSelectionEpsilon: float32(params.ClusterSelectionEpsilon),
+			ClusterSelectionMethod:  params.ClusterSelectionMethod,
+			Metric:                  params.Metric,
 		},
-		"umap_params": map[string]interface{}{
-			"enabled":      params.UMAPEnabled,
-			"n_components": params.UMAPComponents,
-			"n_neighbors":  params.UMAPNeighbors,
+		UMAPParams: &llms.UMAPParams{
+			Enabled:     params.UMAPEnabled,
+			NComponents: params.UMAPComponents,
+			NNeighbors:  params.UMAPNeighbors,
+			MinDist:     0.1, // 默认值
 		},
 	}
+}
 
-	jsonBody, err := json.Marshal(reqBody)
+// createAlbumsFromClusters 根据聚类结果创建相册
+func (s *smartAlbumService) createAlbumsFromClusters(ctx context.Context, result *llms.ClusterResult) ([]int64, error) {
+	if result == nil || len(result.Clusters) == 0 {
+		return nil, fmt.Errorf("聚类结果为空")
+	}
+
+	albumIDs := make([]int64, 0, len(result.Clusters))
+
+	// 获取起始编号
+	startNumber, err := s.getNextSmartAlbumNumber(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("序列化请求失败: %w", err)
+		startNumber = 1
 	}
 
-	// HTTP POST 到 Python 服务
-	url := endpoint + "/v1/clustering"
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
+	for i, cluster := range result.Clusters {
+		if len(cluster.ImageIDs) == 0 {
+			continue
+		}
 
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("请求聚类服务失败: %w", err)
-	}
-	defer resp.Body.Close()
+		// 创建相册 (使用 model.Tag，因为 AlbumRepository 使用 Tag)
+		albumName := fmt.Sprintf("智能相册 #%d", startNumber+i)
+		var coverImageID *int64
+		if len(cluster.ImageIDs) > 0 {
+			coverImageID = &cluster.ImageIDs[0]
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("聚类服务返回错误: %d, %s", resp.StatusCode, string(body))
+		album := &model.Tag{
+			Name: albumName,
+			Type: model.TagTypeAlbum,
+			Metadata: &model.AlbumMetadata{
+				IsSmartAlbum: true,
+				CoverImageID: coverImageID,
+			},
+		}
+
+		err := s.albumRepo.Create(ctx, album)
+		if err != nil {
+			logger.Warn("创建智能相册失败",
+				zap.String("name", albumName),
+				zap.Error(err))
+			continue
+		}
+
+		// 添加图片到相册
+		if err := s.albumRepo.AddImages(ctx, album.ID, cluster.ImageIDs); err != nil {
+			logger.Warn("添加图片到相册失败",
+				zap.Int64("album_id", album.ID),
+				zap.Error(err))
+		}
+
+		albumIDs = append(albumIDs, album.ID)
 	}
 
-	var result ClusteringResult
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("解析聚类结果失败: %w", err)
-	}
-
-	return &result, nil
+	return albumIDs, nil
 }
 
 // getNextSmartAlbumNumber 获取下一个智能相册编号
 func (s *smartAlbumService) getNextSmartAlbumNumber(ctx context.Context) (int, error) {
-	// 查询现有智能相册的最大编号（只查智能相册）
+	// 查询现有智能相册的最大编号
 	isSmartTrue := true
 	albums, _, err := s.albumRepo.List(ctx, 1, 1000, &isSmartTrue)
 	if err != nil {
-		return 1, nil // 出错时从 1 开始
+		return 1, nil
 	}
 
 	maxNumber := 0
@@ -353,19 +373,52 @@ func (s *smartAlbumService) getNextSmartAlbumNumber(ctx context.Context) (int, e
 	return maxNumber + 1, nil
 }
 
-// convertHDBSCANParams 转换 HDBSCAN 参数
-func (s *smartAlbumService) convertHDBSCANParams(dto *model.HDBSCANParamsDTO) *model.HDBSCANParams {
-	if dto == nil {
-		return nil
+// updateTask 更新任务状态
+func (s *smartAlbumService) updateTask(task *SmartAlbumTask, status string, progress int, message string) {
+	s.taskMu.Lock()
+	task.Status = status
+	task.Progress = progress
+	task.Message = message
+	s.taskMu.Unlock()
+
+	s.notifyProgress(task)
+}
+
+// updateTaskError 更新任务错误状态
+func (s *smartAlbumService) updateTaskError(task *SmartAlbumTask, errMsg string) {
+	s.taskMu.Lock()
+	task.Status = "failed"
+	task.Error = &errMsg
+	task.Message = errMsg
+	s.taskMu.Unlock()
+
+	s.notifyProgress(task)
+
+	logger.Error("智能相册任务失败",
+		zap.Int64("task_id", task.ID),
+		zap.String("error", errMsg))
+}
+
+// notifyProgress 通过 WebSocket 推送进度
+func (s *smartAlbumService) notifyProgress(task *SmartAlbumTask) {
+	if s.notifier == nil {
+		return
 	}
-	return &model.HDBSCANParams{
-		MinClusterSize:          dto.MinClusterSize,
-		MinSamples:              dto.MinSamples,
-		ClusterSelectionEpsilon: dto.ClusterSelectionEpsilon,
-		ClusterSelectionMethod:  dto.ClusterSelectionMethod,
-		Metric:                  dto.Metric,
-		UMAPEnabled:             dto.UMAPEnabled,
-		UMAPComponents:          dto.UMAPComponents,
-		UMAPNeighbors:           dto.UMAPNeighbors,
+
+	s.notifier.NotifySmartAlbumProgress(s.taskToVO(task))
+}
+
+// taskToVO 将任务转换为 VO
+func (s *smartAlbumService) taskToVO(task *SmartAlbumTask) *model.SmartAlbumProgressVO {
+	return &model.SmartAlbumProgressVO{
+		TaskID:       task.ID,
+		Status:       task.Status,
+		Progress:     task.Progress,
+		Message:      task.Message,
+		Error:        task.Error,
+		AlbumIDs:     task.AlbumIDs,
+		ClusterCount: task.ClusterCount,
+		NoiseCount:   task.NoiseCount,
+		TotalImages:  task.TotalImages,
 	}
 }

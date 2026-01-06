@@ -29,3 +29,7 @@ llama-cpp-python
 # 聚类算法
 hdbscan>=0.8.33
 umap-learn>=0.5.4
+
+# gRPC
+grpcio>=1.60.0
+grpcio-tools>=1.60.0
