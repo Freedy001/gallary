@@ -272,7 +272,7 @@ func (r *imageRepository) SearchIDs(ctx context.Context, params *model.SearchPar
 
 func (r *imageRepository) buildSearchCondition(params *model.SearchParams, query *gorm.DB) {
 	// 关键词搜索（搜索文件名）
-	if params.Keyword != "" && params.ModelName == "" {
+	if params.Keyword != "" && params.ModelId == "" {
 		query = query.Where("original_name ILIKE ?", "%"+params.Keyword+"%")
 	}
 

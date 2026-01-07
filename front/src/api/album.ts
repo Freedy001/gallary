@@ -36,6 +36,11 @@ export const albumApi = {
     return http.delete(`/api/albums/${id}`)
   },
 
+  // 复制相册
+  copy(id: number) {
+    return http.post<Album>(`/api/albums/${id}/copy`)
+  },
+
   // 获取相册内图片
   getImages(id: number, page: number = 1, pageSize: number = 20) {
     return http.get<Pageable<Image>>(`/api/albums/${id}/images`, {

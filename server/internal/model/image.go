@@ -118,9 +118,9 @@ type SearchParams struct {
 	Tags      []int64  `json:"tags" form:"tags"`
 	Page      int      `json:"page" form:"page"`
 	PageSize  int      `json:"page_size" form:"page_size"`
-	ModelName string   `json:"model_name" form:"model_name"` // 使用的模型名称
-	Latitude  *float64 `json:"latitude" form:"latitude"`     // 中心纬度
-	Longitude *float64 `json:"longitude" form:"longitude"`   // 中心经度
-	Radius    *float64 `json:"radius" form:"radius"`         // 搜索半径（公里），默认 10km
-	ImageData []byte   `json:"-" form:"-"`                   // 图片搜索数据（由 handler 处理文件上传）
+	ModelId   string   `json:"model_id" form:"model_id"`   // 使用的模型名称
+	Latitude  *float64 `json:"latitude" form:"latitude"`   // 中心纬度
+	Longitude *float64 `json:"longitude" form:"longitude"` // 中心经度
+	Radius    *float64 `json:"radius" form:"radius"`       // 搜索半径（公里），默认 10km
+	ImageData []byte   `json:"-" form:"-"`                 // 图片搜索数据（由 handler 处理文件上传）
 }

@@ -42,8 +42,9 @@
                     :disabled="isOptimizing"
                     @click="optimizePrompt"
                 >
-                  <BoltIcon v-if="!isOptimizing" class="h-4 w-4" />
-                  <span v-else class="h-4 w-4 animate-spin rounded-full border-2 border-primary-400 border-t-transparent"></span>
+                  <BoltIcon v-if="!isOptimizing" class="h-4 w-4"/>
+                  <span v-else
+                        class="h-4 w-4 animate-spin rounded-full border-2 border-primary-400 border-t-transparent"></span>
                 </button>
               </tooltip>
 
@@ -348,6 +349,7 @@ import {
   XMarkIcon,
 } from '@heroicons/vue/24/outline'
 import type {SearchParams, Tag} from '@/types'
+import type {EmbeddingModelInfo} from '@/types/ai'
 import {imageApi} from "@/api/image.ts"
 import {aiApi} from "@/api/ai.ts"
 import {useDialogStore} from "@/stores/dialog.ts";
@@ -439,13 +441,14 @@ function removeTag(tagId: number) {
 }
 
 // 嵌入模型相关状态
-const embeddingModels = ref<string[]>([])
-const selectedEmbeddingModel = ref<string>('')
+const embeddingModels = ref<EmbeddingModelInfo[]>([])
+const selectedEmbeddingModel = ref<string>('')  // 存储 model_name，用于 API 调用
+
 
 const embeddingModelOptions = computed<SelectOption[]>(() => {
   return embeddingModels.value.map(model => ({
-    label: model,
-    value: model
+    label: `${model.model_name}(${model.provider_id})`,  // 显示完整的模型 ID
+    value: `${model.provider_id},${model.model_name}`    // 值使用 model_name（用于 API 调用）
   }))
 })
 
@@ -455,25 +458,24 @@ const hasEmbeddingModel = computed(() => {
 })
 
 // ChatCompletion 模型相关状态
-const chatCompletionModels = ref<string[]>([])
 const isOptimizing = ref(false)
 
 // 是否有可用的 ChatCompletion 模型
-const hasChatCompletionModel = computed(() => {
-  return chatCompletionModels.value.length > 0
-})
+const hasChatCompletionModel = ref(false)
 
 let first = true
 
 // 加载 ChatCompletion 模型列表
 async function loadChatCompletionModels() {
   try {
-    const response = await aiApi.getChatCompletionModels()
-    if (response.data) {
-      chatCompletionModels.value = response.data
-    }
+    const response = await aiApi.getChatCompletionModels("DefaultPromptOptimizeModelId")
+    hasChatCompletionModel.value = response.data
   } catch (error) {
-    console.error('加载 ChatCompletion 模型列表失败:', error)
+    dialogStore.notify({
+      title: '加载 ChatCompletion 模型列表失败:',
+      message: (error as Error).message,
+      type: 'error'
+    })
   }
 }
 
@@ -484,7 +486,7 @@ async function optimizePrompt() {
 
   isOptimizing.value = true
   try {
-    const response = await aiApi.optimizePrompt({ query })
+    const response = await aiApi.optimizePrompt({query})
     if (response.data?.optimized_prompt) {
       // 将优化后的提示词填充到搜索框
       imageStore.searchFilters.keyword = response.data.optimized_prompt
@@ -516,7 +518,7 @@ async function loadEmbeddingModels() {
       if (response.data.length > 0) {
         const firstModel = response.data[0]
         if (!selectedEmbeddingModel.value && firstModel) {
-          selectedEmbeddingModel.value = firstModel
+          selectedEmbeddingModel.value = firstModel.model_name
         }
         // 如果存在嵌入模型，默认开启语义搜索
         if (first && !isSemanticSearch.value) {

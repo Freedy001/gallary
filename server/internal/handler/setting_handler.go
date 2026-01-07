@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"fmt"
+	"gallary/server/internal"
 	"gallary/server/internal/model"
+	"reflect"
 
 	"github.com/gin-gonic/gin"
 
@@ -311,4 +314,40 @@ func (h *SettingHandler) UpdateAI(c *gin.Context) {
 	}
 
 	utils.Success(c, gin.H{"message": "AI 配置更新成功"})
+}
+
+// HasConfigDefaultModel 获取是否配置默认模型
+//
+//	@Summary	 	检测是否存在默认配置
+//	@Tags			设置
+//	@Accept			json
+//	@Produce		json
+//	@Param			type	path		string		true	"AI 配置"
+//	@Success		200		{object}	utils.Response	"更新成功"
+//	@Failure		400		{object}	utils.Response	"请求参数错误"
+//	@Failure		500		{object}	utils.Response	"服务器错误"
+//	@Router			/api/settings/configed-default-model [get]
+func (h *SettingHandler) HasConfigDefaultModel(c *gin.Context) {
+	defer func() {
+		if err := recover(); err != nil {
+			var errMsg string
+			switch v := err.(type) {
+			case error:
+				errMsg = v.Error()
+			case string:
+				errMsg = v
+			default:
+				errMsg = fmt.Sprintf("Unknown error: %v", v)
+			}
+			utils.Error(c, 500, errMsg)
+		}
+	}()
+
+	id := c.Param("type")
+	if id == "" {
+		utils.BadRequest(c, "请传入 type")
+		return
+	}
+
+	utils.Success(c, reflect.ValueOf(*internal.PlatConfig.GlobalConfig).FieldByName(id).String() != "")
 }

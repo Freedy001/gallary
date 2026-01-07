@@ -14,6 +14,11 @@ export const shareApi = {
     })
   },
 
+  // 更新分享
+  update(id: number, data: { expire_at?: string | null }) {
+    return http.put<Share>(`/api/shares/${id}`, data)
+  },
+
   // 删除分享
   delete(id: number) {
     return http.delete(`/api/shares/${id}`)

@@ -20,6 +20,12 @@ export interface ModelItem {
   model_name: string      // 内部标识/负载均衡分组
 }
 
+// 嵌入模型信息（包含模型名称和供应商ID）
+export interface EmbeddingModelInfo {
+  model_name: string   // 模型名称（用于负载均衡分组）
+  provider_id: string  // 供应商 ID
+}
+
 // 通用模型配置（与后端 ModelConfig 对应）
 export interface ModelConfig {
   id: string             // 提供商配置唯一标识

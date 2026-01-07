@@ -17,6 +17,7 @@ type ShareService interface {
 	GetShareByCode(ctx context.Context, code string) (*model.Share, error)
 	SharedImages(ctx context.Context, code string, password string, page, pageSize int) ([]*model.ImageVO, int64, error)
 	ListShares(ctx context.Context, page, pageSize int) ([]*model.Share, int64, error)
+	UpdateShare(ctx context.Context, id int64, req *UpdateShareRequest) (*model.Share, error)
 	DeleteShare(ctx context.Context, id int64) error
 }
 
@@ -36,6 +37,11 @@ type CreateShareRequest struct {
 	Description string  `json:"description"`
 	Password    string  `json:"password"`    // 可选，明文密码
 	ExpireDays  int     `json:"expire_days"` // 0表示不过期
+}
+
+// UpdateShareRequest 更新分享请求
+type UpdateShareRequest struct {
+	ExpireAt *time.Time `json:"expire_at"` // 新的过期时间，nil表示永久有效
 }
 
 // ShareDetailResponse 分享详情响应
@@ -157,6 +163,23 @@ func (s *shareService) SharedImages(ctx context.Context, code string, password s
 // ListShares 管理端获取列表
 func (s *shareService) ListShares(ctx context.Context, page, pageSize int) ([]*model.Share, int64, error) {
 	return s.repo.List(ctx, page, pageSize)
+}
+
+// UpdateShare 更新分享
+func (s *shareService) UpdateShare(ctx context.Context, id int64, req *UpdateShareRequest) (*model.Share, error) {
+	share, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	share.ExpireAt = req.ExpireAt
+	share.UpdatedAt = time.Now()
+
+	if err := s.repo.Update(ctx, share); err != nil {
+		return nil, err
+	}
+
+	return share, nil
 }
 
 // DeleteShare 删除分享

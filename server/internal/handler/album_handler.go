@@ -147,6 +147,34 @@ func (h *AlbumHandler) Delete(c *gin.Context) {
 	utils.SuccessWithMessage(c, "删除成功", nil)
 }
 
+// Copy 复制相册
+//
+//	@Summary		复制相册
+//	@Description	复制相册（包括相册内的所有图片关联）
+//	@Tags			相册管理
+//	@Produce		json
+//	@Param			id	path		int									true	"相册ID"
+//	@Success		200	{object}	utils.Response{data=model.AlbumVO}	"复制成功"
+//	@Failure		400	{object}	utils.Response						"无效的相册ID"
+//	@Failure		500	{object}	utils.Response						"复制失败"
+//	@Router			/api/albums/{id}/copy [post]
+func (h *AlbumHandler) Copy(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的相册ID")
+		return
+	}
+
+	album, err := h.albumService.Copy(c.Request.Context(), id)
+	if err != nil {
+		logger.Error("复制相册失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "复制成功", album)
+}
+
 // GetImages 获取相册内图片
 //
 //	@Summary		获取相册内图片

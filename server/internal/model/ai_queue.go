@@ -25,12 +25,8 @@ const (
 
 // AI 任务项状态常量
 const (
-	AITaskItemStatusPending    = "pending"    // 待处理
-	AITaskItemStatusCollecting = "collecting" // 收集向量中（智能相册专用）
-	AITaskItemStatusClustering = "clustering" // 聚类中（智能相册专用）
-	AITaskItemStatusCreating   = "creating"   // 创建相册中（智能相册专用）
-	AITaskItemStatusCompleted  = "completed"  // 完成（智能相册专用）
-	AITaskItemStatusFailed     = "failed"     // 失败
+	AITaskItemStatusPending = "pending" // 待处理
+	AITaskItemStatusFailed  = "failed"  // 失败
 )
 
 // AIQueue AI 队列（永久存在，一个模型名称一个队列）

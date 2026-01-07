@@ -112,6 +112,12 @@
               <!-- 操作按钮 -->
               <div class="flex items-center justify-end gap-3 pt-5 mt-2">
                 <button
+                    class="rounded-lg px-3 py-1.5 text-xs font-medium text-primary-400/80 hover:text-primary-300 hover:bg-primary-500/10 transition-colors duration-300 ring-1 ring-transparent hover:ring-primary-500/20"
+                    @click="extendShare(share)"
+                >
+                  修改有效期
+                </button>
+                <button
                     @click="copyLink(share.share_code)"
                     class="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-300 hover:text-white hover:bg-white/10 transition-colors duration-300 ring-1 ring-transparent hover:ring-white/10"
                 >
@@ -151,24 +157,121 @@
           </nav>
         </div>
       </div>
+
+      <!-- 延期对话框 -->
+      <Modal
+        v-model="extendDialogVisible"
+        size="md"
+        title="修改过期时间"
+        @close="closeExtendDialog"
+      >
+        <div class="space-y-6">
+          <!-- 当前状态 -->
+          <div class="p-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <ClockIcon class="h-5 w-5 text-gray-400" />
+              <div>
+                <p class="text-xs text-gray-500 mb-0.5">当前过期时间</p>
+                <p class="text-sm font-medium text-white">
+                  {{ currentShare?.expire_at ? formatDate(currentShare.expire_at) : '永久有效' }}
+                </p>
+              </div>
+            </div>
+            <div
+              :class="[
+                'px-2.5 py-1 rounded-full text-xs font-medium border',
+                currentShare && isExpired(currentShare)
+                  ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                  : 'bg-green-500/10 border-green-500/20 text-green-400'
+              ]"
+            >
+              {{ currentShare && isExpired(currentShare) ? '已过期' : '生效中' }}
+            </div>
+          </div>
+
+          <!-- 快捷选项 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-300 mb-3">设置有效期</label>
+            <div class="grid grid-cols-3 gap-3">
+              <button
+                v-for="option in extendOptions"
+                :key="option.value"
+                :class="[
+                  'relative px-4 py-3 rounded-xl border text-sm font-medium transition-all duration-200',
+                  extendOption === option.value
+                    ? option.value === -1
+                      ? 'bg-red-500/20 border-red-500 text-red-400'
+                      : 'bg-primary-500/20 border-primary-500 text-primary-400'
+                    :  option.value === -1?
+                    'bg-white/5 border-white/10 text-red-400 hover:bg-white/10 hover:border-white/20':
+                     'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:border-white/20'
+                ]"
+                type="button"
+                @click="handleExtendOptionChange(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 自定义日期 -->
+          <div v-if="extendOption === 'custom'" class="animate-fade-in-down">
+            <label class="block text-sm font-medium text-gray-300 mb-2">选择具体日期</label>
+            <div class="relative group">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <CalendarIcon class="h-5 w-5 text-gray-500 group-focus-within:text-primary-500 transition-colors" />
+              </div>
+              <input
+                v-model="customExpireDate"
+                :min="minDate"
+                class="w-full rounded-xl bg-white/5 border border-white/10 pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                type="datetime-local"
+              />
+            </div>
+            <p class="text-xs text-gray-500 mt-2 ml-1">
+              设置的过期时间必须晚于当前时间
+            </p>
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="flex justify-end gap-3">
+            <button
+              class="px-5 py-2.5 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
+              @click="closeExtendDialog"
+            >
+              取消
+            </button>
+            <button
+              :disabled="!isValid"
+              class="px-5 py-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-600 shadow-[0_0_15px_rgba(139,92,246,0.3)] hover:shadow-[0_0_20px_rgba(139,92,246,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+              @click="confirmExtend"
+            >
+              确认修改
+            </button>
+          </div>
+        </template>
+      </Modal>
     </template>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import {ref, onMounted} from 'vue'
+import {computed, onMounted, ref} from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import Modal from '@/components/common/Modal.vue'
 import {shareApi} from '@/api/share'
 import {useDialogStore} from '@/stores/dialog'
 import type {Share} from '@/types'
 import {
-  ShareIcon,
-  EyeIcon,
   ArrowDownTrayIcon,
+  CalendarIcon,
+  ClipboardDocumentIcon,
   ClockIcon,
+  EyeIcon,
   LinkIcon,
   LockClosedIcon,
-  ClipboardDocumentIcon
+  ShareIcon
 } from '@heroicons/vue/24/outline'
 
 const loading = ref(false)
@@ -176,6 +279,35 @@ const shares = ref<Share[]>([])
 const currentPage = ref(1)
 const totalPages = ref(1)
 const dialogStore = useDialogStore()
+
+// 延期相关
+const extendDialogVisible = ref(false)
+const currentShare = ref<Share | null>(null)
+const extendOption = ref<string | number>('')
+const customExpireDate = ref('')
+
+const extendOptions = [
+  {label: '立即过期', value: -1},
+  {label: '1天后', value: 1},
+  {label: '7天后', value: 7},
+  {label: '30天后', value: 30},
+  {label: '永久有效', value: 0},
+  {label: '自定义', value: 'custom'}
+]
+
+const minDate = computed(() => {
+  const now = new Date()
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset())
+  return now.toISOString().slice(0, 16)
+})
+
+const isValid = computed(() => {
+  if (extendOption.value === 0 || extendOption.value === -1) return true
+  if (extendOption.value === 'custom') {
+    return customExpireDate.value && new Date(customExpireDate.value) > new Date()
+  }
+  return !!extendOption.value
+})
 
 async function fetchShares(page = 1) {
   loading.value = true
@@ -259,6 +391,88 @@ async function deleteShare(share: Share) {
 function changePage(page: number) {
   if (page >= 1 && page <= totalPages.value) {
     fetchShares(page)
+  }
+}
+
+// 延期相关函数
+function extendShare(share: Share) {
+  currentShare.value = share
+  extendOption.value = ''
+  customExpireDate.value = ''
+  extendDialogVisible.value = true
+}
+
+function closeExtendDialog() {
+  extendDialogVisible.value = false
+  currentShare.value = null
+  extendOption.value = ''
+  customExpireDate.value = ''
+}
+
+function handleExtendOptionChange(value: string | number) {
+  extendOption.value = value
+  if (value === 'custom') {
+    customExpireDate.value = ''
+  } else if (value === 0) {
+    // 永久有效
+    customExpireDate.value = ''
+  } else if (value === -1) {
+    // 立即过期
+    customExpireDate.value = ''
+  } else if (typeof value === 'number' && value > 0) {
+    // 计算未来日期
+    const futureDate = new Date()
+    futureDate.setDate(futureDate.getDate() + value)
+    // 格式化为 datetime-local 所需的格式
+    const year = futureDate.getFullYear()
+    const month = String(futureDate.getMonth() + 1).padStart(2, '0')
+    const day = String(futureDate.getDate()).padStart(2, '0')
+    const hours = String(futureDate.getHours()).padStart(2, '0')
+    const minutes = String(futureDate.getMinutes()).padStart(2, '0')
+    customExpireDate.value = `${year}-${month}-${day}T${hours}:${minutes}`
+  }
+}
+
+async function confirmExtend() {
+  if (!currentShare.value) return
+
+  let expireAt: string | null = null
+
+  if (extendOption.value === 0) {
+    // 永久有效
+    expireAt = null
+  } else if (extendOption.value === -1) {
+    // 立即过期 - 设置为当前时间之前
+    expireAt = new Date().toISOString()
+  } else if (extendOption.value === 'custom') {
+    if (!customExpireDate.value) {
+      dialogStore.alert({title: '错误', message: '请选择过期时间', type: 'error'})
+      return
+    }
+    const selectedDate = new Date(customExpireDate.value)
+    if (selectedDate <= new Date()) {
+      dialogStore.alert({title: '错误', message: '过期时间必须大于当前时间', type: 'error'})
+      return
+    }
+    expireAt = selectedDate.toISOString()
+  } else if (typeof extendOption.value === 'number') {
+    // 计算未来日期
+    const futureDate = new Date()
+    futureDate.setDate(futureDate.getDate() + extendOption.value)
+    expireAt = futureDate.toISOString()
+  } else {
+    dialogStore.alert({title: '错误', message: '请选择延期时长', type: 'error'})
+    return
+  }
+
+  try {
+    await shareApi.update(currentShare.value.id, {expire_at: expireAt})
+    dialogStore.alert({title: '成功', message: '有效期已更新', type: 'success'})
+    closeExtendDialog()
+    fetchShares(currentPage.value)
+  } catch (error) {
+    console.error('Failed to update share:', error)
+    dialogStore.alert({title: '错误', message: '更新失败', type: 'error'})
   }
 }
 

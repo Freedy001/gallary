@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -26,6 +27,7 @@ type AlbumRepository interface {
 	GetImages(ctx context.Context, albumID int64, page, pageSize int) ([]*model.Image, int64, error)
 	GetImageCount(ctx context.Context, albumID int64) (int64, error)
 	GetImageCounts(ctx context.Context, albumIDs []int64) (map[int64]int64, error)
+	CopyImages(ctx context.Context, srcAlbumID, dstAlbumID int64) error
 
 	// 封面
 	GetCoverImage(ctx context.Context, coverImageID int64) (*model.Image, error)
@@ -153,6 +155,18 @@ func (r *albumRepository) RemoveImages(ctx context.Context, albumID int64, image
 		Delete(&model.ImageTag{}).Error
 }
 
+// CopyImages 复制相册中的图片关联到新相册
+func (r *albumRepository) CopyImages(ctx context.Context, srcAlbumID, dstAlbumID int64) error {
+	// 复制源相册的所有图片关联到目标相册
+	return database.GetDB(ctx).WithContext(ctx).Exec(`
+		INSERT INTO image_tags (image_id, tag_id, sort_order, created_at)
+		SELECT image_id, ?, sort_order, NOW()
+		FROM image_tags
+		WHERE tag_id = ?
+		ON CONFLICT (image_id, tag_id) DO NOTHING
+	`, dstAlbumID, srcAlbumID).Error
+}
+
 // GetImages 分页获取相册内图片
 func (r *albumRepository) GetImages(ctx context.Context, albumID int64, page, pageSize int) ([]*model.Image, int64, error) {
 	var images []*model.Image
@@ -275,31 +289,16 @@ func (r *albumRepository) GetFirstImages(ctx context.Context, albumIDs []int64) 
 		return make(map[int64]*model.Image), nil
 	}
 
-	// 获取图片详情
-	imageIDs := make([]int64, 0, len(results))
-	tagImageMap := make(map[int64]int64)
-	for _, r := range results {
-		imageIDs = append(imageIDs, r.ImageID)
-		tagImageMap[r.ImageID] = r.TagID
-	}
-
 	var images []*model.Image
 	err = database.GetDB(ctx).WithContext(ctx).
-		Where("id IN ? AND deleted_at IS NULL", imageIDs).
+		Where("id IN ? AND deleted_at IS NULL", lo.Uniq(lo.Map(results, func(item firstImageResult, index int) int64 { return item.ImageID }))).
 		Find(&images).Error
 	if err != nil {
 		return nil, err
 	}
 
-	// 构建结果映射
-	resultMap := make(map[int64]*model.Image)
-	for _, img := range images {
-		if tagID, ok := tagImageMap[img.ID]; ok {
-			resultMap[tagID] = img
-		}
-	}
-
-	return resultMap, nil
+	idImageMap := lo.KeyBy(images, func(item *model.Image) int64 { return item.ID })
+	return lo.SliceToMap(results, func(item firstImageResult) (int64, *model.Image) { return item.TagID, idImageMap[item.ImageID] }), nil
 }
 
 // FindBestCoverByAverageVector 通过平均向量查找最佳封面

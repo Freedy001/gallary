@@ -3,7 +3,6 @@ gRPC AI 服务实现
 包含所有 AI 服务：嵌入、美学评分、多模态嵌入、聚类
 """
 
-import asyncio
 import io
 import json
 import time
@@ -345,80 +344,74 @@ class AIServicer(ai_pb2_grpc.AIServiceServicer):
             min_dist=request.umap_params.min_dist or 0.1,
         )
 
-        # 用于在同步 gRPC 方法中运行异步代码
-        loop = asyncio.new_event_loop()
-        progress_queue = asyncio.Queue()
+        logger.info("开始进行聚簇参数->{} {}", hdbscan_params, umap_params)
+        # 使用列表收集进度信息
+        progress_list: list[ProgressInfo] = []
 
-        async def progress_callback(info: ProgressInfo):
-            await progress_queue.put(info)
-
-        async def run_clustering():
-            try:
-                result = await clustering_service.cluster(
-                    embeddings=embeddings,
-                    image_ids=image_ids,
-                    hdbscan_params=hdbscan_params,
-                    umap_params=umap_params,
-                    progress_callback=progress_callback,
-                )
-                await progress_queue.put(("result", result))
-            except Exception as e:
-                await progress_queue.put(("error", str(e)))
-
-        task = loop.create_task(run_clustering())
+        def progress_callback(_info: ProgressInfo):
+            progress_list.append(_info)
 
         try:
-            while True:
-                try:
-                    item = loop.run_until_complete(asyncio.wait_for(progress_queue.get(), timeout=0.1))
-                except asyncio.TimeoutError:
-                    if task.done():
-                        break
-                    continue
+            # 同步执行聚类
+            result = clustering_service.cluster(
+                embeddings=embeddings,
+                image_ids=image_ids,
+                hdbscan_params=hdbscan_params,
+                umap_params=umap_params,
+                progress_callback=progress_callback,
+            )
 
-                if isinstance(item, tuple):
-                    if item[0] == "result":
-                        result = item[1]
-                        clusters = [
-                            ai_pb2.ClusterResult(
-                                cluster_id=c.cluster_id,
-                                image_ids=c.image_ids,
-                                avg_probability=c.avg_probability,
-                            )
-                            for c in result.clusters
-                        ]
-                        response = ai_pb2.ClusteringResponse(
-                            clusters=clusters,
-                            noise_image_ids=result.noise_image_ids,
-                            n_clusters=result.n_clusters,
-                            params_used={k: json.dumps(v) for k, v in result.params_used.items() if v is not None},
-                        )
-                        yield ai_pb2.ProgressUpdate(
-                            task_id=task_id,
-                            status="completed",
-                            progress=100,
-                            message="聚类完成",
-                            result=response,
-                        )
-                        break
-                    elif item[0] == "error":
-                        yield ai_pb2.ProgressUpdate(
-                            task_id=task_id,
-                            status="failed",
-                            progress=0,
-                            message=f"聚类失败: {item[1]}",
-                            error=item[1],
-                        )
-                        break
-                elif isinstance(item, ProgressInfo):
-                    yield ai_pb2.ProgressUpdate(
-                        task_id=task_id,
-                        status=item.status,
-                        progress=item.progress,
-                        message=item.message,
-                    )
-        finally:
-            loop.close()
+            # 先发送收集到的进度信息
+            for info in progress_list:
+                yield ai_pb2.ProgressUpdate(
+                    task_id=task_id,
+                    status=info.status,
+                    progress=info.progress,
+                    message=info.message,
+                )
+
+            # 构建结果
+            clusters = [
+                ai_pb2.ClusterResult(
+                    cluster_id=c.cluster_id,
+                    image_ids=c.image_ids,
+                    avg_probability=c.avg_probability,
+                )
+                for c in result.clusters
+            ]
+            response = ai_pb2.ClusteringResponse(
+                clusters=clusters,
+                noise_image_ids=result.noise_image_ids,
+                n_clusters=result.n_clusters,
+                params_used={k: json.dumps(v) for k, v in result.params_used.items() if v is not None},
+            )
+
+            # 发送完成结果
+            yield ai_pb2.ProgressUpdate(
+                task_id=task_id,
+                status="completed",
+                progress=100,
+                message="聚类完成",
+                result=response,
+            )
+
+        except Exception as e:
+            # 发送已收集的进度信息
+            for info in progress_list:
+                yield ai_pb2.ProgressUpdate(
+                    task_id=task_id,
+                    status=info.status,
+                    progress=info.progress,
+                    message=info.message,
+                )
+            # 发送错误
+            yield ai_pb2.ProgressUpdate(
+                task_id=task_id,
+                status="failed",
+                progress=0,
+                message=f"聚类失败: {str(e)}",
+                error=str(e),
+            )
 
 
 def create_grpc_server(port: int = 50051, max_workers: int = 10) -> grpc.Server:

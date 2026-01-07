@@ -36,8 +36,8 @@ func (c *AliyunMultimodalEmbedding) UpdateConfig(config *model.ModelConfig) {
 	c.config = config
 }
 
-// NewAliyunMultimodalEmbedding 创建阿里云客户端
-func NewAliyunMultimodalEmbedding(provider *model.ModelConfig, modelItem *model.ModelItem, httpClient *http.Client, manager *storage.StorageManager) *AliyunMultimodalEmbedding {
+// newAliyunMultimodalEmbedding 创建阿里云客户端
+func newAliyunMultimodalEmbedding(provider *model.ModelConfig, modelItem *model.ModelItem, httpClient *http.Client, manager *storage.StorageManager) *AliyunMultimodalEmbedding {
 	return &AliyunMultimodalEmbedding{
 		config:     provider,
 		modelItem:  modelItem,

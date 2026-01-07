@@ -19,6 +19,7 @@ type AlbumService interface {
 	List(ctx context.Context, page, pageSize int, isSmart *bool) ([]*model.AlbumVO, int64, error)
 	Update(ctx context.Context, id int64, req *UpdateAlbumRequest) (*model.AlbumVO, error)
 	Delete(ctx context.Context, id int64) error
+	Copy(ctx context.Context, id int64) (*model.AlbumVO, error)
 
 	// 图片管理
 	GetImages(ctx context.Context, albumID int64, page, pageSize int) ([]*model.ImageVO, int64, error)
@@ -174,6 +175,40 @@ func (s *albumService) Update(ctx context.Context, id int64, req *UpdateAlbumReq
 // Delete 删除相册
 func (s *albumService) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
+}
+
+// Copy 复制相册
+func (s *albumService) Copy(ctx context.Context, id int64) (*model.AlbumVO, error) {
+	// 获取原相册
+	originalAlbum, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("获取原相册失败: %w", err)
+	}
+
+	// 创建新相册
+	newAlbum := &model.Tag{
+		Name: originalAlbum.Name + " (副本)",
+		Type: model.TagTypeAlbum,
+	}
+
+	// 复制元数据（不复制封面）
+	if originalAlbum.Metadata != nil {
+		newAlbum.Metadata = &model.AlbumMetadata{
+			Description: originalAlbum.Metadata.Description,
+		}
+	}
+
+	if err := s.repo.Create(ctx, newAlbum); err != nil {
+		return nil, fmt.Errorf("创建相册副本失败: %w", err)
+	}
+
+	// 复制相册内的图片关联
+	if err := s.repo.CopyImages(ctx, id, newAlbum.ID); err != nil {
+		logger.Warn("复制相册图片关联失败", zap.Error(err))
+	}
+
+	logger.Info("复制相册成功", zap.Int64("original_id", id), zap.Int64("new_id", newAlbum.ID))
+	return s.toVO(ctx, newAlbum)
 }
 
 // GetImages 获取相册内图片

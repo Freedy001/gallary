@@ -53,8 +53,8 @@ func (c *OpenAIClient) UpdateConfig(config *model.ModelConfig) {
 	c.config = config
 }
 
-// NewOpenAIClient 创建 OpenAI 兼容模型客户端
-func NewOpenAIClient(provider *model.ModelConfig, modelItem *model.ModelItem, httpClient *http.Client) *OpenAIClient {
+// newOpenAIClient 创建 OpenAI 兼容模型客户端
+func newOpenAIClient(provider *model.ModelConfig, modelItem *model.ModelItem, httpClient *http.Client) *OpenAIClient {
 	return &OpenAIClient{
 		config:     provider,
 		modelItem:  modelItem,

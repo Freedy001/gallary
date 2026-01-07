@@ -1,6 +1,6 @@
 import http from './http'
 import type {ApiResponse} from '@/types'
-import type {AIConfig, AIQueueDetail, TestConnectionRequest,} from '@/types/ai'
+import type {AIConfig, AIQueueDetail, EmbeddingModelInfo, TestConnectionRequest,} from '@/types/ai'
 import type {GenerateSmartAlbumsRequest, SmartAlbumTaskVO} from "@/types/smart-album.ts";
 
 // 优化提示词请求
@@ -32,14 +32,14 @@ export const aiApi = {
     return http.post('/api/ai/test-connection', request)
   },
 
-  // 获取可用的嵌入模型列表
-  getEmbeddingModels(): Promise<ApiResponse<string[]>> {
+  // 获取可用的嵌入模型列表（包含模型名称和供应商ID）
+  getEmbeddingModels(): Promise<ApiResponse<EmbeddingModelInfo[]>> {
     return http.get('/api/ai/embedding-models')
   },
 
   // 获取支持 ChatCompletion 的模型列表
-  getChatCompletionModels(): Promise<ApiResponse<string[]>> {
-    return http.get('/api/ai/chat-completion-models')
+  getChatCompletionModels(type: "DefaultPromptOptimizeModelId"): Promise<ApiResponse<boolean>> {
+    return http.get('/api/settings/configed-default-model/' + type)
   },
 
   // 优化提示词

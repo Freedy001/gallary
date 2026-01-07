@@ -424,7 +424,7 @@ func (s *imageService) Search(ctx context.Context, params *model.SearchParams) (
 	}
 
 	// 文本语义搜索
-	if params.ModelName != "" {
+	if params.ModelId != "" {
 		if s.aiService == nil {
 			return nil, 0, fmt.Errorf("未配置 ai service")
 		}
@@ -449,7 +449,7 @@ func (s *imageService) Search(ctx context.Context, params *model.SearchParams) (
 			}
 
 			// 2. 在候选ID范围内进行语义搜索排序
-			images, err := s.aiService.SemanticSearchWithinIDs(ctx, params.ImageData, params.Keyword, params.ModelName, candidateIDs, params.PageSize)
+			images, err := s.aiService.SemanticSearchWithinIDs(ctx, params.ImageData, params.Keyword, params.ModelId, candidateIDs, params.PageSize)
 			if err != nil {
 				return nil, 0, fmt.Errorf("语义搜索失败: %w", err)
 			}
@@ -460,7 +460,7 @@ func (s *imageService) Search(ctx context.Context, params *model.SearchParams) (
 		}
 
 		// 纯语义搜索（无传统筛选条件）
-		images, err := s.aiService.SemanticSearchWithinIDs(ctx, params.ImageData, params.Keyword, params.ModelName, nil, params.PageSize)
+		images, err := s.aiService.SemanticSearchWithinIDs(ctx, params.ImageData, params.Keyword, params.ModelId, nil, params.PageSize)
 		if err != nil {
 			return nil, 0, fmt.Errorf("语义搜索失败: %w", err)
 		}

@@ -3,13 +3,39 @@ import {computed, ref} from 'vue'
 import {albumApi} from '@/api/album'
 import type {Album} from '@/types'
 
+// 分区状态类型
+interface AlbumSection {
+  albums: (Album | null)[]
+  total: number
+  loading: boolean
+  loadingPages: Set<number>
+}
+
+function createEmptySection(): AlbumSection {
+  return {
+    albums: [],
+    total: 0,
+    loading: false,
+    loadingPages: new Set()
+  }
+}
+
 export const useAlbumStore = defineStore('album', () => {
-  // State
-  const albums = ref<Album[]>([])
+  // 分区状态
+  const normalSection = ref<AlbumSection>(createEmptySection())
+  const smartSection = ref<AlbumSection>(createEmptySection())
+
+  // 其他状态
   const currentAlbum = ref<Album | null>(null)
-  const loading = ref(false)
-  const total = ref(0)
   const selectedAlbums = ref<Set<number>>(new Set())
+
+  // 向后兼容的计算属性
+  const albums = computed(() => [
+    ...normalSection.value.albums.filter((a): a is Album => a !== null),
+    ...smartSection.value.albums.filter((a): a is Album => a !== null)
+  ])
+  const total = computed(() => normalSection.value.total + smartSection.value.total)
+  const loading = computed(() => normalSection.value.loading || smartSection.value.loading)
 
   // Computed
   const selectedCount = computed(() => selectedAlbums.value.size)
@@ -19,29 +45,77 @@ export const useAlbumStore = defineStore('album', () => {
   )
 
   // Actions
-  async function fetchAlbums(page = 1, pageSize = 20) {
+  async function fetchSection(section: 'normal' | 'smart', page = 1, pageSize = 20) {
+    const sectionRef = section === 'normal' ? normalSection : smartSection
+    const isSmart = section === 'smart'
+
+    // 防止重复加载同一页
+    if (sectionRef.value.loadingPages.has(page)) return
+
     try {
-      loading.value = true
-      const { data } = await albumApi.getList({ page, pageSize })
-      albums.value = data.list
-      total.value = data.total
+      sectionRef.value.loadingPages.add(page)
+      if (page === 1) sectionRef.value.loading = true
+
+      const { data } = await albumApi.getList({ page, pageSize, isSmart })
+
+      if (page === 1) {
+        // 初始化占位符数组
+        sectionRef.value.albums = new Array(data.total).fill(null)
+        sectionRef.value.total = data.total
+      } else {
+        // 确保数组长度足够
+        if (sectionRef.value.albums.length < data.total) {
+          const diff = data.total - sectionRef.value.albums.length
+          for (let i = 0; i < diff; i++) sectionRef.value.albums.push(null)
+        }
+      }
+
+      // 填充数据
+      const startIndex = (page - 1) * pageSize
+      data.list.forEach((album, i) => {
+        if (startIndex + i < sectionRef.value.albums.length) {
+          sectionRef.value.albums[startIndex + i] = album
+        }
+      })
     } finally {
-      loading.value = false
+      sectionRef.value.loadingPages.delete(page)
+      if (page === 1) sectionRef.value.loading = false
+    }
+  }
+
+  // 刷新所有分区（并行加载第一页）
+  async function refreshAlbums(pageSize = 20) {
+    await Promise.all([
+      fetchSection('normal', 1, pageSize),
+      fetchSection('smart', 1, pageSize)
+    ])
+  }
+
+  // 向后兼容的 fetchAlbums（内部调用 refreshAlbums）
+  async function fetchAlbums(page = 1, pageSize = 20) {
+    if (page === 1) {
+      await refreshAlbums(pageSize)
     }
   }
 
   async function createAlbum(name: string, description?: string) {
     const { data } = await albumApi.create({ name, description })
-    albums.value.unshift(data)
-    total.value += 1
+    // 普通相册添加到 normalSection 开头
+    normalSection.value.albums.unshift(data)
+    normalSection.value.total += 1
     return data
   }
 
   async function updateAlbum(id: number, name: string, description?: string) {
     const { data } = await albumApi.update(id, { name, description })
-    const index = albums.value.findIndex(a => a.id === id)
-    if (index !== -1) {
-      albums.value[index] = { ...albums.value[index], ...data }
+    // 在两个分区中查找并更新
+    const normalIndex = normalSection.value.albums.findIndex(a => a?.id === id)
+    if (normalIndex !== -1) {
+      normalSection.value.albums[normalIndex] = { ...normalSection.value.albums[normalIndex]!, ...data }
+    }
+    const smartIndex = smartSection.value.albums.findIndex(a => a?.id === id)
+    if (smartIndex !== -1) {
+      smartSection.value.albums[smartIndex] = { ...smartSection.value.albums[smartIndex]!, ...data }
     }
     if (currentAlbum.value?.id === id) {
       currentAlbum.value = { ...currentAlbum.value, ...data }
@@ -55,8 +129,17 @@ export const useAlbumStore = defineStore('album', () => {
 
   async function deleteAlbum(id: number) {
     await albumApi.delete(id)
-    albums.value = albums.value.filter(a => a.id !== id)
-    total.value -= 1
+    // 从两个分区中移除
+    const normalIndex = normalSection.value.albums.findIndex(a => a?.id === id)
+    if (normalIndex !== -1) {
+      normalSection.value.albums.splice(normalIndex, 1)
+      normalSection.value.total -= 1
+    }
+    const smartIndex = smartSection.value.albums.findIndex(a => a?.id === id)
+    if (smartIndex !== -1) {
+      smartSection.value.albums.splice(smartIndex, 1)
+      smartSection.value.total -= 1
+    }
     selectedAlbums.value.delete(id)
     if (currentAlbum.value?.id === id) {
       currentAlbum.value = null
@@ -68,9 +151,13 @@ export const useAlbumStore = defineStore('album', () => {
     for (const id of ids) {
       await albumApi.delete(id)
     }
-    albums.value = albums.value.filter(a => !selectedAlbums.value.has(a.id))
-    total.value -= ids.length
-    if (currentAlbum.value && selectedAlbums.value.has(currentAlbum.value.id)) {
+    // 从两个分区中移除
+    normalSection.value.albums = normalSection.value.albums.filter(a => a === null || !ids.includes(a.id))
+    smartSection.value.albums = smartSection.value.albums.filter(a => a === null || !ids.includes(a.id))
+    // 更新 total（简化处理，重新计算）
+    normalSection.value.total = normalSection.value.albums.filter(a => a !== null).length
+    smartSection.value.total = smartSection.value.albums.filter(a => a !== null).length
+    if (currentAlbum.value && ids.includes(currentAlbum.value.id)) {
       currentAlbum.value = null
     }
     selectedAlbums.value.clear()
@@ -97,7 +184,10 @@ export const useAlbumStore = defineStore('album', () => {
   }
 
   return {
-    // State
+    // 分区状态
+    normalSection,
+    smartSection,
+    // 向后兼容的状态
     albums,
     currentAlbum,
     loading,
@@ -108,6 +198,8 @@ export const useAlbumStore = defineStore('album', () => {
     hasSelection,
     selectedAlbumList,
     // Actions
+    fetchSection,
+    refreshAlbums,
     fetchAlbums,
     createAlbum,
     updateAlbum,

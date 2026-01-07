@@ -214,14 +214,14 @@ func (s *smartAlbumService) collectEmbeddings(ctx context.Context, modelName str
 // executeClustering 执行聚类（使用 gRPC 流式调用）
 func (s *smartAlbumService) executeClustering(ctx context.Context, task *SmartAlbumTask, embeddings []*model.ImageEmbedding) (*llms.ClusterResult, error) {
 	// 获取 SelfClient
-	client, err := s.loadBalancer.GetClientByName(task.Params.ModelName)
+	client, err := s.loadBalancer.GetClientByName("Self Hosted")
 	if err != nil {
-		return nil, fmt.Errorf("获取模型客户端失败: %w", err)
+		return nil, fmt.Errorf("获取Self Hosted模型客户端失败: %w", err)
 	}
 
 	selfClient, ok := client.(llms.SelfClient)
 	if !ok {
-		return nil, fmt.Errorf("模型 %s 不支持聚类功能", task.Params.ModelName)
+		return nil, fmt.Errorf("模型 Self Hosted 不支持聚类功能")
 	}
 
 	// 构建请求
@@ -231,6 +231,7 @@ func (s *smartAlbumService) executeClustering(ctx context.Context, task *SmartAl
 	progressChan := make(chan *llms.ClusterProgress, 10)
 
 	var result *llms.ClusterResult
+	var errorMsg string
 	var wg sync.WaitGroup
 
 	// 启动 goroutine 处理进度
@@ -242,6 +243,7 @@ func (s *smartAlbumService) executeClustering(ctx context.Context, task *SmartAl
 			mappedProgress := 25 + (progress.Progress * 55 / 100)
 			s.updateTask(task, "clustering", mappedProgress, progress.Message)
 
+			errorMsg = progress.Error
 			if progress.Result != nil {
 				result = progress.Result
 			}
@@ -253,9 +255,12 @@ func (s *smartAlbumService) executeClustering(ctx context.Context, task *SmartAl
 
 	// 等待进度处理完成
 	wg.Wait()
-
 	if err != nil {
 		return nil, err
+	}
+
+	if errorMsg != "" {
+		return nil, fmt.Errorf(errorMsg)
 	}
 
 	return result, nil

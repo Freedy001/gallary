@@ -368,11 +368,11 @@ const (
 	AliyunMultimodalEmbedding Provider = "alyunMultimodalEmbedding"
 )
 
-// ModelId 模型组合标识符（提供商ID,api_model_name）
-type ModelId string
+// CopositModelId 模型组合标识符（提供商ID,api_model_name）
+type CopositModelId string
 
 // Parse 解析组合ID，返回提供商ID和api模型名称
-func (id ModelId) Parse() (providerId string, modelName string) {
+func (id CopositModelId) Parse() (providerId string, modelName string) {
 	parts := strings.SplitN(string(id), ",", 2)
 	if len(parts) == 2 {
 		return parts[0], parts[1]
@@ -381,14 +381,24 @@ func (id ModelId) Parse() (providerId string, modelName string) {
 }
 
 // CreateModelId 创建组合ID
-func CreateModelId(providerId, modelName string) ModelId {
-	return ModelId(providerId + "," + modelName)
+func CreateModelId(providerId, modelName string) CopositModelId {
+	return CopositModelId(providerId + "," + modelName)
 }
 
 // ModelItem 单个模型配置项
 type ModelItem struct {
 	ApiModelName string `json:"api_model_name"` // API 调用时使用的模型名称
 	ModelName    string `json:"model_name"`     // 内部标识/负载均衡分组
+}
+
+// EmbeddingModelInfo 嵌入模型信息（包含模型名称和供应商ID）
+type EmbeddingModelInfo struct {
+	ModelName  string `json:"model_name"`  // 模型名称（用于负载均衡分组）
+	ProviderID string `json:"provider_id"` // 供应商 ID
+}
+
+func (e *EmbeddingModelInfo) ToModelId() CopositModelId {
+	return CreateModelId(e.ProviderID, e.ModelName)
 }
 
 type ModelConfig struct {
@@ -461,7 +471,7 @@ func (a AIPo) GetEnabled() []*ModelConfig {
 // FindById 根据组合ID查找模型配置和模型项
 // compositeId 格式: "providerId,apiModelName" 或旧格式 "providerId"
 func (a AIPo) FindById(compositeId string) (*ModelConfig, *ModelItem) {
-	providerId, modelName := ModelId(compositeId).Parse()
+	providerId, modelName := CopositModelId(compositeId).Parse()
 
 	provider, find := lo.Find(a.GetEnabled(), func(item *ModelConfig) bool { return item.ID == providerId })
 	if !find {
@@ -487,8 +497,8 @@ type ProviderWithModelItem struct {
 	ModelItem *ModelItem
 }
 
-// FindModelConfigByModelName 根据 ModelName 查找所有启用的提供商配置（用于负载均衡）
-// 返回所有包含指定 ModelName 的提供商配置及对应的模型项
+// FindModelConfigByModelName 根据 ModelId 查找所有启用的提供商配置（用于负载均衡）
+// 返回所有包含指定 ModelId 的提供商配置及对应的模型项
 func (a AIPo) FindModelConfigByModelName(modelName string) []*ProviderWithModelItem {
 	return lo.FlatMap(a.GetEnabled(), func(provider *ModelConfig, index int) []*ProviderWithModelItem {
 		return lo.FilterMap(provider.Models, func(item *ModelItem, index int) (*ProviderWithModelItem, bool) {
@@ -503,7 +513,7 @@ func (a AIPo) FindModelConfigByModelName(modelName string) []*ProviderWithModelI
 	})
 }
 
-// GetDefaultTagModelName 获取默认打标签模型的 ModelName（用于负载均衡）
+// GetDefaultTagModelName 获取默认打标签模型的 ModelId（用于负载均衡）
 func (a AIPo) GetDefaultTagModelName() string {
 	if a.GlobalConfig != nil && a.GlobalConfig.DefaultTagModelId != "" {
 		provider, modelItem := a.FindById(a.GlobalConfig.DefaultTagModelId)

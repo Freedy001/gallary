@@ -15,6 +15,7 @@ import (
 
 	"gallary/server/pkg/logger"
 
+	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
@@ -27,7 +28,7 @@ type ModelLoadBalancer struct {
 	modelClients map[string]ModelClient
 	modelMu      sync.RWMutex
 
-	// 负载均衡计数器（按 ModelName 分组）
+	// 负载均衡计数器（按 ModelId 分组）
 	loadBalanceCounters map[string]*uint64
 	lbMu                sync.RWMutex
 }
@@ -101,9 +102,25 @@ func (lb *ModelLoadBalancer) GetAllEmbeddingModels() ([]string, error) {
 	return lb.selectModel(func(client ModelClient) bool { _, ok := client.(EmbeddingClient); return ok })
 }
 
-// GetAllChatCompletionModels 获取所有支持 ChatCompletion 的模型名称
-func (lb *ModelLoadBalancer) GetAllChatCompletionModels() ([]string, error) {
-	return lb.selectModel(func(client ModelClient) bool { _, ok := client.(LLMSClient); return ok })
+// GetAllEmbeddingModelsWithProvider 获取所有嵌入模型信息（包含供应商ID）
+func (lb *ModelLoadBalancer) GetAllEmbeddingModelsWithProvider() ([]*model.EmbeddingModelInfo, error) {
+	return lb.selectModelWithProvider(func(client ModelClient) bool { _, ok := client.(EmbeddingClient); return ok })
+}
+
+// selectModelWithProvider 选择支持指定功能的模型，返回模型名称和供应商ID
+func (lb *ModelLoadBalancer) selectModelWithProvider(support func(client ModelClient) bool) ([]*model.EmbeddingModelInfo, error) {
+	return lo.FlatMap(internal.PlatConfig.AIPo.GetEnabled(), func(provider *model.ModelConfig, index int) []*model.EmbeddingModelInfo {
+		return lo.FilterMap(provider.Models, func(modelItem *model.ModelItem, index int) (*model.EmbeddingModelInfo, bool) {
+			client := lb.getOrCreateClient(provider, modelItem)
+			if client == nil || !support(client) {
+				return nil, false
+			}
+			return &model.EmbeddingModelInfo{
+				ModelName:  modelItem.ModelName,
+				ProviderID: provider.ID,
+			}, true
+		})
+	}), nil
 }
 
 func (lb *ModelLoadBalancer) selectModel(support func(client ModelClient) bool) ([]string, error) {

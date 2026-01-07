@@ -198,34 +198,16 @@ type SemanticSearchRequest struct {
 // GetEmbeddingModels 获取可用的嵌入模型列表
 //
 //	@Summary		获取可用的嵌入模型列表
-//	@Description	获取所有已启用且支持嵌入功能的模型名称列表
+//	@Description	获取所有已启用且支持嵌入功能的模型名称列表（包含模型名称和供应商ID）
 //	@Tags			AI
 //	@Produce		json
-//	@Success		200	{object}	utils.Response{data=[]string}	"获取成功"
+//	@Success		200	{object}	utils.Response{data=[]model.EmbeddingModelInfo}	"获取成功"
 //	@Failure		500	{object}	utils.Response					"获取失败"
 //	@Router			/api/ai/embedding-models [get]
 func (h *AIHandler) GetEmbeddingModels(c *gin.Context) {
 	models, err := h.service.GetEmbeddingModels(c.Request.Context())
 	if err != nil {
 		utils.InternalServerError(c, "获取嵌入模型列表失败: "+err.Error())
-		return
-	}
-	utils.Success(c, models)
-}
-
-// GetChatCompletionModels 获取支持 ChatCompletion 的模型列表
-//
-//	@Summary		获取支持 ChatCompletion 的模型列表
-//	@Description	获取所有已启用且支持 ChatCompletion 功能的模型名称列表
-//	@Tags			AI
-//	@Produce		json
-//	@Success		200	{object}	utils.Response{data=[]string}	"获取成功"
-//	@Failure		500	{object}	utils.Response					"获取失败"
-//	@Router			/api/ai/chat-completion-models [get]
-func (h *AIHandler) GetChatCompletionModels(c *gin.Context) {
-	models, err := h.service.GetChatCompletionModels(c.Request.Context())
-	if err != nil {
-		utils.InternalServerError(c, "获取 ChatCompletion 模型列表失败: "+err.Error())
 		return
 	}
 	utils.Success(c, models)

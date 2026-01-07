@@ -15,25 +15,25 @@
       <div v-else-if="models.length > 0" class="space-y-2">
         <button
           v-for="model in models"
-          :key="model"
+          :key="model.model_name"
           :class="[
-            selectedModel === model
+            selectedModel === model.model_name
               ? 'bg-primary-500/20 ring-1 ring-primary-500/50'
               : 'bg-white/5 hover:bg-white/10'
           ]"
           class="w-full flex items-center justify-between rounded-xl px-4 py-3 transition-all text-left"
-          @click="selectedModel = model"
+          @click="selectedModel = model.model_name"
         >
-          <span class="text-sm text-white font-medium">{{ model }}</span>
+          <span class="text-sm text-white font-medium">{{ model.model_name }}</span>
           <div
             :class="[
-              selectedModel === model
+              selectedModel === model.model_name
                 ? 'border-primary-500 bg-primary-500 text-white'
                 : 'border-white/30'
             ]"
             class="flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors flex-shrink-0"
           >
-            <CheckIcon v-if="selectedModel === model" class="h-3 w-3" />
+            <CheckIcon v-if="selectedModel === model.model_name" class="h-3 w-3" />
           </div>
         </button>
       </div>
@@ -69,6 +69,7 @@ import {ref, watch} from 'vue'
 import Modal from '@/components/common/Modal.vue'
 import {CheckIcon} from '@heroicons/vue/24/outline'
 import {aiApi} from '@/api/ai'
+import type {EmbeddingModelInfo} from '@/types/ai'
 import {useDialogStore} from "@/stores/dialog.ts";
 
 const dialogStore = useDialogStore();
@@ -78,7 +79,7 @@ const emit = defineEmits<{
   selected: [modelName: string]
 }>()
 
-const models = ref<string[]>([])
+const models = ref<EmbeddingModelInfo[]>([])
 const selectedModel = ref<string>('')
 const loading = ref(false)
 const submitting = ref(false)
@@ -94,7 +95,7 @@ async function loadModels() {
 
     // 默认选中第一个模型
     if (models.value.length > 0 && !selectedModel.value) {
-      selectedModel.value = models.value[0]!
+      selectedModel.value = models.value[0]!.model_name
     }
   } catch (err) {
     dialogStore.notify({

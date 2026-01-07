@@ -3,31 +3,24 @@
     <form class="space-y-6" @submit.prevent="handleSubmit">
       <!-- 模型选择 -->
       <div>
-        <label class="block text-sm font-medium text-gray-300 mb-2">嵌入模型</label>
-        <select
+        <BaseSelect
           v-model="form.model_name"
+          :options="embeddingModelOptions"
           :disabled="taskInProgress"
-          class="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors outline-none disabled:opacity-50"
-          required
-        >
-          <option disabled value="">请选择模型</option>
-          <option v-for="model in embeddingModels" :key="model" :value="model">
-            {{ model }}
-          </option>
-        </select>
+          label="嵌入模型"
+          placeholder="请选择模型"
+        />
         <p class="text-xs text-gray-500 mt-1">选择用于获取图片向量的嵌入模型</p>
       </div>
 
       <!-- 算法选择 -->
       <div>
-        <label class="block text-sm font-medium text-gray-300 mb-2">聚类算法</label>
-        <select
+        <BaseSelect
           v-model="form.algorithm"
+          :options="algorithmOptions"
           :disabled="taskInProgress"
-          class="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors outline-none disabled:opacity-50"
-        >
-          <option value="hdbscan">HDBSCAN（密度聚类）</option>
-        </select>
+          label="聚类算法"
+        />
       </div>
 
       <!-- 高级配置折叠 -->
@@ -47,64 +40,80 @@
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-xs text-gray-400 mb-1">最小聚类大小</label>
-              <input
-                v-model.number="form.hdbscan_params.min_cluster_size"
-                :disabled="taskInProgress"
-                class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none disabled:opacity-50"
-                min="2"
-                type="number"
-              />
+              <div class="relative">
+                <input
+                  v-model.number="form.hdbscan_params.min_cluster_size"
+                  :disabled="taskInProgress"
+                  class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none disabled:opacity-50 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  min="2"
+                  type="number"
+                />
+              </div>
               <p class="text-[10px] text-gray-500 mt-0.5">每个相册最少包含的图片数</p>
             </div>
             <div>
               <label class="block text-xs text-gray-400 mb-1">最小样本数</label>
-              <input
-                v-model.number="form.hdbscan_params.min_samples"
-                :disabled="taskInProgress"
-                class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none placeholder-gray-600 disabled:opacity-50"
-                min="1"
-                placeholder="默认等于最小聚类大小"
-                type="number"
-              />
+              <div class="relative">
+                <input
+                  v-model.number="form.hdbscan_params.min_samples"
+                  :disabled="taskInProgress"
+                  class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none placeholder-gray-600 disabled:opacity-50 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  min="1"
+                  placeholder="默认等于最小聚类大小"
+                  type="number"
+                />
+              </div>
               <p class="text-[10px] text-gray-500 mt-0.5">核心点判定标准</p>
             </div>
             <div>
-              <label class="block text-xs text-gray-400 mb-1">聚类选择方法</label>
-              <select
+              <BaseSelect
                 v-model="form.hdbscan_params.cluster_selection_method"
+                :options="clusterSelectionMethodOptions"
                 :disabled="taskInProgress"
-                class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none disabled:opacity-50"
-              >
-                <option value="eom">EOM（推荐）</option>
-                <option value="leaf">Leaf</option>
-              </select>
+                button-class="!py-2 !text-sm"
+                label="聚类选择方法"
+              />
               <p class="text-[10px] text-gray-500 mt-0.5">EOM 更稳定，Leaf 产生更多小聚类</p>
             </div>
             <div>
-              <label class="block text-xs text-gray-400 mb-1">距离度量</label>
-              <select
+              <BaseSelect
                 v-model="form.hdbscan_params.metric"
+                :options="metricOptions"
                 :disabled="taskInProgress"
-                class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none disabled:opacity-50"
-              >
-                <option value="cosine">余弦相似度（推荐）</option>
-                <option value="euclidean">欧氏距离</option>
-              </select>
+                button-class="!py-2 !text-sm"
+                label="距离度量"
+              />
             </div>
           </div>
 
           <!-- UMAP 降维 -->
           <div class="pt-2 border-t border-white/5">
-            <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-              <input
-                v-model="form.hdbscan_params.umap_enabled"
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-sm text-gray-300">启用 UMAP 降维</span>
+                <p class="text-[10px] text-gray-500 mt-0.5">图片数量较多时建议启用，可提高聚类效果</p>
+              </div>
+              <button
+                :aria-checked="form.hdbscan_params.umap_enabled"
+                :class="[
+                  form.hdbscan_params.umap_enabled ? 'bg-primary-500' : 'bg-white/10',
+                  taskInProgress ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                  'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none'
+                ]"
+                role="switch"
                 :disabled="taskInProgress"
-                class="rounded bg-white/5 border-white/10 text-primary-500 focus:ring-primary-500 disabled:opacity-50"
-                type="checkbox"
-              />
-              启用 UMAP 降维
-            </label>
-            <p class="text-xs text-gray-500 mt-1 ml-6">图片数量较多时建议启用，可提高聚类效果</p>
+                type="button"
+                @click="!taskInProgress && (form.hdbscan_params.umap_enabled = !form.hdbscan_params.umap_enabled)"
+              >
+                <span
+                  :class="[
+                    form.hdbscan_params.umap_enabled ? 'translate-x-5' : 'translate-x-0',
+                    'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out'
+                  ]"
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -128,7 +137,7 @@
       <!-- 操作按钮 -->
       <div class="flex justify-end gap-3 pt-4">
         <button
-          class="px-5 py-2.5 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 transition-colors"
+          class="px-5 py-2.5 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
           type="button"
           @click="handleClose"
         >
@@ -136,7 +145,7 @@
         </button>
         <button
           :disabled="loading || !form.model_name || taskInProgress"
-          class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-5 py-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-600 shadow-[0_0_15px_rgba(139,92,246,0.3)] hover:shadow-[0_0_20px_rgba(139,92,246,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
           type="submit"
         >
           {{ loading ? '提交中...' : '生成智能相册' }}
@@ -151,10 +160,10 @@
         <span class="font-medium">生成完成</span>
       </div>
       <div class="text-sm text-gray-300 space-y-1">
-        <p>已创建 <span class="text-white font-medium">{{ result.cluster_count }}</span> 个智能相册</p>
-        <p>共处理 <span class="text-white font-medium">{{ result.total_images }}</span> 张图片</p>
+        <p>已创建 <span class="text-white font-semibold text-base tabular-nums">{{ result.cluster_count }}</span> 个智能相册</p>
+        <p>共处理 <span class="text-white font-semibold text-base tabular-nums">{{ result.total_images }}</span> 张图片</p>
         <p v-if="result.noise_count && result.noise_count > 0" class="text-gray-400">
-          {{ result.noise_count }} 张图片未被归类（噪声点）
+          <span class="tabular-nums">{{ result.noise_count }}</span> 张图片未被归类（噪声点）
         </p>
       </div>
     </div>
@@ -174,7 +183,10 @@
 import {computed, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
 import {CheckCircleIcon, ChevronDownIcon, XCircleIcon} from '@heroicons/vue/24/outline'
 import Modal from '@/components/common/Modal.vue'
+import type {SelectOption} from '@/components/common/BaseSelect.vue'
+import BaseSelect from '@/components/common/BaseSelect.vue'
 import {aiApi} from '@/api/ai'
+import type {EmbeddingModelInfo} from '@/types/ai'
 import type {GenerateSmartAlbumsRequest, SmartAlbumTaskStatus} from '@/types/smart-album'
 import {DEFAULT_HDBSCAN_PARAMS} from '@/types/smart-album'
 import {useDialogStore} from '@/stores/dialog'
@@ -202,7 +214,26 @@ const dialogStore = useDialogStore()
 
 const loading = ref(false)
 const showAdvanced = ref(false)
-const embeddingModels = ref<string[]>([])
+const embeddingModels = ref<EmbeddingModelInfo[]>([])
+
+// 计算选项列表（使用模型名称作为显示和值）
+const embeddingModelOptions = computed<SelectOption[]>(() =>
+  embeddingModels.value.map(model => ({ label: model.model_name, value: model.model_name }))
+)
+
+const algorithmOptions: SelectOption[] = [
+  { label: 'HDBSCAN（密度聚类）', value: 'hdbscan' }
+]
+
+const clusterSelectionMethodOptions: SelectOption[] = [
+  { label: 'EOM（推荐）', value: 'eom' },
+  { label: 'Leaf', value: 'leaf' }
+]
+
+const metricOptions: SelectOption[] = [
+  { label: '余弦相似度（推荐）', value: 'cosine' },
+  { label: '欧氏距离', value: 'euclidean' }
+]
 const currentTaskId = ref<number | null>(null)
 const currentProgress = ref<SmartAlbumProgressVO | null>(null)
 const result = ref<SmartAlbumProgressVO | null>(null)
@@ -286,7 +317,7 @@ onMounted(async () => {
     embeddingModels.value = models
     const firstModel = models[0]
     if (firstModel) {
-      form.model_name = firstModel
+      form.model_name = firstModel.model_name
     }
   } catch (err) {
     console.error('获取嵌入模型列表失败', err)

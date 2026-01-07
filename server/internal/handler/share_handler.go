@@ -100,6 +100,42 @@ func (h *ShareHandler) Delete(c *gin.Context) {
 	utils.SuccessWithMessage(c, "删除成功", nil)
 }
 
+// Update 更新分享
+//
+//	@Summary		更新分享
+//	@Description	更新分享的过期时间
+//	@Tags			分享管理
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		int									true	"分享ID"
+//	@Param			request	body		service.UpdateShareRequest			true	"更新分享请求"
+//	@Success		200		{object}	utils.Response{data=model.Share}	"更新成功"
+//	@Failure		400		{object}	utils.Response					"无效的参数"
+//	@Failure		500		{object}	utils.Response					"更新失败"
+//	@Router			/api/shares/{id} [put]
+func (h *ShareHandler) Update(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.BadRequest(c, "无效的分享ID")
+		return
+	}
+
+	var req service.UpdateShareRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数: "+err.Error())
+		return
+	}
+
+	share, err := h.service.UpdateShare(c.Request.Context(), id, &req)
+	if err != nil {
+		logger.Error("更新分享失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "更新成功", share)
+}
+
 // GetPublicInfo 获取分享公开信息（不需要密码）
 //
 //	@Summary		获取分享公开信息

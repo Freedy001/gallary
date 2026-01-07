@@ -43,13 +43,10 @@ type AIService interface {
 
 	// 搜索
 	// 图片搜索（以图搜图，支持图片+文本混合查询）
-	SemanticSearchWithinIDs(ctx context.Context, imageData []byte, text string, modelName string, candidateIDs []int64, limit int) ([]*model.Image, error)
+	SemanticSearchWithinIDs(ctx context.Context, imageData []byte, text string, modelId string, candidateIDs []int64, limit int) ([]*model.Image, error)
 
-	// 获取可用的嵌入模型列表
-	GetEmbeddingModels(ctx context.Context) ([]string, error)
-
-	// 获取支持 ChatCompletion 的模型列表
-	GetChatCompletionModels(ctx context.Context) ([]string, error)
+	// 获取可用的嵌入模型列表（包含模型名称和供应商ID）
+	GetEmbeddingModels(ctx context.Context) ([]*model.EmbeddingModelInfo, error)
 
 	// 优化提示词
 	OptimizePrompt(ctx context.Context, query string) (string, error)
@@ -454,7 +451,7 @@ func (s *aiService) processQueue(ctx context.Context, queue *model.AIQueue) {
 		return
 	}
 
-	// 验证 ModelName 可以获取 client
+	// 验证 ModelId 可以获取 client
 	_, err = s.loadBalancer.GetClientByName(queue.ModelName)
 	if err != nil {
 		logger.Error("获取模型客户端失败", zap.String("model_name", queue.ModelName), zap.Error(err))
@@ -505,20 +502,20 @@ func (s *aiService) processQueue(ctx context.Context, queue *model.AIQueue) {
 // ================== 语义搜索 ==================
 
 // ImageSearchWithinIDs 通过图片（可选文本）进行语义搜索
-func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byte, text string, modelName string, candidateIDs []int64, limit int) ([]*model.Image, error) {
+func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byte, text string, modelId string, candidateIDs []int64, limit int) ([]*model.Image, error) {
 	if candidateIDs != nil && len(candidateIDs) == 0 {
 		return []*model.Image{}, nil
 	}
 
-	// 通过 ModelName 获取 client（支持负载均衡）
-	client, err := s.loadBalancer.GetClientByName(modelName)
+	// 通过 ModelId 获取 client（支持负载均衡）
+	client, err := s.loadBalancer.GetClientByID(modelId)
 	if err != nil {
 		return nil, err
 	}
 
 	embeddingClient, ok := client.(llms.EmbeddingClient)
 	if !ok {
-		return nil, fmt.Errorf("模型%s不是向量模型", modelName)
+		return nil, fmt.Errorf("模型%s不是向量模型", modelId)
 	}
 
 	// 获取查询向量（图片+文本混合）
@@ -527,8 +524,8 @@ func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byt
 		return nil, fmt.Errorf("生成查询向量失败: %v", err)
 	}
 
-	// 在指定ID范围内执行向量搜索（使用 modelItem.ModelName 作为内部标识）
-	results, err := s.embeddingRepo.VectorSearchWithinIDs(ctx, modelName, queryEmbedding, candidateIDs, limit)
+	// 在指定ID范围内执行向量搜索（使用 modelItem.ModelId 作为内部标识）
+	results, err := s.embeddingRepo.VectorSearchWithinIDs(ctx, modelId, queryEmbedding, candidateIDs, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -581,15 +578,16 @@ func (s *aiService) notifyStatusChange(ctx context.Context) {
 	}
 }
 
-// GetEmbeddingModels 获取可用的嵌入模型列表
-func (s *aiService) GetEmbeddingModels(_ context.Context) ([]string, error) {
-	models, err := s.loadBalancer.GetAllEmbeddingModels()
+// GetEmbeddingModels 获取可用的嵌入模型列表（包含模型名称和供应商ID）
+func (s *aiService) GetEmbeddingModels(_ context.Context) ([]*model.EmbeddingModelInfo, error) {
+	models, err := s.loadBalancer.GetAllEmbeddingModelsWithProvider()
 	if err != nil {
 		return models, err
 	}
 
+	// 将默认搜索模型排到第一位
 	for i, m := range models {
-		if m == internal.PlatConfig.GlobalConfig.DefaultSearchModelId {
+		if m.ToModelId() == model.CopositModelId(internal.PlatConfig.GlobalConfig.DefaultSearchModelId) {
 			temp := models[i]
 			models[i] = models[0]
 			models[0] = temp
@@ -597,12 +595,7 @@ func (s *aiService) GetEmbeddingModels(_ context.Context) ([]string, error) {
 		}
 	}
 
-	return s.loadBalancer.GetAllEmbeddingModels()
-}
-
-// GetChatCompletionModels 获取支持 ChatCompletion 的模型列表
-func (s *aiService) GetChatCompletionModels(_ context.Context) ([]string, error) {
-	return s.loadBalancer.GetAllChatCompletionModels()
+	return models, nil
 }
 
 // OptimizePrompt 优化提示词

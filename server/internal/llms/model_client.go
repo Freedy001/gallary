@@ -108,15 +108,15 @@ type ClusterItem struct {
 
 // CreateModelClient 根据配置创建模型客户端
 // provider: 提供商配置
-// modelItem: 具体的模型项（包含 ApiModelName 和 ModelName）
+// modelItem: 具体的模型项（包含 ApiModelName 和 ModelId）
 func CreateModelClient(provider *model.ModelConfig, modelItem *model.ModelItem, httpClient *http.Client, manager *storage.StorageManager) ModelClient {
 	switch provider.Provider {
 	case model.SelfHosted:
 		return newSelfHostedClient(provider, modelItem, manager)
 	case model.OpenAI:
-		return NewOpenAIClient(provider, modelItem, httpClient)
+		return newOpenAIClient(provider, modelItem, httpClient)
 	case model.AliyunMultimodalEmbedding:
-		return NewAliyunMultimodalEmbedding(provider, modelItem, httpClient, manager)
+		return newAliyunMultimodalEmbedding(provider, modelItem, httpClient, manager)
 	default:
 		return nil
 	}

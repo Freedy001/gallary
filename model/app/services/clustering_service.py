@@ -3,9 +3,8 @@
 将 HDBSCAN 聚类业务逻辑从路由层分离
 """
 
-import asyncio
 from dataclasses import dataclass
-from typing import Callable, Awaitable, Optional
+from typing import Callable, Optional
 
 import numpy as np
 
@@ -59,8 +58,8 @@ class ProgressInfo:
     message: str
 
 
-# 进度回调类型
-ProgressCallback = Callable[[ProgressInfo], Awaitable[None]]
+# 进度回调类型（同步）
+ProgressCallback = Callable[[ProgressInfo], None]
 
 
 class ClusteringService:
@@ -70,7 +69,7 @@ class ClusteringService:
         if hdbscan is None:
             raise ImportError("缺少依赖: hdbscan，请运行 pip install hdbscan")
 
-    async def cluster(
+    def cluster(
         self,
         embeddings: list[list[float]],
         image_ids: list[int],
@@ -92,11 +91,11 @@ class ClusteringService:
             聚类结果
         """
         # 辅助函数：报告进度
-        async def report(status: str, progress: int, message: str):
+        def report(status: str, progress: int, message: str):
             if progress_callback:
-                await progress_callback(ProgressInfo(status, progress, message))
+                progress_callback(ProgressInfo(status, progress, message))
 
-        await report("clustering", 10, "开始聚类计算")
+        report("clustering", 10, "开始聚类计算")
 
         embeddings_arr = np.array(embeddings, dtype=np.float32)
 
@@ -109,7 +108,7 @@ class ClusteringService:
         # 可选 UMAP 降维
         umap_actually_used = False
         if umap_params.enabled and len(embeddings_arr) > umap_params.n_components:
-            await report("clustering", 30, "UMAP 降维中")
+            report("clustering", 30, "UMAP 降维中")
             try:
                 import umap
                 reducer = umap.UMAP(
@@ -119,14 +118,13 @@ class ClusteringService:
                     metric="cosine",
                     random_state=42
                 )
-                loop = asyncio.get_event_loop()
-                embeddings_arr = await loop.run_in_executor(None, reducer.fit_transform, embeddings_arr)
+                embeddings_arr = reducer.fit_transform(embeddings_arr)
                 umap_actually_used = True
             except ImportError:
                 pass
 
         # HDBSCAN 聚类
-        await report("clustering", 60, "HDBSCAN 聚类中")
+        report("clustering", 60, "HDBSCAN 聚类中")
 
         min_cluster_size = min(hdbscan_params.min_cluster_size, len(embeddings_arr) // 2)
         min_cluster_size = max(min_cluster_size, 2)
@@ -145,12 +143,11 @@ class ClusteringService:
             metric=metric
         )
 
-        loop = asyncio.get_event_loop()
-        labels = await loop.run_in_executor(None, clusterer.fit_predict, embeddings_arr)
+        labels = clusterer.fit_predict(embeddings_arr)
         probabilities = clusterer.probabilities_
 
         # 整理结果
-        await report("clustering", 90, "整理聚类结果")
+        report("clustering", 90, "整理聚类结果")
 
         clusters_dict: dict[int, list[tuple[int, float]]] = {}
         noise_ids: list[int] = []
@@ -193,8 +190,6 @@ class ClusteringService:
                 "min_dist": umap_params.min_dist,
             } if umap_actually_used else None
         }
-
-        await report("completed", 100, "聚类完成")
 
         return ClusteringResult(
             clusters=cluster_results,

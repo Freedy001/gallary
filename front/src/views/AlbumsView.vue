@@ -65,13 +65,13 @@
         <SelectionBox :style="selectionBoxStyle" />
 
         <!-- 加载状态 -->
-        <div v-if="albumStore.loading && albumStore.albums.length === 0" class="flex h-64 items-center justify-center">
+        <div v-if="albumStore.loading && albumStore.total === 0" class="flex h-64 items-center justify-center">
           <div
               class="h-8 w-8 animate-spin rounded-full border-2 border-primary-500 border-t-transparent shadow-[0_0_15px_rgba(139,92,246,0.5)]"></div>
         </div>
 
         <!-- 空状态 -->
-        <div v-else-if="albumStore.albums.length === 0"
+        <div v-else-if="!albumStore.loading && albumStore.total === 0"
              class="flex h-64 flex-col items-center justify-center text-gray-500">
           <div class="rounded-2xl bg-white/5 p-4 mb-4 ring-1 ring-white/10">
             <RectangleStackIcon class="h-8 w-8 text-gray-400"/>
@@ -88,22 +88,26 @@
         <!-- 相册列表 -->
         <div v-else class="space-y-8">
           <!-- 普通相册区域 -->
-          <div v-if="normalAlbums.length > 0">
+          <div v-if="albumStore.normalSection.total > 0">
             <div class="flex items-center gap-3 mb-4">
               <RectangleStackIcon class="h-5 w-5 text-gray-400"/>
               <h2 class="text-sm font-medium text-gray-300">普通相册</h2>
-              <span class="text-xs text-gray-500">({{ normalAlbums.length }})</span>
+              <span class="text-xs text-gray-500">({{ albumStore.normalSection.total }})</span>
             </div>
             <div :class="gridClass">
               <div
-                  v-for="(album, index) in normalAlbums"
-                  :key="album.id"
-                  :ref="(el) => setItemRef(index, el as HTMLElement)"
+                  v-for="(album, index) in albumStore.normalSection.albums"
+                  :key="album?.id ?? `normal-${index}`"
+                  :ref="(el) => setItemRef('normal', index, el as HTMLElement)"
+                  :data-index="index"
+                  :data-section="'normal'"
                   class="group cursor-pointer"
-                  @click="handleAlbumClick($event, album)"
-                  @contextmenu.prevent="handleContextMenu($event, album)"
+                  @click="album && handleAlbumClick($event, album)"
+                  @contextmenu.prevent="album && handleContextMenu($event, album)"
               >
+                <AlbumCardSkeleton v-if="!album" />
                 <AlbumCard
+                    v-else
                     :album="album"
                     :selected="albumStore.selectedAlbums.has(album.id)"
                     @menu="handleContextMenu($event, album)"
@@ -113,25 +117,29 @@
           </div>
 
           <!-- 分隔线 -->
-          <div v-if="normalAlbums.length > 0 && smartAlbums.length > 0" class="border-t border-white/10"></div>
+          <div v-if="albumStore.normalSection.total > 0 && albumStore.smartSection.total > 0" class="border-t border-white/10"></div>
 
           <!-- 智能相册区域 -->
-          <div v-if="smartAlbums.length > 0">
+          <div v-if="albumStore.smartSection.total > 0">
             <div class="flex items-center gap-3 mb-4">
               <SparklesIcon class="h-5 w-5 text-purple-400"/>
               <h2 class="text-sm font-medium text-gray-300">智能相册</h2>
-              <span class="text-xs text-gray-500">({{ smartAlbums.length }})</span>
+              <span class="text-xs text-gray-500">({{ albumStore.smartSection.total }})</span>
             </div>
             <div :class="gridClass">
               <div
-                  v-for="(album, index) in smartAlbums"
-                  :key="album.id"
-                  :ref="(el) => setItemRef(normalAlbums.length + index, el as HTMLElement)"
+                  v-for="(album, index) in albumStore.smartSection.albums"
+                  :key="album?.id ?? `smart-${index}`"
+                  :ref="(el) => setItemRef('smart', index, el as HTMLElement)"
+                  :data-index="index"
+                  :data-section="'smart'"
                   class="group cursor-pointer"
-                  @click="handleAlbumClick($event, album)"
-                  @contextmenu.prevent="handleContextMenu($event, album)"
+                  @click="album && handleAlbumClick($event, album)"
+                  @contextmenu.prevent="album && handleContextMenu($event, album)"
               >
+                <AlbumCardSkeleton v-if="!album" />
                 <AlbumCard
+                    v-else
                     :album="album"
                     :selected="albumStore.selectedAlbums.has(album.id)"
                     :show-probability="true"
@@ -169,6 +177,9 @@
         <ContextMenuItem :icon="PencilIcon" @click="handleEditAlbum">
           编辑相册
         </ContextMenuItem>
+        <ContextMenuItem :icon="DocumentDuplicateIcon" @click="handleCopyAlbum">
+          复制相册
+        </ContextMenuItem>
 
         <!-- 封面管理 -->
         <div class="h-px bg-white/10 my-1"></div>
@@ -193,7 +204,7 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, onUnmounted, ref} from 'vue'
+import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {useAlbumStore} from '@/stores/album'
 import {useDialogStore} from '@/stores/dialog'
@@ -206,10 +217,19 @@ import EditAlbumModal from '@/components/album/EditAlbumModal.vue'
 import GenerateSmartAlbumModal from '@/components/album/GenerateSmartAlbumModal.vue'
 import SelectModelModal from '@/components/album/SelectModelModal.vue'
 import AlbumCard from '@/components/album/AlbumCard.vue'
+import AlbumCardSkeleton from '@/components/album/AlbumCardSkeleton.vue'
 import SelectionBox from '@/components/common/SelectionBox.vue'
 import ContextMenu from '@/components/common/ContextMenu.vue'
 import ContextMenuItem from '@/components/common/ContextMenuItem.vue'
-import {PencilIcon, PlusIcon, RectangleStackIcon, SparklesIcon, TrashIcon, XMarkIcon} from '@heroicons/vue/24/outline'
+import {
+  DocumentDuplicateIcon,
+  PencilIcon,
+  PlusIcon,
+  RectangleStackIcon,
+  SparklesIcon,
+  TrashIcon,
+  XMarkIcon
+} from '@heroicons/vue/24/outline'
 import type {Album} from '@/types'
 
 const router = useRouter()
@@ -228,31 +248,44 @@ const editingAlbum = ref<Album | null>(null)
 const contextMenu = ref({ visible: false, x: 0, y: 0 })
 const selectedAlbumForMenu = ref<Album | null>(null)
 
-// 分离普通相册和智能相册
-const normalAlbums = computed(() => albumStore.albums.filter(a => !a.is_smart_album))
-const smartAlbums = computed(() => albumStore.albums.filter(a => a.is_smart_album))
+// 合并所有已加载相册用于框选
+const allLoadedAlbums = computed(() => [
+  ...albumStore.normalSection.albums.filter((a): a is Album => a !== null),
+  ...albumStore.smartSection.albums.filter((a): a is Album => a !== null)
+])
 
-// 合并所有相册用于框选索引
-const allAlbums = computed(() => [...normalAlbums.value, ...smartAlbums.value])
+// 分区元素引用
+const normalItemRefs = new Map<number, HTMLElement>()
+const smartItemRefs = new Map<number, HTMLElement>()
 
-// 框选功能
-const itemRefs = new Map<number, HTMLElement>()
+// 合并 refs 用于框选
+const combinedItemRefs = new Map<number, HTMLElement>()
 
-function setItemRef(index: number, el: HTMLElement | null) {
+function setItemRef(section: 'normal' | 'smart', index: number, el: HTMLElement | null) {
+  const refs = section === 'normal' ? normalItemRefs : smartItemRefs
   if (el) {
-    itemRefs.set(index, el)
+    refs.set(index, el)
+    // 为框选功能维护合并的 refs
+    const combinedIndex = section === 'normal' ? index : albumStore.normalSection.albums.length + index
+    combinedItemRefs.set(combinedIndex, el)
+    // 观察元素
+    if (observer.value) observer.value.observe(el)
   } else {
-    itemRefs.delete(index)
+    refs.delete(index)
   }
 }
 
+// IntersectionObserver
+const observer = ref<IntersectionObserver | null>(null)
+const pageSize = 20
+
 const { selectionBoxStyle, handleMouseDown, isDragOperation } = useGenericBoxSelection<Album>({
   containerRef,
-  itemRefs,
-  getItems: () => allAlbums.value,
+  itemRefs: combinedItemRefs,
+  getItems: () => allLoadedAlbums.value,
   getItemId: (album) => album.id,
   toggleSelection: (id) => albumStore.toggleAlbumSelection(id),
-  useScroll: false
+  useScroll: true
 })
 
 // 根据密度动态计算网格列数
@@ -341,7 +374,7 @@ async function handleDeleteAlbum() {
 
   const confirmed = await dialogStore.confirm({
     title: '确认删除',
-    message: `确定要删除相册"${album.name}"吗？相册内的照片不会被删除。`,
+    message: `确定要删除相册“${album.name}”吗？相册内的照片不会被删除。`,
     type: 'warning',
     confirmText: '删除'
   })
@@ -353,6 +386,27 @@ async function handleDeleteAlbum() {
   } catch (err) {
     console.error('删除相册失败', err)
     dialogStore.alert({ title: '错误', message: '删除失败', type: 'error' })
+  }
+}
+
+// 复制相册
+async function handleCopyAlbum() {
+  contextMenu.value.visible = false
+  const album = selectedAlbumForMenu.value
+  if (!album) return
+
+  try {
+    await albumApi.copy(album.id)
+    dialogStore.notify({
+      title: '成功',
+      message: `已复制相册“${album.name}”`,
+      type: 'success'
+    })
+    // 刷新相册列表
+    await albumStore.fetchAlbums()
+  } catch (err) {
+    console.error('复制相册失败', err)
+    dialogStore.alert({ title: '错误', message: '复制相册失败', type: 'error' })
   }
 }
 
@@ -435,9 +489,56 @@ async function handleModelSelected(modelName: string) {
 // 清理选中状态当离开页面
 onUnmounted(() => {
   albumStore.clearSelection()
+  observer.value?.disconnect()
+  observer.value = null
 })
 
 onMounted(() => {
-  albumStore.fetchAlbums()
+  // 初始化 IntersectionObserver
+  observer.value = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return
+
+        const el = entry.target as HTMLElement
+        const section = el.dataset.section as 'normal' | 'smart'
+        const index = Number(el.dataset.index)
+
+        if (!section || isNaN(index)) return
+
+        // 检查该位置是否已加载
+        const sectionData = section === 'normal'
+          ? albumStore.normalSection
+          : albumStore.smartSection
+
+        if (!sectionData.albums[index]) {
+          const page = Math.floor(index / pageSize) + 1
+          albumStore.fetchSection(section, page, pageSize)
+        }
+      })
+    },
+    {
+      rootMargin: '200px 0px',
+      threshold: 0
+    }
+  )
+
+  // 观察所有已存在的元素
+  normalItemRefs.forEach(el => observer.value?.observe(el))
+  smartItemRefs.forEach(el => observer.value?.observe(el))
+
+  // 初始加载
+  albumStore.refreshAlbums(pageSize)
 })
+
+// 监听分区数组长度变化，观察新元素
+watch(
+  () => [albumStore.normalSection.albums.length, albumStore.smartSection.albums.length],
+  () => {
+    nextTick(() => {
+      normalItemRefs.forEach(el => observer.value?.observe(el))
+      smartItemRefs.forEach(el => observer.value?.observe(el))
+    })
+  }
+)
 </script>

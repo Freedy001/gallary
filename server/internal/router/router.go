@@ -90,6 +90,7 @@ func SetupRouter(
 		{
 			shares.POST("", shareHandler.Create)
 			shares.GET("", shareHandler.List)
+			shares.PUT("/:id", shareHandler.Update)
 			shares.DELETE("/:id", shareHandler.Delete)
 		}
 
@@ -101,6 +102,7 @@ func SetupRouter(
 			albums.POST("", albumHandler.Create)
 			albums.PUT("/:id", albumHandler.Update)
 			albums.DELETE("/:id", albumHandler.Delete)
+			albums.POST("/:id/copy", albumHandler.Copy)
 			albums.GET("/:id/images", albumHandler.GetImages)
 			albums.POST("/:id/images", albumHandler.AddImages)
 			albums.DELETE("/:id/images", albumHandler.RemoveImages)
@@ -118,6 +120,7 @@ func SetupRouter(
 			settings.PUT("/password", settingHandler.UpdatePassword)
 			settings.PUT("/cleanup", settingHandler.UpdateCleanup)
 			settings.PUT("/ai", settingHandler.UpdateAI)
+			settings.GET("/configed-default-model/:type", settingHandler.HasConfigDefaultModel)
 
 			// 存储配置 CRUD
 			settings.POST("/storage", settingHandler.AddStorage)                                 // 添加存储配置
@@ -158,9 +161,6 @@ func SetupRouter(
 
 			// 获取可用的嵌入模型列表
 			ai.GET("/embedding-models", aiHandler.GetEmbeddingModels)
-
-			// 获取支持 ChatCompletion 的模型列表
-			ai.GET("/chat-completion-models", aiHandler.GetChatCompletionModels)
 
 			// 提示词优化
 			ai.POST("/optimize-prompt", aiHandler.OptimizePrompt)

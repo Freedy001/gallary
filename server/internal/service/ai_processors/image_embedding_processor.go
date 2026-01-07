@@ -70,7 +70,7 @@ func (p *ImageEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64,
 		return err
 	}
 
-	// 4. 保存嵌入向量（使用 modelItem.ModelName 作为内部标识）
+	// 4. 保存嵌入向量（使用 modelItem.ModelId 作为内部标识）
 	embeddingModel := &model.ImageEmbedding{
 		ImageID:   image.ID,
 		ModelID:   string(model.CreateModelId(config.ID, modelItem.ApiModelName)),
