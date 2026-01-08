@@ -52,14 +52,15 @@ export interface SearchParams {
   end_date?: string
   location?: string
   tags?: number[]  // 标签ID数组
-  semantic_query?: string
-  model_name?: string
+  model_id?: string
   page?: number
   page_size?: number
   // 经纬度搜索
   latitude?: number
   longitude?: number
   radius?: number // 搜索半径（公里），默认 10km
+  // 以图搜图
+  file?: File
 }
 
 export interface MetadataUpdate {

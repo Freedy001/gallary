@@ -18,8 +18,8 @@ type AlbumService interface {
 	Create(ctx context.Context, req *CreateAlbumRequest) (*model.AlbumVO, error)
 	List(ctx context.Context, page, pageSize int, isSmart *bool) ([]*model.AlbumVO, int64, error)
 	Update(ctx context.Context, id int64, req *UpdateAlbumRequest) (*model.AlbumVO, error)
-	Delete(ctx context.Context, id int64) error
-	Copy(ctx context.Context, id int64) (*model.AlbumVO, error)
+	BatchDelete(ctx context.Context, ids []int64) error
+	BatchCopy(ctx context.Context, ids []int64) ([]*model.AlbumVO, error)
 
 	// 图片管理
 	GetImages(ctx context.Context, albumID int64, page, pageSize int) ([]*model.ImageVO, int64, error)
@@ -172,13 +172,20 @@ func (s *albumService) Update(ctx context.Context, id int64, req *UpdateAlbumReq
 	return s.toVO(ctx, album)
 }
 
-// Delete 删除相册
-func (s *albumService) Delete(ctx context.Context, id int64) error {
-	return s.repo.Delete(ctx, id)
+// BatchDelete 批量删除相册
+func (s *albumService) BatchDelete(ctx context.Context, ids []int64) error {
+	for _, id := range ids {
+		if err := s.repo.Delete(ctx, id); err != nil {
+			logger.Warn("批量删除相册失败", zap.Int64("id", id), zap.Error(err))
+			return fmt.Errorf("删除相册 %d 失败: %w", id, err)
+		}
+	}
+	logger.Info("批量删除相册成功", zap.Int("count", len(ids)))
+	return nil
 }
 
-// Copy 复制相册
-func (s *albumService) Copy(ctx context.Context, id int64) (*model.AlbumVO, error) {
+// copy 复制单个相册（内部方法）
+func (s *albumService) copy(ctx context.Context, id int64) (*model.AlbumVO, error) {
 	// 获取原相册
 	originalAlbum, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -209,6 +216,21 @@ func (s *albumService) Copy(ctx context.Context, id int64) (*model.AlbumVO, erro
 
 	logger.Info("复制相册成功", zap.Int64("original_id", id), zap.Int64("new_id", newAlbum.ID))
 	return s.toVO(ctx, newAlbum)
+}
+
+// BatchCopy 批量复制相册
+func (s *albumService) BatchCopy(ctx context.Context, ids []int64) ([]*model.AlbumVO, error) {
+	results := make([]*model.AlbumVO, 0, len(ids))
+	for _, id := range ids {
+		vo, err := s.copy(ctx, id)
+		if err != nil {
+			logger.Warn("批量复制相册失败", zap.Int64("id", id), zap.Error(err))
+			return results, fmt.Errorf("复制相册 %d 失败: %w", id, err)
+		}
+		results = append(results, vo)
+	}
+	logger.Info("批量复制相册成功", zap.Int("count", len(ids)))
+	return results, nil
 }
 
 // GetImages 获取相册内图片

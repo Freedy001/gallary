@@ -331,12 +331,10 @@
 
 <script setup lang="ts">
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
-import {useRouter} from 'vue-router'
 import {useUIStore} from '@/stores/ui'
-import {useImageStore} from '@/stores/image'
-import LocationPicker from '@/components/common/LocationPicker.vue'
-import type {SelectOption} from '@/components/common/BaseSelect.vue'
-import BaseSelect from '@/components/common/BaseSelect.vue'
+import LocationPicker from '@/components/widgets/common/LocationPicker.vue'
+import type {SelectOption} from '@/components/widgets/common/BaseSelect.vue'
+import BaseSelect from '@/components/widgets/common/BaseSelect.vue'
 import {
   BoltIcon,
   CalendarIcon,
@@ -353,16 +351,16 @@ import type {EmbeddingModelInfo} from '@/types/ai'
 import {imageApi} from "@/api/image.ts"
 import {aiApi} from "@/api/ai.ts"
 import {useDialogStore} from "@/stores/dialog.ts";
-import Tooltip from "@/components/common/Tooltip.vue";
+import Tooltip from "@/components/widgets/common/Tooltip.vue";
+import {useSearchStore} from "@/stores/search.ts";
 
-const router = useRouter()
 const uiStore = useUIStore()
-const imageStore = useImageStore()
 const dialogStore = useDialogStore();
 
 const searchInputRef = ref<HTMLInputElement>()
 const isSemanticSearch = ref(false)
 const semanticSearching = ref(false)
+const imageStore = useSearchStore();
 
 // 图片搜索相关状态
 const searchImage = ref<File | null>(null)
@@ -468,7 +466,7 @@ let first = true
 // 加载 ChatCompletion 模型列表
 async function loadChatCompletionModels() {
   try {
-    const response = await aiApi.getChatCompletionModels("DefaultPromptOptimizeModelId")
+    const response = await aiApi.configedDefaultModel("DefaultPromptOptimizeModelId")
     hasChatCompletionModel.value = response.data
   } catch (error) {
     dialogStore.notify({
@@ -516,10 +514,8 @@ async function loadEmbeddingModels() {
       embeddingModels.value = response.data
       // 自动选择第一个模型
       if (response.data.length > 0) {
-        const firstModel = response.data[0]
-        if (!selectedEmbeddingModel.value && firstModel) {
-          selectedEmbeddingModel.value = firstModel.model_name
-        }
+        const modelId = embeddingModelOptions.value[0]?.value;
+        if (typeof modelId === 'string') selectedEmbeddingModel.value = modelId
         // 如果存在嵌入模型，默认开启语义搜索
         if (first && !isSemanticSearch.value) {
           isSemanticSearch.value = true
@@ -659,59 +655,35 @@ async function executeSearch() {
 
   // 如果启用语义搜索，添加语义搜索参数（与传统筛选条件组合使用）
   if (isSemanticSearch.value) {
-    searchParams.model_name = selectedEmbeddingModel.value
+    searchParams.model_id = selectedEmbeddingModel.value
     searchParams.page_size = 50
   }
 
-  // 执行统一搜索
-  try {
-    semanticSearching.value = true
-
-    // 更新搜索状态
-    imageStore.isSearchMode = true
-
-    // 构建搜索描述
-    const parts = []
-    if (searchImage.value) {
-      parts.push('📷 以图搜图')
-    }
-    if (imageStore.searchFilters.keyword) {
-      parts.push(isSemanticSearch.value ? `AI: "${imageStore.searchFilters.keyword.trim()}"` : `关键词: "${imageStore.searchFilters.keyword}"`)
-    }
-    if (imageStore.searchFilters.start_date || imageStore.searchFilters.end_date) {
-      parts.push(`日期: ${imageStore.searchFilters.start_date || '开始'} - ${imageStore.searchFilters.end_date || '至今'}`)
-    }
-    if (imageStore.searchFilters.location) parts.push(`位置: "${imageStore.searchFilters.location}"`)
-    if (imageStore.searchFilters.tags && imageStore.searchFilters.tags.length > 0) {
-      const tagNames = selectedTags.value.map(t => t.name).join(', ')
-      parts.push(`标签: "${tagNames}"`)
-    }
-    imageStore.searchDescription = parts.join(' | ') || '搜索结果'
-
-    // 获取搜索图片（如果有）
-    const imageFile = searchImage.value || undefined
-
-    await imageStore.refreshImages(async (page, size) => {
-      searchParams.page = page
-      searchParams.page_size = size
-      return (await imageApi.search(searchParams, imageFile)).data
-    })
-
-    close()
-
-    // 确保在画廊页面
-    if (router.currentRoute.value.path !== '/gallery') {
-      await router.push('/gallery')
-    }
-  } catch (error) {
-    dialogStore.notify({
-      title: '失败',
-      message: (error as Error).message,
-      type: 'error'
-    })
-  } finally {
-    semanticSearching.value = false
+  // 如果有搜索图片，添加到参数中
+  if (searchImage.value) {
+    searchParams.file = searchImage.value
   }
+
+  // 构建搜索描述
+  const parts = []
+  if (searchImage.value) {
+    parts.push('📷 以图搜图')
+  }
+  if (imageStore.searchFilters.keyword) {
+    parts.push(isSemanticSearch.value ? `AI: "${imageStore.searchFilters.keyword.trim()}"` : `关键词: "${imageStore.searchFilters.keyword}"`)
+  }
+  if (imageStore.searchFilters.start_date || imageStore.searchFilters.end_date) {
+    parts.push(`日期: ${imageStore.searchFilters.start_date || '开始'} - ${imageStore.searchFilters.end_date || '至今'}`)
+  }
+  if (imageStore.searchFilters.location) parts.push(`位置: "${imageStore.searchFilters.location}"`)
+  if (imageStore.searchFilters.tags && imageStore.searchFilters.tags.length > 0) {
+    const tagNames = selectedTags.value.map(t => t.name).join(', ')
+    parts.push(`标签: "${tagNames}"`)
+  }
+
+  // 通过 emit 通知父组件执行搜索
+  imageStore.callSubscribers(searchParams, parts.join(' | ') || '搜索结果')
+  close()
 }
 
 

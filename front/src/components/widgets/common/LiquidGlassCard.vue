@@ -87,8 +87,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted, watch } from 'vue'
-import { useRafFn } from '@vueuse/core'
+import {onUnmounted, ref, watch} from 'vue'
+import {useRafFn} from '@vueuse/core'
 
 const props = withDefaults(defineProps<{
   targetElement?: HTMLElement | null

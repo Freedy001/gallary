@@ -32,13 +32,13 @@ export const albumApi = {
   },
 
   // 删除相册
-  delete(id: number) {
-    return http.delete(`/api/albums/${id}`)
+  delete(ids: number[]) {
+    return http.post('/api/albums/batch-delete', { ids })
   },
 
   // 复制相册
-  copy(id: number) {
-    return http.post<Album>(`/api/albums/${id}/copy`)
+  copy(ids: number[]) {
+    return http.post<Album[]>('/api/albums/batch-copy', { ids })
   },
 
   // 获取相册内图片
@@ -73,5 +73,10 @@ export const albumApi = {
   // 设置平均向量封面
   setAverageCover(id: number, modelName: string) {
     return http.put(`/api/albums/${id}/cover/average`, { model_name: modelName })
+  },
+
+  // AI 命名相册（添加到队列）
+  aiNaming(ids: number[]) {
+    return http.post<{ added: number }>('/api/albums/ai-naming', { ids })
   },
 }

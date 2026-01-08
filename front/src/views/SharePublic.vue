@@ -1,7 +1,7 @@
 <template>
   <div class="h-screen overflow-hidden bg-transparent">
     <!-- 验证加载中 -->
-    <div v-if="imageStore.loading" class="flex h-screen items-center justify-center">
+    <div v-if="loading" class="flex h-screen items-center justify-center">
       <div class="text-center">
         <div
             class="inline-block h-12 w-12 animate-spin rounded-full border-2 border-white/5 border-t-primary-500 shadow-[0_0_15px_rgba(139,92,246,0.3)]"></div>
@@ -64,16 +64,16 @@
           <!-- 选择模式下的头部 -->
           <div v-if="uiStore.isSelectionMode" class="flex items-center justify-between min-h-[2.5rem] sm:min-h-[3rem]">
             <div class="flex items-center gap-4">
-              <span class="text-base sm:text-lg font-medium text-white">已选择 {{ imageStore.selectedCount }} 项</span>
+              <span class="text-base sm:text-lg font-medium text-white">已选择 {{ imageList.selectedCount.value }} 项</span>
             </div>
             <div class="flex items-center gap-2 sm:gap-3">
               <button
-                  v-if="imageStore.selectedCount > 0"
+                  v-if="imageList.selectedCount.value > 0"
                   @click="downloadSelected"
                   class="glass-button-primary flex items-center gap-2 !py-1.5 !px-3 !text-sm sm:!py-3 sm:!px-6 sm:!text-base"
               >
                 <ArrowDownTrayIcon class="h-4 w-4"/>
-                <span class="hidden sm:inline">下载 ({{ imageStore.selectedCount }})</span>
+                <span class="hidden sm:inline">下载 ({{ imageList.selectedCount.value }})</span>
               </button>
               <button
                   @click="exitSelectionMode"
@@ -92,7 +92,7 @@
                 <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-white/50">
                   <span class="flex items-center gap-1.5">
                     <PhotoIcon class="h-3.5 w-3.5 sm:h-4 sm:w-4"/>
-                    {{ imageStore.total }} 张照片
+                    {{ imageList.total.value }} 张照片
                   </span>
                   <span class="flex items-center gap-1.5">
                     <ClockIcon class="h-3.5 w-3.5 sm:h-4 sm:w-4"/>
@@ -139,7 +139,7 @@
           <SelectionBox :style="selectionBoxStyle"/>
 
           <!-- 空状态 -->
-          <div v-if="!imageStore.images || imageStore.images.length === 0"
+          <div v-if="imageList.images.value.length === 0"
                class="flex min-h-[50vh] flex-col items-center justify-center py-12">
             <div class="text-center relative z-10">
               <div class="relative group mx-auto mb-8">
@@ -165,7 +165,7 @@
 
           <div v-else class="grid grid-cols-2 gap-1.5 sm:gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             <div
-                v-for="(image, index) in imageStore.images"
+                v-for="(image, index) in imageList.images.value"
                 :key="image?.id || index"
                 :ref="(el) => setItemRef(el as HTMLElement | null, index)"
                 :data-index="index"
@@ -176,7 +176,7 @@
               <div
                   class="absolute inset-0 rounded-lg sm:rounded-2xl ring-1 ring-inset ring-white/10 pointer-events-none transition-opacity group-hover:ring-white/20"
                   :class="[
-                    uiStore.isSelectionMode && image && imageStore.selectedImages.has(image.id)
+                    uiStore.isSelectionMode && image && imageList.selectedImages.value.has(image.id)
                       ? 'ring-2 ring-primary-500 bg-primary-500/10'
                       : ''
                   ]"></div>
@@ -195,12 +195,12 @@
                   <div
                       class="flex h-6 w-6 items-center justify-center rounded-full border-2 transition-colors"
                       :class="[
-                      imageStore.selectedImages.has(image.id)
+                      imageList.selectedImages.value.has(image.id)
                         ? 'border-primary-500 bg-primary-500 text-white'
                         : 'border-white/70 bg-black/40'
                     ]"
                   >
-                    <CheckIcon v-if="imageStore.selectedImages.has(image.id)" class="h-4 w-4"/>
+                    <CheckIcon v-if="imageList.selectedImages.value.has(image.id)" class="h-4 w-4"/>
                   </div>
                 </div>
                 <!-- 悬浮遮罩 -->
@@ -251,7 +251,10 @@
     </div>
 
     <!-- 复用 ImageViewer 组件 -->
-    <ImageViewer/>
+    <ImageViewer
+        v-model:index="imageList.viewerIndex.value"
+        :images="imageList.images.value"
+    />
   </div>
 </template>
 
@@ -260,8 +263,8 @@ import {nextTick, onMounted, onUnmounted, ref} from 'vue'
 import {useRoute} from 'vue-router'
 import {shareApi} from '@/api/share'
 import {imageApi} from '@/api/image'
-import {useImageStore} from '@/stores/image'
 import {useUIStore} from '@/stores/ui'
+import {useImageList} from '@/composables/useImageList'
 import ImageViewer from '@/components/gallery/ImageViewer.vue'
 import {
   ArchiveBoxArrowDownIcon,
@@ -274,22 +277,39 @@ import {
   PhotoIcon,
   SparklesIcon
 } from '@heroicons/vue/24/outline'
-import ContextMenu from '@/components/common/ContextMenu.vue'
-import ContextMenuItem from '@/components/common/ContextMenuItem.vue'
-import SelectionBox from '@/components/common/SelectionBox.vue'
-import type {Image, SharePublicInfo} from '@/types'
+import ContextMenu from '@/components/widgets/common/ContextMenu.vue'
+import ContextMenuItem from '@/components/widgets/common/ContextMenuItem.vue'
+import SelectionBox from '@/components/widgets/common/SelectionBox.vue'
+import type {Image, Pageable, SharePublicInfo} from '@/types'
 import {useGenericBoxSelection} from '@/composables/useGenericBoxSelection'
 
 const route = useRoute()
-const imageStore = useImageStore()
 const uiStore = useUIStore()
 const code = route.params.code as string
+
+// 分享页面固定 6 列，计算合适的分页大小
+// 6 列 * 5 行/屏 * 2 屏 = 60
+const pageSize = 60
+
+// 使用本地 imageList 替代全局 imageStore
+let currentFetcher: (page: number, size: number) => Promise<Pageable<Image>> = async () => ({
+  list: [],
+  total: 0,
+  page: 1,
+  page_size: pageSize
+})
+
+const imageList = useImageList({
+  originFetcher: (page, size) => currentFetcher(page, size),
+  pageSize
+})
 
 const verifying = ref(false)
 const needPassword = ref(false)
 const shareInfo = ref<SharePublicInfo | null>(null)
 const password = ref('')
 const error = ref('')
+const loading = ref(false)
 
 // Context Menu State
 const contextMenu = ref({visible: false, x: 0, y: 0})
@@ -299,7 +319,6 @@ const contextMenuSingleTarget = ref<{ image: Image, index: number } | null>(null
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const observer = ref<IntersectionObserver | null>(null)
 const itemRefs = new Map<number, HTMLElement>()
-const loadingPages = new Set<number>()
 
 const {
   selectionBoxStyle,
@@ -308,21 +327,17 @@ const {
 } = useGenericBoxSelection<Image | null>({
   containerRef: scrollContainerRef,
   itemRefs,
-  getItems: () => imageStore.images,
+  getItems: () => imageList.images.value,
   getItemId: (item) => item?.id ?? -1,
   toggleSelection: (id) => {
     if (id === -1) return
-    imageStore.toggleSelect(id)
+    imageList.toggleSelect(id)
   },
   onSelectionEnd: () => {
     uiStore.setSelectionMode(true)
   },
   useScroll: true
 })
-
-// 分享页面固定 6 列，计算合适的分页大小
-// 6 列 * 5 行/屏 * 2 屏 = 60
-const pageSize = 60
 
 // 选择模式相关方法
 function enterSelectionMode() {
@@ -331,7 +346,7 @@ function enterSelectionMode() {
 
 function exitSelectionMode() {
   uiStore.setSelectionMode(false)
-  imageStore.clearSelection()
+  imageList.clearSelection()
 }
 
 function handleImageClick(image: Image | null, index: number) {
@@ -339,10 +354,13 @@ function handleImageClick(image: Image | null, index: number) {
   // 如果是拖拽操作结束，不处理点击
   if (isDragOperation()) return
 
+  // 如果右键菜单正在显示，只关闭菜单
+  if (contextMenu.value.visible) return
+
   if (uiStore.isSelectionMode) {
-    imageStore.toggleSelect(image.id)
+    imageList.toggleSelect(image.id)
   } else {
-    imageStore.viewerIndex = index
+    imageList.viewerIndex.value = index
   }
 }
 
@@ -365,10 +383,10 @@ function initObserver() {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const index = Number((entry.target as HTMLElement).dataset.index)
-            if (!isNaN(index) && !imageStore.images[index]) {
+            if (!isNaN(index) && !imageList.images.value[index]) {
               // 计算需要加载的页码
               const page = Math.floor(index / pageSize) + 1
-              imageStore.fetchImages(page, pageSize)
+              imageList.fetchImages(page, pageSize)
             }
           }
         })
@@ -398,8 +416,8 @@ const handleImageContextMenu = (e: MouseEvent, image: Image, index: number) => {
     y: e.clientY
   }
 
-  if (imageStore.selectedImages.has(image.id)) {
-    contextMenuTargetIds.value = Array.from(imageStore.selectedImages)
+  if (imageList.selectedImages.value.has(image.id)) {
+    contextMenuTargetIds.value = Array.from(imageList.selectedImages.value)
   } else {
     // If right clicking an unselected image, select it properly
     contextMenuTargetIds.value = [image.id]
@@ -412,7 +430,7 @@ const handleImageContextMenu = (e: MouseEvent, image: Image, index: number) => {
 
 const handleContextMenuView = () => {
   if (contextMenuSingleTarget.value) {
-    imageStore.viewerIndex = contextMenuSingleTarget.value.index
+    imageList.viewerIndex.value = contextMenuSingleTarget.value.index
   }
   contextMenu.value.visible = false
 }
@@ -422,7 +440,7 @@ const handleContextMenuDownload = () => {
   for (let targetId of contextMenuTargetIds.value) {
     if (targetId === undefined) continue;
 
-    const img = imageStore.images.find(i => i?.id === targetId)
+    const img = imageList.images.value.find(i => i?.id === targetId)
     if (img) imageApi.download(targetId, img.original_name)
   }
 }
@@ -433,11 +451,11 @@ const handleContextMenuZipDownload = () => {
 }
 
 async function downloadSelected() {
-  if (imageStore.selectedCount === 0) return
-  for (let targetId of imageStore.selectedImages) {
+  if (imageList.selectedCount.value === 0) return
+  for (let targetId of imageList.selectedImages.value) {
     if (!targetId) continue;
 
-    const img = imageStore.images.find(i => i?.id === targetId)
+    const img = imageList.images.value.find(i => i?.id === targetId)
     if (img) await imageApi.download(targetId, img.original_name)
   }
 }
@@ -481,10 +499,10 @@ async function checkShare() {
 
 async function initFetcher() {
   // 设置 fetcher 并加载图片
-  await imageStore.refreshImages(
-      async (page, size) => (await shareApi.getImages(code, password.value, page, size)).data,
-      pageSize
-  )
+  loading.value = true
+  currentFetcher = async (page, size) => (await shareApi.getImages(code, password.value, page, size)).data
+  await imageList.refresh(pageSize)
+  loading.value = false
   await nextTick()
   initObserver()
 }
@@ -500,8 +518,7 @@ onUnmounted(() => {
     observer.value = null
   }
   itemRefs.clear()
-  loadingPages.clear()
-  imageStore.clearSelection()
+  imageList.clearSelection()
 })
 </script>
 

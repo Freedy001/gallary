@@ -36,17 +36,18 @@ type GenerateSmartAlbumsRequest struct {
 
 // SmartAlbumTask 内存中的智能相册任务
 type SmartAlbumTask struct {
-	ID           int64
-	Status       string // pending, collecting, clustering, creating, completed, failed
-	Progress     int
-	Message      string
-	Error        *string
-	AlbumIDs     []int64
-	ClusterCount int
-	NoiseCount   int
-	TotalImages  int
-	Params       *GenerateSmartAlbumsRequest
-	CreatedAt    time.Time
+	ID            int64
+	Status        string // pending, collecting, clustering, creating, completed, failed
+	Progress      int
+	Message       string
+	Error         *string
+	AlbumIDs      []int64
+	ClusterCount  int
+	NoiseCount    int
+	NoiseImageIDs []int64
+	TotalImages   int
+	Params        *GenerateSmartAlbumsRequest
+	CreatedAt     time.Time
 }
 
 type smartAlbumService struct {
@@ -181,6 +182,7 @@ func (s *smartAlbumService) processTask(ctx context.Context, task *SmartAlbumTas
 
 	task.ClusterCount = result.NClusters
 	task.NoiseCount = len(result.NoiseImageIDs)
+	task.NoiseImageIDs = result.NoiseImageIDs
 	s.updateTask(task, "clustering", 80, fmt.Sprintf("聚类完成，发现 %d 个分组", result.NClusters))
 
 	// 3. 创建相册 (80-100%)
@@ -416,14 +418,15 @@ func (s *smartAlbumService) notifyProgress(task *SmartAlbumTask) {
 // taskToVO 将任务转换为 VO
 func (s *smartAlbumService) taskToVO(task *SmartAlbumTask) *model.SmartAlbumProgressVO {
 	return &model.SmartAlbumProgressVO{
-		TaskID:       task.ID,
-		Status:       task.Status,
-		Progress:     task.Progress,
-		Message:      task.Message,
-		Error:        task.Error,
-		AlbumIDs:     task.AlbumIDs,
-		ClusterCount: task.ClusterCount,
-		NoiseCount:   task.NoiseCount,
-		TotalImages:  task.TotalImages,
+		TaskID:        task.ID,
+		Status:        task.Status,
+		Progress:      task.Progress,
+		Message:       task.Message,
+		Error:         task.Error,
+		AlbumIDs:      task.AlbumIDs,
+		ClusterCount:  task.ClusterCount,
+		NoiseCount:    task.NoiseCount,
+		NoiseImageIDs: task.NoiseImageIDs,
+		TotalImages:   task.TotalImages,
 	}
 }

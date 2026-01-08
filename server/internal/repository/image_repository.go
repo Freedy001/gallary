@@ -146,7 +146,7 @@ func (r *imageRepository) List(ctx context.Context, page, pageSize int) ([]*mode
 
 	// 查询数据
 	err := database.GetDB(ctx).WithContext(ctx).
-		Preload("Tags").
+		Preload("Tags", "type != ?", model.TagTypeAlbum).
 		Order("taken_at DESC, created_at DESC").
 		Limit(pageSize).
 		Offset(offset).

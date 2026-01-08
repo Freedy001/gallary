@@ -5,8 +5,6 @@ import (
 	"gallary/server/internal"
 	"gallary/server/internal/model"
 	"gallary/server/internal/storage"
-	"maps"
-	"slices"
 	"time"
 
 	"net/http"
@@ -98,52 +96,33 @@ func (lb *ModelLoadBalancer) selectProviderByRoundRobin(modelName string, provid
 	return providers[idx]
 }
 
-func (lb *ModelLoadBalancer) GetAllEmbeddingModels() ([]string, error) {
-	return lb.selectModel(func(client ModelClient) bool { _, ok := client.(EmbeddingClient); return ok })
+func (lb *ModelLoadBalancer) GetAllgModelName() ([]string, error) {
+	models, err := lb.selectModelWithProvider(func(client ModelClient) bool { return true })
+	if err != nil {
+		return make([]string, 0), err
+	}
+	return lo.Uniq(lo.Map(models, func(item *model.ProviderAndModelName, index int) string { return item.ModelName })), nil
 }
 
 // GetAllEmbeddingModelsWithProvider 获取所有嵌入模型信息（包含供应商ID）
-func (lb *ModelLoadBalancer) GetAllEmbeddingModelsWithProvider() ([]*model.EmbeddingModelInfo, error) {
+func (lb *ModelLoadBalancer) GetAllEmbeddingModelsWithProvider() ([]*model.ProviderAndModelName, error) {
 	return lb.selectModelWithProvider(func(client ModelClient) bool { _, ok := client.(EmbeddingClient); return ok })
 }
 
 // selectModelWithProvider 选择支持指定功能的模型，返回模型名称和供应商ID
-func (lb *ModelLoadBalancer) selectModelWithProvider(support func(client ModelClient) bool) ([]*model.EmbeddingModelInfo, error) {
-	return lo.FlatMap(internal.PlatConfig.AIPo.GetEnabled(), func(provider *model.ModelConfig, index int) []*model.EmbeddingModelInfo {
-		return lo.FilterMap(provider.Models, func(modelItem *model.ModelItem, index int) (*model.EmbeddingModelInfo, bool) {
+func (lb *ModelLoadBalancer) selectModelWithProvider(support func(client ModelClient) bool) ([]*model.ProviderAndModelName, error) {
+	return lo.FlatMap(internal.PlatConfig.AIPo.GetEnabled(), func(provider *model.ModelConfig, index int) []*model.ProviderAndModelName {
+		return lo.FilterMap(provider.Models, func(modelItem *model.ModelItem, index int) (*model.ProviderAndModelName, bool) {
 			client := lb.getOrCreateClient(provider, modelItem)
 			if client == nil || !support(client) {
 				return nil, false
 			}
-			return &model.EmbeddingModelInfo{
+			return &model.ProviderAndModelName{
 				ModelName:  modelItem.ModelName,
 				ProviderID: provider.ID,
 			}, true
 		})
 	}), nil
-}
-
-func (lb *ModelLoadBalancer) selectModel(support func(client ModelClient) bool) ([]string, error) {
-	config := internal.PlatConfig.AIPo
-	// 获取所有启用的模型
-	enabledModels := config.GetEnabled()
-	if len(enabledModels) == 0 {
-		return nil, nil
-	}
-
-	modelNames := make(map[string]bool)
-	for _, provider := range enabledModels {
-		for i := range provider.Models {
-			modelItem := provider.Models[i]
-			client := lb.getOrCreateClient(provider, modelItem)
-			if client == nil || !support(client) {
-				continue
-			}
-			modelNames[modelItem.ModelName] = true
-		}
-	}
-
-	return slices.Collect(maps.Keys(modelNames)), nil
 }
 
 // GetClientByName 根据模型名称获取客户端（支持负载均衡）
@@ -170,7 +149,7 @@ func (lb *ModelLoadBalancer) GetClientByName(modelName string) (ModelClient, err
 
 // GetClientByID 根据组合模型ID获取客户端
 // compositeId 格式: "providerId,apiModelName" 或 "providerId"
-func (lb *ModelLoadBalancer) GetClientByID(compositeId string) (ModelClient, error) {
+func (lb *ModelLoadBalancer) GetClientByID(compositeId model.CopositModelId) (ModelClient, error) {
 	config := internal.PlatConfig.AIPo
 
 	// 查找模型配置

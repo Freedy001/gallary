@@ -11,7 +11,7 @@
             </div>
             <div class="flex flex-col">
               <h1 class="text-lg font-medium text-white leading-tight">最近删除</h1>
-              <span class="text-xs text-gray-500 font-mono mt-0.5">{{ imageStore.total }} 项资源</span>
+              <span class="text-xs text-gray-500 font-mono mt-0.5">{{ totalCount }} 项资源</span>
             </div>
           </div>
 
@@ -19,7 +19,7 @@
           <div v-else class="flex items-center gap-6 animate-fade-in">
             <div class="flex items-center gap-3 rounded-lg bg-primary-500/10 px-4 py-2 border border-primary-500/20">
               <span class="h-2 w-2 rounded-full bg-primary-500 animate-pulse"></span>
-              <span class="text-lg font-medium text-white">已选择 {{ imageStore.selectedCount }} 项</span>
+              <span class="text-lg font-medium text-white">已选择 {{ selectedCount }} 项</span>
             </div>
             <button
                 @click="toggleSelectAll"
@@ -35,21 +35,21 @@
           <!-- 选择模式下的操作按钮 -->
           <div v-if="uiStore.isSelectionMode" class="flex items-center gap-4">
             <button
-                :disabled="imageStore.selectedCount === 0"
+                :disabled="selectedCount === 0"
                 @click="handleBatchRestore"
                 class="flex items-center gap-2 rounded-xl bg-blue-500/10 border border-blue-500/20 px-5 py-2.5 text-sm font-medium text-blue-400 transition-all hover:bg-blue-500/20 hover:shadow-[0_0_15px_rgba(59,130,246,0.2)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
             >
               <ArrowUturnLeftIcon class="h-4 w-4" />
-              <span>恢复 ({{ imageStore.selectedCount }})</span>
+              <span>恢复 ({{ selectedCount }})</span>
             </button>
 
             <button
-                :disabled="imageStore.selectedCount === 0"
+                :disabled="selectedCount === 0"
                 @click="handleBatchPermanentDelete"
                 class="flex items-center gap-2 rounded-xl bg-red-500/10 border border-red-500/20 px-5 py-2.5 text-sm font-medium text-red-400 transition-all hover:bg-red-500/20 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
             >
               <XMarkIcon class="h-4 w-4" />
-              <span>彻底删除 ({{ imageStore.selectedCount }})</span>
+              <span>彻底删除 ({{ selectedCount }})</span>
             </button>
 
             <button
@@ -61,7 +61,7 @@
           </div>
 
           <!-- 正常模式下的操作按钮 -->
-          <div v-else-if="validImagesCount > 0" class="flex items-center gap-4">
+          <div v-else-if="totalCount > 0" class="flex items-center gap-4">
             <button
                 @click="enterSelectionMode"
                 class="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
@@ -74,14 +74,19 @@
     </template>
 
     <template #default>
-      <ImageGrid mode="trash" />
+      <ImageGrid
+        ref="imageGridRef"
+        :fetcher="trashFetcher"
+        mode="trash"
+        @update:total="totalCount = $event"
+        @update:selected-count="selectedCount = $event"
+      />
     </template>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, onUnmounted} from 'vue'
-import {useImageStore} from '@/stores/image'
+import {computed, ref} from 'vue'
 import {useUIStore} from '@/stores/ui'
 import {useDialogStore} from '@/stores/dialog'
 import {imageApi} from '@/api/image'
@@ -90,27 +95,34 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import ImageGrid from '@/components/gallery/ImageGrid.vue'
 import {ArrowUturnLeftIcon, TrashIcon, XMarkIcon,} from '@heroicons/vue/24/outline'
 
-const imageStore = useImageStore()
 const uiStore = useUIStore()
 const dialogStore = useDialogStore()
+const imageGridRef = ref<InstanceType<typeof ImageGrid> | null>(null)
 
-// 计算有效的（已加载的）图片数量
-const validImagesCount = computed(() => {
-  return imageStore.images.filter(img => img !== null).length
-})
+// 本地状态
+const totalCount = ref(0)
+const selectedCount = ref(0)
+
+// 回收站数据获取函数
+const trashFetcher = async (page: number, size: number): Promise<Pageable<Image>> => {
+  return (await imageApi.getDeletedList(page, size)).data
+}
 
 const isAllSelected = computed(() => {
-  const validImages = imageStore.images.filter(img => img !== null) as Image[]
-  return validImages.length > 0 && validImages.every(img => imageStore.selectedImages.has(img.id))
+  const grid = imageGridRef.value
+  if (!grid) return false
+  const validImages = grid.images.filter(img => img !== null) as Image[]
+  return validImages.length > 0 && selectedCount.value === validImages.length
 })
 
 function toggleSelectAll() {
+  const grid = imageGridRef.value
+  if (!grid) return
+
   if (isAllSelected.value) {
-    imageStore.clearSelection()
+    grid.clearSelection()
   } else {
-    imageStore.images.forEach(img => {
-      if (img) imageStore.selectImage(img.id)
-    })
+    grid.selectAll()
   }
 }
 
@@ -120,22 +132,20 @@ function enterSelectionMode() {
 
 function exitSelectionMode() {
   uiStore.setSelectionMode(false)
-  imageStore.clearSelection()
+  imageGridRef.value?.clearSelection()
 }
 
 async function handleBatchRestore() {
-  const ids = Array.from(imageStore.selectedImages)
-  if (ids.length === 0) return
+  const ids = imageGridRef.value?.selectedIds
+  if (!ids || ids.length === 0) return
 
   try {
     await imageApi.restoreImages(ids)
-    // 从列表移除已恢复的图片
-    imageStore.images = imageStore.images.filter(img => img === null || !imageStore.selectedImages.has(img.id))
-    imageStore.total -= ids.length
-    imageStore.clearSelection()
+    // 刷新列表
+    await imageGridRef.value?.refresh()
 
     // 如果没有图片了，退出选择模式
-    if (imageStore.total === 0) {
+    if (totalCount.value === 0) {
       uiStore.setSelectionMode(false)
     }
   } catch (err) {
@@ -144,8 +154,8 @@ async function handleBatchRestore() {
 }
 
 async function handleBatchPermanentDelete() {
-  const ids = Array.from(imageStore.selectedImages)
-  if (ids.length === 0) return
+  const ids = imageGridRef.value?.selectedIds
+  if (!ids || ids.length === 0) return
 
   const confirmed = await dialogStore.confirm({
     title: '确认彻底删除',
@@ -158,39 +168,15 @@ async function handleBatchPermanentDelete() {
 
   try {
     await imageApi.permanentlyDelete(ids)
-    // 从列表移除已删除的图片
-    imageStore.images = imageStore.images.filter(img => img === null || !imageStore.selectedImages.has(img.id))
-    imageStore.total -= ids.length
-    imageStore.clearSelection()
+    // 刷新列表
+    await imageGridRef.value?.refresh()
 
     // 如果没有图片了，退出选择模式
-    if (imageStore.total === 0) {
+    if (totalCount.value === 0) {
       uiStore.setSelectionMode(false)
     }
   } catch (err) {
     console.error('批量彻底删除图片失败', err)
   }
 }
-
-onMounted(async () => {
-  // 使用 refreshImages 切换数据源为回收站 API
-  const pageSize = uiStore.imagePageSize
-  await imageStore.refreshImages(async (page: number, size: number): Promise<Pageable<Image>> => {
-    return (await imageApi.getDeletedList(page, size)).data
-  }, pageSize)
-
-  // 加载第一页
-  if (imageStore.images.length === 0 && imageStore.total > 0) {
-     // Note: refreshImages already calls fetchImages(1) internally
-  } else if (imageStore.images.length === 0) {
-      // refreshImages calls fetchImages(1) which populates total.
-      // If total was 0 initially, fine.
-  }
-})
-
-onUnmounted(() => {
-  imageStore.clearSelection()
-  uiStore.setSelectionMode(false)
-  // 注意：不需要重置 fetcher，因为 Gallery.vue 会在挂载时重置它
-})
 </script>

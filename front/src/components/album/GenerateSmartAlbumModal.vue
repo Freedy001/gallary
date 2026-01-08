@@ -4,11 +4,11 @@
       <!-- 模型选择 -->
       <div>
         <BaseSelect
-          v-model="form.model_name"
-          :options="embeddingModelOptions"
-          :disabled="taskInProgress"
-          label="嵌入模型"
-          placeholder="请选择模型"
+            v-model="form.model_name"
+            :disabled="smartAlbumStore.taskInProgress"
+            :options="embeddingModelOptions"
+            label="嵌入模型"
+            placeholder="请选择模型"
         />
         <p class="text-xs text-gray-500 mt-1">选择用于获取图片向量的嵌入模型</p>
       </div>
@@ -16,23 +16,23 @@
       <!-- 算法选择 -->
       <div>
         <BaseSelect
-          v-model="form.algorithm"
-          :options="algorithmOptions"
-          :disabled="taskInProgress"
-          label="聚类算法"
+            v-model="form.algorithm"
+            :disabled="smartAlbumStore.taskInProgress"
+            :options="algorithmOptions"
+            label="聚类算法"
         />
       </div>
 
       <!-- 高级配置折叠 -->
       <div class="border border-white/10 rounded-xl overflow-hidden">
         <button
-          :disabled="taskInProgress"
-          class="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-300 hover:bg-white/5 transition-colors disabled:opacity-50"
-          type="button"
-          @click="showAdvanced = !showAdvanced"
+            :disabled="smartAlbumStore.taskInProgress"
+            class="w-full flex items-center justify-between px-4 py-3 text-sm text-gray-300 hover:bg-white/5 transition-colors disabled:opacity-50"
+            type="button"
+            @click="showAdvanced = !showAdvanced"
         >
           <span>高级配置</span>
-          <ChevronDownIcon :class="['h-4 w-4 transition-transform', showAdvanced ? 'rotate-180' : '']" />
+          <ChevronDownIcon :class="['h-4 w-4 transition-transform', showAdvanced ? 'rotate-180' : '']"/>
         </button>
 
         <div v-show="showAdvanced" class="px-4 pb-4 space-y-4 border-t border-white/10 pt-4">
@@ -42,11 +42,11 @@
               <label class="block text-xs text-gray-400 mb-1">最小聚类大小</label>
               <div class="relative">
                 <input
-                  v-model.number="form.hdbscan_params.min_cluster_size"
-                  :disabled="taskInProgress"
-                  class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none disabled:opacity-50 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  min="2"
-                  type="number"
+                    v-model.number="form.hdbscan_params.min_cluster_size"
+                    :disabled="smartAlbumStore.taskInProgress"
+                    class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none disabled:opacity-50 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    min="2"
+                    type="number"
                 />
               </div>
               <p class="text-[10px] text-gray-500 mt-0.5">每个相册最少包含的图片数</p>
@@ -55,33 +55,33 @@
               <label class="block text-xs text-gray-400 mb-1">最小样本数</label>
               <div class="relative">
                 <input
-                  v-model.number="form.hdbscan_params.min_samples"
-                  :disabled="taskInProgress"
-                  class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none placeholder-gray-600 disabled:opacity-50 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  min="1"
-                  placeholder="默认等于最小聚类大小"
-                  type="number"
+                    v-model.number="form.hdbscan_params.min_samples"
+                    :disabled="smartAlbumStore.taskInProgress"
+                    class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none placeholder-gray-600 disabled:opacity-50 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    min="1"
+                    placeholder="默认等于最小聚类大小"
+                    type="number"
                 />
               </div>
               <p class="text-[10px] text-gray-500 mt-0.5">核心点判定标准</p>
             </div>
             <div>
               <BaseSelect
-                v-model="form.hdbscan_params.cluster_selection_method"
-                :options="clusterSelectionMethodOptions"
-                :disabled="taskInProgress"
-                button-class="!py-2 !text-sm"
-                label="聚类选择方法"
+                  v-model="form.hdbscan_params.cluster_selection_method"
+                  :disabled="smartAlbumStore.taskInProgress"
+                  :options="clusterSelectionMethodOptions"
+                  button-class="!py-2 !text-sm"
+                  label="聚类选择方法"
               />
               <p class="text-[10px] text-gray-500 mt-0.5">EOM 更稳定，Leaf 产生更多小聚类</p>
             </div>
             <div>
               <BaseSelect
-                v-model="form.hdbscan_params.metric"
-                :options="metricOptions"
-                :disabled="taskInProgress"
-                button-class="!py-2 !text-sm"
-                label="距离度量"
+                  v-model="form.hdbscan_params.metric"
+                  :disabled="smartAlbumStore.taskInProgress"
+                  :options="metricOptions"
+                  button-class="!py-2 !text-sm"
+                  label="距离度量"
               />
             </div>
           </div>
@@ -94,23 +94,23 @@
                 <p class="text-[10px] text-gray-500 mt-0.5">图片数量较多时建议启用，可提高聚类效果</p>
               </div>
               <button
-                :aria-checked="form.hdbscan_params.umap_enabled"
-                :class="[
+                  :aria-checked="form.hdbscan_params.umap_enabled"
+                  :class="[
                   form.hdbscan_params.umap_enabled ? 'bg-primary-500' : 'bg-white/10',
-                  taskInProgress ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
-                  'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none'
+                  smartAlbumStore.taskInProgress ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none'
                 ]"
-                role="switch"
-                :disabled="taskInProgress"
-                type="button"
-                @click="!taskInProgress && (form.hdbscan_params.umap_enabled = !form.hdbscan_params.umap_enabled)"
+                  :disabled="smartAlbumStore.taskInProgress"
+                  role="switch"
+                  type="button"
+                  @click="!smartAlbumStore.taskInProgress && (form.hdbscan_params.umap_enabled = !form.hdbscan_params.umap_enabled)"
               >
                 <span
-                  :class="[
+                    :class="[
                     form.hdbscan_params.umap_enabled ? 'translate-x-5' : 'translate-x-0',
                     'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out'
                   ]"
-                  aria-hidden="true"
+                    aria-hidden="true"
                 />
               </button>
             </div>
@@ -118,99 +118,47 @@
         </div>
       </div>
 
-      <!-- 任务进度 -->
-      <div v-if="currentProgress" class="p-4 bg-white/5 border border-white/10 rounded-xl space-y-3">
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-gray-300">{{ getStatusText(currentProgress.status) }}</span>
-          <span class="text-xs text-gray-500">{{ currentProgress.progress }}%</span>
-        </div>
-        <div class="w-full bg-white/10 rounded-full h-2 overflow-hidden">
-          <div
-            :class="getProgressBarClass(currentProgress.status)"
-            :style="{ width: `${currentProgress.progress}%` }"
-            class="h-full rounded-full transition-all duration-300"
-          />
-        </div>
-        <p class="text-xs text-gray-400">{{ currentProgress.message }}</p>
-      </div>
-
       <!-- 操作按钮 -->
       <div class="flex justify-end gap-3 pt-4">
         <button
-          class="px-5 py-2.5 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
-          type="button"
-          @click="handleClose"
+            class="px-5 py-2.5 rounded-xl border border-white/10 text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
+            type="button"
+            @click="handleClose"
         >
-          {{ taskInProgress ? '后台运行' : '取消' }}
+          取消
         </button>
         <button
-          :disabled="loading || !form.model_name || taskInProgress"
-          class="px-5 py-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-600 shadow-[0_0_15px_rgba(139,92,246,0.3)] hover:shadow-[0_0_20px_rgba(139,92,246,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-          type="submit"
+            :disabled="loading || !form.model_name || smartAlbumStore.taskInProgress"
+            class="px-5 py-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-600 shadow-glow hover:shadow-[0_0_20px_rgba(139,92,246,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+            type="submit"
         >
           {{ loading ? '提交中...' : '生成智能相册' }}
         </button>
       </div>
     </form>
-
-    <!-- 生成结果 -->
-    <div v-if="result" class="mt-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
-      <div class="flex items-center gap-2 text-green-400 mb-2">
-        <CheckCircleIcon class="h-5 w-5" />
-        <span class="font-medium">生成完成</span>
-      </div>
-      <div class="text-sm text-gray-300 space-y-1">
-        <p>已创建 <span class="text-white font-semibold text-base tabular-nums">{{ result.cluster_count }}</span> 个智能相册</p>
-        <p>共处理 <span class="text-white font-semibold text-base tabular-nums">{{ result.total_images }}</span> 张图片</p>
-        <p v-if="result.noise_count && result.noise_count > 0" class="text-gray-400">
-          <span class="tabular-nums">{{ result.noise_count }}</span> 张图片未被归类（噪声点）
-        </p>
-      </div>
-    </div>
-
-    <!-- 错误提示 -->
-    <div v-if="errorMessage" class="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-      <div class="flex items-center gap-2 text-red-400 mb-2">
-        <XCircleIcon class="h-5 w-5" />
-        <span class="font-medium">生成失败</span>
-      </div>
-      <p class="text-sm text-gray-300">{{ errorMessage }}</p>
-    </div>
   </Modal>
 </template>
 
 <script lang="ts" setup>
-import {computed, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
-import {CheckCircleIcon, ChevronDownIcon, XCircleIcon} from '@heroicons/vue/24/outline'
-import Modal from '@/components/common/Modal.vue'
-import type {SelectOption} from '@/components/common/BaseSelect.vue'
-import BaseSelect from '@/components/common/BaseSelect.vue'
+import {computed, onMounted, reactive, ref, watch} from 'vue'
+import {ChevronDownIcon} from '@heroicons/vue/24/outline'
+import Modal from '@/components/widgets/common/Modal.vue'
+import type {SelectOption} from '@/components/widgets/common/BaseSelect.vue'
+import BaseSelect from '@/components/widgets/common/BaseSelect.vue'
 import {aiApi} from '@/api/ai'
 import type {EmbeddingModelInfo} from '@/types/ai'
-import type {GenerateSmartAlbumsRequest, SmartAlbumTaskStatus} from '@/types/smart-album'
+import type {GenerateSmartAlbumsRequest, SmartAlbumProgressVO} from '@/types/smart-album'
 import {DEFAULT_HDBSCAN_PARAMS} from '@/types/smart-album'
 import {useDialogStore} from '@/stores/dialog'
-import wsService from '@/services/websocket'
+import {useSmartAlbumStore} from '@/stores/smartAlbum'
 
-// 智能相册进度 VO（与后端一致）
-interface SmartAlbumProgressVO {
-  task_id: number
-  status: SmartAlbumTaskStatus
-  progress: number
-  message: string
-  error?: string
-  album_ids?: number[]
-  cluster_count?: number
-  noise_count?: number
-  total_images?: number
-}
-
-const isOpen = defineModel<boolean>({ default: false })
+const isOpen = defineModel<boolean>({default: false})
 const emit = defineEmits<{
   generated: []
 }>()
 
 const dialogStore = useDialogStore()
+const smartAlbumStore = useSmartAlbumStore()
 
 const loading = ref(false)
 const showAdvanced = ref(false)
@@ -218,95 +166,44 @@ const embeddingModels = ref<EmbeddingModelInfo[]>([])
 
 // 计算选项列表（使用模型名称作为显示和值）
 const embeddingModelOptions = computed<SelectOption[]>(() =>
-  embeddingModels.value.map(model => ({ label: model.model_name, value: model.model_name }))
+    embeddingModels.value.map(model => ({label: model.model_name, value: model.model_name}))
 )
 
 const algorithmOptions: SelectOption[] = [
-  { label: 'HDBSCAN（密度聚类）', value: 'hdbscan' }
+  {label: 'HDBSCAN（密度聚类）', value: 'hdbscan'}
 ]
 
 const clusterSelectionMethodOptions: SelectOption[] = [
-  { label: 'EOM（推荐）', value: 'eom' },
-  { label: 'Leaf', value: 'leaf' }
+  {label: 'EOM（推荐）', value: 'eom'},
+  {label: 'Leaf', value: 'leaf'}
 ]
 
 const metricOptions: SelectOption[] = [
-  { label: '余弦相似度（推荐）', value: 'cosine' },
-  { label: '欧氏距离', value: 'euclidean' }
+  {label: '余弦相似度（推荐）', value: 'cosine'},
+  {label: '欧氏距离', value: 'euclidean'}
 ]
-const currentTaskId = ref<number | null>(null)
-const currentProgress = ref<SmartAlbumProgressVO | null>(null)
-const result = ref<SmartAlbumProgressVO | null>(null)
-const errorMessage = ref<string | null>(null)
-let unsubscribe: (() => void) | null = null
 
 const form = reactive<GenerateSmartAlbumsRequest>({
   model_name: '',
   algorithm: 'hdbscan',
-  hdbscan_params: { ...DEFAULT_HDBSCAN_PARAMS }
+  hdbscan_params: {...DEFAULT_HDBSCAN_PARAMS}
 })
-
-const taskInProgress = computed(() => {
-  if (!currentProgress.value) return false
-  const status = currentProgress.value.status
-  return status === 'pending' || status === 'collecting' || status === 'clustering' || status === 'creating'
-})
-
-function getStatusText(status: SmartAlbumTaskStatus): string {
-  const statusMap: Record<SmartAlbumTaskStatus, string> = {
-    pending: '等待处理',
-    collecting: '收集向量数据',
-    clustering: '执行聚类分析',
-    creating: '创建相册',
-    completed: '已完成',
-    failed: '失败'
-  }
-  return statusMap[status] || status
-}
-
-function getProgressBarClass(status: SmartAlbumTaskStatus): string {
-  if (status === 'failed') return 'bg-red-500'
-  if (status === 'completed') return 'bg-green-500'
-  return 'bg-gradient-to-r from-purple-500 to-blue-500'
-}
-
-// 处理 WebSocket 进度消息
-function handleProgressMessage(data: SmartAlbumProgressVO) {
-  // 只处理当前任务的进度
-  if (currentTaskId.value && data.task_id === currentTaskId.value) {
-    currentProgress.value = data
-
-    if (data.status === 'completed') {
-      result.value = data
-      dialogStore.notify({
-        title: '成功',
-        message: `成功创建 ${data.cluster_count || 0} 个智能相册`,
-        type: 'success'
-      })
-      emit('generated')
-    } else if (data.status === 'failed') {
-      errorMessage.value = data.error || '任务执行失败'
-    }
-  }
-}
 
 // 打开弹窗时重置状态
 watch(isOpen, (val) => {
   if (val) {
-    result.value = null
-    errorMessage.value = null
-    currentProgress.value = null
-    currentTaskId.value = null
-    form.hdbscan_params = { ...DEFAULT_HDBSCAN_PARAMS }
-
-    // 订阅 WebSocket 消息
-    unsubscribe = wsService.subscribe<SmartAlbumProgressVO>('smart_album_progress', handleProgressMessage)
-  } else {
-    // 取消订阅
-    if (unsubscribe) {
-      unsubscribe()
-      unsubscribe = null
+    // 只有在没有进行中任务时才重置
+    if (!smartAlbumStore.taskInProgress) {
+      smartAlbumStore.resetState()
+      form.hdbscan_params = {...DEFAULT_HDBSCAN_PARAMS}
     }
+  }
+})
+
+// 监听结果，如果完成则触发事件
+watch(() => smartAlbumStore.result, (newResult) => {
+  if (newResult) {
+    emit('generated')
   }
 })
 
@@ -324,31 +221,25 @@ onMounted(async () => {
   }
 })
 
-onUnmounted(() => {
-  if (unsubscribe) {
-    unsubscribe()
-    unsubscribe = null
-  }
-})
-
 async function handleSubmit() {
-  if (!form.model_name || loading.value || taskInProgress.value) return
+  if (!form.model_name || loading.value || smartAlbumStore.taskInProgress) return
 
   try {
     loading.value = true
-    result.value = null
-    errorMessage.value = null
+    smartAlbumStore.resetState()
 
     const res = await aiApi.generateSmartAlbum(form)
     const taskVO = res.data as unknown as SmartAlbumProgressVO
-    currentTaskId.value = taskVO.task_id
-    currentProgress.value = taskVO
+    smartAlbumStore.setTaskId(taskVO.task_id)
 
     dialogStore.notify({
       title: '任务已提交',
       message: '智能相册生成任务已开始，进度将实时更新',
       type: 'info'
     })
+
+    // 提交成功后立即关闭弹窗
+    isOpen.value = false
   } catch (err: any) {
     console.error('提交任务失败', err)
     dialogStore.notify({

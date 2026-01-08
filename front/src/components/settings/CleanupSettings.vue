@@ -1,6 +1,6 @@
 <template>
   <div class="rounded-2xl bg-white/5 ring-1 ring-white/10 overflow-hidden">
-    <div class="border-b border-white/5 p-5 bg-white/[0.02]">
+    <div class="border-b border-white/5 p-5 bg-white/2">
       <h2 class="text-lg font-medium text-white">自动清理策略</h2>
       <p class="mt-1 text-sm text-gray-500">配置回收站图片的自动清理规则</p>
     </div>
@@ -36,30 +36,27 @@
           {{ days === 0 ? '已禁用自动清理' : `回收站中的图片将在 ${days} 天后自动永久删除` }}
         </p>
       </div>
-
-      <div class="pt-4">
-        <button
-            @click="handleSave"
-            :disabled="saving"
-            class="px-6 py-2.5 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 ring-1 ring-primary-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {{ saving ? '保存中...' : '保存清理策略' }}
-        </button>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { settingsApi, type CleanupConfig } from '@/api/settings'
-import { useDialogStore } from '@/stores/dialog'
+import {onMounted, ref, watch} from 'vue'
+import {type CleanupConfig, settingsApi} from '@/api/settings'
+import {useDialogStore} from '@/stores/dialog'
 
 const dialogStore = useDialogStore()
+
+// 定义 emits
+const emit = defineEmits<{
+  change: [hasChanges: boolean]
+  saving: [isSaving: boolean]
+}>()
 
 const loading = ref(true)
 const saving = ref(false)
 const days = ref(30)
+const originalDays = ref(30)
 
 async function loadSettings() {
   loading.value = true
@@ -68,6 +65,7 @@ async function loadSettings() {
     const data = resp.data
     if (data.trash_auto_delete_days !== undefined) {
       days.value = data.trash_auto_delete_days
+      originalDays.value = data.trash_auto_delete_days
     }
   } catch (error) {
     console.error('Failed to load cleanup settings:', error)
@@ -76,20 +74,45 @@ async function loadSettings() {
   }
 }
 
+// 监听days变化
+watch(days, (newValue) => {
+  emit('change', newValue !== originalDays.value)
+})
+
 async function handleSave() {
   saving.value = true
+  emit('saving', true)
   try {
     const config: CleanupConfig = {
       trash_auto_delete_days: days.value
     }
     await settingsApi.updateCleanup(config)
+    originalDays.value = days.value
+    emit('change', false)
     dialogStore.alert({ title: '成功', message: '清理策略更新成功', type: 'success' })
   } catch (error: any) {
     dialogStore.alert({ title: '错误', message: error.message || '更新清理策略失败', type: 'error' })
   } finally {
     saving.value = false
+    emit('saving', false)
   }
 }
+
+// 暴露 save 方法
+function save() {
+  return handleSave()
+}
+
+// 还原配置方法
+function restore() {
+  days.value = originalDays.value
+  emit('change', false)
+}
+
+defineExpose({
+  save,
+  restore
+})
 
 onMounted(() => {
   loadSettings()

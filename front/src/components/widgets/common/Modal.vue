@@ -2,44 +2,45 @@
   <Teleport to="body">
     <Transition name="modal-overlay">
       <div
-        v-if="modelValue"
-        class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-sm"
-        @mousedown.self="handleClose"
+          v-if="modelValue"
+          class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 backdrop-blur-sm"
+          @mousedown.self="handleClose"
       >
         <Transition name="modal-content" appear>
           <LiquidGlassCard
-            v-if="modelValue"
-            :class="[
+              v-if="modelValue"
+              :class="[
               'relative w-full mx-auto',
               sizeClasses,
             ]"
-            :hover-effect="false"
-            content-class="p-0"
-            @click.stop
+              :hover-effect="false"
+              content-class="p-0"
+              @click.stop
           >
             <!-- 头部 -->
-            <div v-if="title || $slots.header" class="flex items-center justify-between border-b border-white/10 px-6 py-4">
+            <div v-if="title || $slots.header"
+                 class="flex items-center justify-between border-b border-white/10 px-6 py-4">
               <slot name="header">
                 <h3 class="text-xl font-semibold text-white">{{ title }}</h3>
               </slot>
 
               <button
-                v-if="closable"
-                @click="handleClose"
-                class="rounded-lg p-1 text-white/50 hover:bg-white/10 hover:text-white transition-colors"
+                  v-if="closable"
+                  class="rounded-lg p-1 text-white/50 hover:bg-white/10 hover:text-white transition-colors"
+                  @click="handleClose"
               >
-                <XMarkIcon class="h-5 w-5" />
+                <XMarkIcon class="h-5 w-5"/>
               </button>
             </div>
 
             <!-- 内容 -->
             <div class="px-6 py-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
-              <slot />
+              <slot/>
             </div>
 
             <!-- 底部 -->
             <div v-if="$slots.footer" class="border-t border-white/10 px-6 py-4">
-              <slot name="footer" />
+              <slot name="footer"/>
             </div>
           </LiquidGlassCard>
         </Transition>
@@ -51,7 +52,7 @@
 <script setup lang="ts">
 import {computed} from 'vue'
 import {XMarkIcon} from '@heroicons/vue/24/outline'
-import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
+import LiquidGlassCard from '@/components/widgets/common/LiquidGlassCard.vue'
 
 interface Props {
   modelValue: boolean
@@ -87,6 +88,8 @@ function handleClose() {
     emit('close')
   }
 }
+
+defineExpose({close: handleClose})
 </script>
 
 <style scoped>

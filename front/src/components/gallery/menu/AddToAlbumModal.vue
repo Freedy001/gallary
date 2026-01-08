@@ -106,10 +106,10 @@
 
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
-import {albumApi} from '@/api/album'
+import {albumApi} from '@/api/album.ts'
 import type {Album} from '@/types'
-import Modal from '@/components/common/Modal.vue'
-import EditAlbumModal from './EditAlbumModal.vue'
+import Modal from '@/components/widgets/common/Modal.vue'
+import EditAlbumModal from '../../album/EditAlbumModal.vue'
 import {CheckIcon, PhotoIcon, PlusIcon, RectangleStackIcon} from '@heroicons/vue/24/outline'
 import {useDialogStore} from "@/stores/dialog.ts";
 

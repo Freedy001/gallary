@@ -28,12 +28,17 @@ export const imageApi = {
     })
   },
 
+  // 批量获取图片（根据ID列表）
+  getByIds(ids: number[]): Promise<ApiResponse<Image[]>> {
+    return http.post('/api/images/batch', {ids})
+  },
+
   // 获取标签列表（支持搜索）
   getTags(keyword?: string, limit?: number): Promise<ApiResponse<Tag[]>> {
     const params: Record<string, string | number> = {}
     if (keyword) params.keyword = keyword
     if (limit) params.limit = limit
-    return http.get('/api/tags', { params })
+    return http.get('/api/tags', {params})
   },
 
   // 删除图片
@@ -86,11 +91,12 @@ export const imageApi = {
   },
 
   // 搜索图片（支持图片上传进行以图搜图）
-  search(params: SearchParams, file?: File): Promise<ApiResponse<Pageable<Image>>> {
-    if (file) {
+  search(params: SearchParams): Promise<ApiResponse<Pageable<Image>>> {
+    if (params.file) {
       // 有图片时使用 FormData（multipart/form-data）
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', params.file)
+      params.file = undefined
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
           if (Array.isArray(value)) {

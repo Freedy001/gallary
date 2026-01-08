@@ -14,7 +14,7 @@
 
 <script setup lang="ts">
 import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
-import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
+import LiquidGlassCard from '@/components/widgets/common/LiquidGlassCard.vue'
 
 const props = defineProps<{
   modelValue: boolean

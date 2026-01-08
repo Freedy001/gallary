@@ -1,13 +1,8 @@
 <template>
   <Teleport to="body">
     <Transition name="fade">
-      <!--
-        Change: Changed base container to handle the liquid glass context
-        Instead of simple bg-black, we'll use our custom glass style classes
-      -->
       <div v-if="isVisible"
            class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 liquid-glass-container">
-        <!-- Layer 1: Glass Distortion Background (The overlay itself acts as the glass) -->
         <div class="absolute inset-0 liquid-glass-backdrop"></div>
 
         <!-- 关闭按钮 -->
@@ -59,41 +54,23 @@
           <!-- 图片内容 -->
           <Transition v-else :name="slideDirection">
             <div :key="currentImage.id" class="absolute inset-0 flex items-center justify-center w-full h-full">
-              <!-- 占位层：缩略图 + Loading (在大图加载完成前显示) -->
+              <!-- 占位层：缩略图 + Loading -->
               <div v-if="!isImageLoaded" class="absolute inset-0 flex items-center justify-center z-0 pointer-events-none overflow-hidden">
-                <!-- 呼吸背景：模糊缩略图 -->
                 <img
                     v-if="currentImage.thumbnail_url"
                     :src="currentImage.thumbnail_url"
                     class="w-full h-full object-contain animate-breathe opacity-80 will-change-transform"
                     alt="thumbnail"
                 />
-
-                <!-- 下载进度指示器 -->
                 <div class="absolute z-10 flex flex-col items-center justify-center">
-                   <!-- 圆形进度条 -->
                    <div class="relative flex items-center justify-center">
-                      <!-- 背景圆环 -->
                       <svg class="w-16 h-16 transform -rotate-90">
-                        <circle
-                          cx="32" cy="32" r="28"
-                          stroke="rgba(255,255,255,0.2)"
-                          stroke-width="4"
-                          fill="none"
-                        />
-                        <!-- 进度圆环 -->
-                        <circle
-                          cx="32" cy="32" r="28"
-                          stroke="rgba(255,255,255,0.9)"
-                          stroke-width="4"
-                          fill="none"
-                          stroke-linecap="round"
-                          :stroke-dasharray="175.93"
+                        <circle cx="32" cy="32" fill="none" r="28" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
+                        <circle :stroke-dasharray="175.93" class="transition-all duration-300 ease-out" cx="32" cy="32" fill="none" r="28"
+                          stroke="rgba(255,255,255,0.9)" stroke-linecap="round"
                           :stroke-dashoffset="175.93 * (1 - downloadProgress / 100)"
-                          class="transition-all duration-300 ease-out"
-                        />
+                          stroke-width="4"/>
                       </svg>
-                      <!-- 进度文字 -->
                       <span class="absolute text-white text-sm font-medium">{{ downloadProgress }}%</span>
                    </div>
                    <span class="mt-3 text-white/70 text-xs tracking-wide">{{ formatFileSize(currentImage.file_size) }}</span>
@@ -127,7 +104,7 @@
           </Transition>
         </div>
 
-        <!-- Details Toggle Button (Visible when details hidden) -->
+        <!-- Details Toggle Button -->
         <Transition name="fade">
           <button
               v-if="!showDetails"
@@ -139,7 +116,7 @@
           </button>
         </Transition>
 
-        <!-- 底部工具栏 (Liquid Glass Card Style) -->
+        <!-- 底部工具栏 -->
         <Transition name="slide-up">
           <div
               v-if="showDetails"
@@ -152,7 +129,6 @@
                 :target-element="mainImageRef"
                 :target-image="imageUrl"
             >
-              <!-- Toggle Hide Button -->
               <button
                   @click="showDetails = false"
                   class="absolute top-2 right-2 sm:right-5 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
@@ -170,25 +146,17 @@
 
               <!-- 文件信息 -->
               <div class="mb-3 text-white pr-8">
-                <!-- 加载中占位符 -->
                 <template v-if="!currentImage">
                   <div class="h-6 sm:h-7 w-32 sm:w-48 bg-white/20 rounded animate-pulse"></div>
                   <div class="mt-2 flex gap-4">
                     <div class="h-4 sm:h-5 w-24 sm:w-32 bg-white/10 rounded animate-pulse"></div>
                   </div>
                 </template>
-                <!-- 实际内容 -->
                 <template v-else>
-                  <h3 class="text-base sm:text-lg font-semibold text-shadow truncate">{{
-                      currentImage.original_name
-                    }}</h3>
-                  <div
-                      class="mt-1.5 sm:mt-2 flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-100 text-shadow-sm">
+                  <h3 class="text-base sm:text-lg font-semibold text-shadow truncate">{{ currentImage.original_name }}</h3>
+                  <div class="mt-1.5 sm:mt-2 flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-100 text-shadow-sm">
                     <span v-if="currentImage.taken_at">{{ formatDate(currentImage.taken_at) }}</span>
-                    <span v-if="currentImage.camera_model" class="hidden sm:inline">{{
-                        currentImage.camera_model
-                      }}</span>
-                    <!-- EXIF 信息 - 移动端隐藏部分详情 -->
+                    <span v-if="currentImage.camera_model" class="hidden sm:inline">{{ currentImage.camera_model }}</span>
                     <div v-if="currentImage.aperture || currentImage.shutter_speed || currentImage.iso"
                          class="hidden sm:flex gap-3 border-l border-white/30 pl-3">
                       <span v-if="currentImage.aperture">{{ currentImage.aperture }}</span>
@@ -196,32 +164,21 @@
                       <span v-if="currentImage.iso">ISO{{ currentImage.iso }}</span>
                       <span v-if="currentImage.focal_length">{{ currentImage.focal_length }}</span>
                     </div>
-                    <span class="border-l border-white/30 pl-3">{{ currentImage.width }} × {{
-                        currentImage.height
-                      }}</span>
+                    <span class="border-l border-white/30 pl-3">{{ currentImage.width }} × {{ currentImage.height }}</span>
                     <span>{{ formatFileSize(currentImage.file_size) }}</span>
                   </div>
                 </template>
               </div>
 
               <!-- 操作按钮 -->
-              <div class="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar"
-                   style="user-select: none">
+              <div class="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar" style="user-select: none">
                 <!-- 缩放控制组 -->
                 <div class="flex items-center bg-white/5 rounded-lg border border-white/10 p-0.5 shrink-0">
-                  <button
-                      @click="zoomOut(0.25)"
-                      class="rounded-md p-1.5 sm:px-3 sm:py-2 text-sm text-white hover:bg-white/10 transition-all"
-                  >
+                  <button class="rounded-md p-1.5 sm:px-3 sm:py-2 text-sm text-white hover:bg-white/10 transition-all" @click="zoomOut(0.25)">
                     <MinusIcon class="h-4 w-4"/>
                   </button>
-                  <span class="px-2 text-xs sm:text-sm text-white font-medium min-w-[3rem] text-center">{{
-                      Math.round(scale * 100)
-                    }}%</span>
-                  <button
-                      @click="zoomIn(0.25)"
-                      class="rounded-md p-1.5 sm:px-3 sm:py-2 text-sm text-white hover:bg-white/10 transition-all"
-                  >
+                  <span class="px-2 text-xs sm:text-sm text-white font-medium min-w-[3rem] text-center">{{ Math.round(scale * 100) }}%</span>
+                  <button class="rounded-md p-1.5 sm:px-3 sm:py-2 text-sm text-white hover:bg-white/10 transition-all" @click="zoomIn(0.25)">
                     <PlusIcon class="h-4 w-4"/>
                   </button>
                 </div>
@@ -239,7 +196,7 @@
                       class="flex items-center justify-center gap-2 text-sm text-white/70 hover:text-white transition-colors py-1 w-full sm:w-auto"
                   >
                     <span class="hidden sm:inline" v-if="showThumbnails">隐藏预览</span>
-                    <span class="hidden sm:inline" v-else>显示预览 ({{ imageStore.images.length }})</span>
+                    <span v-else class="hidden sm:inline">显示预览 ({{ props.images.length }})</span>
                     <ChevronUpIcon v-if="showThumbnails" class="h-4 w-4"/>
                     <ChevronDownIcon v-else class="h-4 w-4"/>
                   </button>
@@ -277,11 +234,11 @@
                       @wheel.stop
                   >
                     <div
-                        v-for="(img, index) in imageStore.images"
-                        :key="img?.id || index"
+                        v-for="(img, idx) in props.images"
+                        :key="img?.id || idx"
                         class="relative h-10 w-10 flex-shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 transition-all bg-gray-800/50"
-                        :class="index === imageStore.viewerIndex ? 'border-blue-500 opacity-100 ring-2 ring-blue-500/50' : 'border-transparent opacity-60 hover:opacity-80'"
-                        @click="changeIndex(index)"
+                        :class="idx === index ? 'border-blue-500 opacity-100 ring-2 ring-blue-500/50' : 'border-transparent opacity-60 hover:opacity-80'"
+                        @click="changeIndex(idx)"
                     >
                       <CachedImage
                           v-if="img"
@@ -305,26 +262,37 @@
 </template>
 
 <script setup lang="ts">
-import {computed, ref, onMounted, onUnmounted, watch} from 'vue'
-import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
-import CachedImage from '@/components/common/CachedImage.vue'
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import LiquidGlassCard from '@/components/widgets/common/LiquidGlassCard.vue'
+import CachedImage from '@/components/widgets/common/CachedImage.vue'
 import {
-  XMarkIcon,
+  ArrowDownTrayIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronUpIcon,
+  InformationCircleIcon,
   MinusIcon,
   PlusIcon,
-  ArrowDownTrayIcon,
   TrashIcon,
-  InformationCircleIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
+  XMarkIcon,
 } from '@heroicons/vue/24/outline'
-import {useImageStore} from "@/stores/image.ts";
-import {useDialogStore} from "@/stores/dialog";
+import {useDialogStore} from "@/stores/dialog"
 import {imageApi} from '@/api/image'
+import type {Image} from '@/types'
 
-const imageStore = useImageStore()
+// Props
+const props = defineProps<{
+  images: (Image | null)[]
+  index: number
+}>()
+
+// Emits
+const emit = defineEmits<{
+  (e: 'update:index', value: number): void
+  (e: 'delete', id: number): void
+}>()
+
 const dialogStore = useDialogStore()
 
 const imageContainerRef = ref<HTMLElement>()
@@ -332,15 +300,14 @@ const scale = ref(1)
 const translate = ref({x: 0, y: 0})
 const isDragging = ref(false)
 const dragStart = ref({x: 0, y: 0})
-// Touch handling state
 const touchStart = ref({x: 0, y: 0})
 const initialTouchDistance = ref(0)
 const initialTouchScale = ref(1)
-const isSwiping = ref(false) // 标记是否正在滑动切换图片
-const isImageLoaded = ref(false) // 标记大图是否加载完成
-const downloadProgress = ref(0) // 下载进度 0-100
-const blobUrl = ref<string>('') // 用于存储下载后的 blob URL
-const abortController = ref<AbortController | null>(null) // 用于取消下载
+const isSwiping = ref(false)
+const isImageLoaded = ref(false)
+const downloadProgress = ref(0)
+const blobUrl = ref<string>('')
+const abortController = ref<AbortController | null>(null)
 
 const slideDirection = ref<'slide-left' | 'slide-right'>('slide-left')
 const showDetails = ref(true)
@@ -348,22 +315,21 @@ const showThumbnails = ref(true)
 const thumbnailsRef = ref<HTMLElement>()
 const isWeChat = ref(false)
 
-const isVisible = computed(() => imageStore.viewerIndex !== -1)
-
-const currentImage = computed(() => {
-  return imageStore.images[imageStore.viewerIndex] || null
+const index = computed({
+  get: () => props.index,
+  set: (val) => emit('update:index', val)
 })
 
-// 监听当前图片变化，重置加载状态并开始下载
+const isVisible = computed(() => index.value !== -1)
+const currentImage = computed(() => props.images[index.value] || null)
+
 watch(() => currentImage.value?.id, async (newId, oldId) => {
   if (newId === oldId) return
 
-  // 取消之前的下载
   if (abortController.value) {
     abortController.value.abort()
   }
 
-  // 清理之前的 blob URL
   if (blobUrl.value) {
     URL.revokeObjectURL(blobUrl.value)
     blobUrl.value = ''
@@ -377,14 +343,11 @@ watch(() => currentImage.value?.id, async (newId, oldId) => {
   }
 })
 
-// 使用 fetch 下载图片并跟踪进度
 async function downloadImageWithProgress(url: string, expectedSize?: number) {
   abortController.value = new AbortController()
 
   try {
-    const response = await fetch(url, {
-      signal: abortController.value.signal
-    })
+    const response = await fetch(url, { signal: abortController.value.signal })
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
@@ -394,7 +357,6 @@ async function downloadImageWithProgress(url: string, expectedSize?: number) {
     const totalSize = contentLength ? parseInt(contentLength, 10) : (expectedSize || 0)
 
     if (!response.body) {
-      // 如果没有 body stream，直接加载
       const blob = await response.blob()
       blobUrl.value = URL.createObjectURL(blob)
       downloadProgress.value = 100
@@ -407,7 +369,6 @@ async function downloadImageWithProgress(url: string, expectedSize?: number) {
 
     while (true) {
       const {done, value} = await reader.read()
-
       if (done) break
 
       chunks.push(value)
@@ -416,23 +377,17 @@ async function downloadImageWithProgress(url: string, expectedSize?: number) {
       if (totalSize > 0) {
         downloadProgress.value = Math.min(Math.round((receivedLength / totalSize) * 100), 99)
       } else {
-        // 如果不知道总大小，显示已下载的 MB
         downloadProgress.value = Math.min(Math.round(receivedLength / 1024 / 1024 * 10), 99)
       }
     }
 
-    // 合并所有块
     const blob = new Blob(chunks as BlobPart[])
     blobUrl.value = URL.createObjectURL(blob)
     downloadProgress.value = 100
 
   } catch (error) {
-    if ((error as Error).name === 'AbortError') {
-      // 下载被取消，忽略
-      return
-    }
+    if ((error as Error).name === 'AbortError') return
     console.error('图片下载失败:', error)
-    // 下载失败时回退到直接使用 URL
     blobUrl.value = url
     downloadProgress.value = 100
   }
@@ -440,40 +395,31 @@ async function downloadImageWithProgress(url: string, expectedSize?: number) {
 
 function onImageLoad(event: Event) {
   const img = event.target as HTMLImageElement
-  // 只有在图片真正加载成功时才设置为已加载
   if (img && img.complete && img.naturalWidth > 0) {
     isImageLoaded.value = true
   }
 }
 
 function onImageError() {
-  // 加载失败时也显示图片（可能显示破损图标）
   isImageLoaded.value = true
   console.error('图片加载失败:', displayImageUrl.value)
 }
 
-// 显示用的图片 URL（优先使用 blob URL）
-const displayImageUrl = computed(() => {
-  return blobUrl.value || ''
-})
+const displayImageUrl = computed(() => blobUrl.value || '')
+const imageUrl = computed(() => currentImage.value?.url || '')
 
-const imageUrl = computed(() => {
-  if (!currentImage.value) return ''
-  return currentImage.value.url
-})
-
-const hasPrevious = computed(() => imageStore.viewerIndex > 0)
-const hasNext = computed(() => imageStore.viewerIndex < imageStore.images.length - 1)
+const hasPrevious = computed(() => index.value > 0)
+const hasNext = computed(() => index.value < props.images.length - 1)
 
 function close() {
-  imageStore.viewerIndex = -1
+  index.value = -1
   resetZoom()
 }
 
 function previous() {
   if (hasPrevious.value) {
     slideDirection.value = 'slide-right'
-    imageStore.viewerIndex--
+    index.value--
     resetZoom()
   }
 }
@@ -481,19 +427,19 @@ function previous() {
 function next() {
   if (hasNext.value) {
     slideDirection.value = 'slide-left'
-    imageStore.viewerIndex++
+    index.value++
     resetZoom()
   }
 }
 
 function changeIndex(newIndex: number) {
-  if (newIndex >= 0 && newIndex < imageStore.images.length) {
-    if (newIndex > imageStore.viewerIndex) {
+  if (newIndex >= 0 && newIndex < props.images.length) {
+    if (newIndex > index.value) {
       slideDirection.value = 'slide-left'
     } else {
       slideDirection.value = 'slide-right'
     }
-    imageStore.viewerIndex = newIndex
+    index.value = newIndex
     resetZoom()
   }
 }
@@ -548,7 +494,6 @@ function getDistance(touches: TouchList) {
 
 function handleTouchStart(e: TouchEvent) {
   if (e.touches.length === 1 && e.touches[0]) {
-    // Single finger: Pan or prepare for Swipe
     const touch = e.touches[0]
     touchStart.value = {x: touch.clientX, y: touch.clientY}
 
@@ -559,11 +504,9 @@ function handleTouchStart(e: TouchEvent) {
         y: touch.clientY - translate.value.y
       }
     } else {
-      // 原始比例时，准备滑动切换
       isSwiping.value = true
     }
   } else if (e.touches.length === 2) {
-    // Two fingers: Pinch
     isDragging.value = false
     isSwiping.value = false
     initialTouchDistance.value = getDistance(e.touches) ?? 0
@@ -572,7 +515,6 @@ function handleTouchStart(e: TouchEvent) {
 }
 
 function handleTouchMove(e: TouchEvent) {
-  // Prevent default to stop page scrolling/zooming
   if (e.cancelable) {
     e.preventDefault()
   }
@@ -581,22 +523,18 @@ function handleTouchMove(e: TouchEvent) {
     const touch = e.touches[0]
 
     if (scale.value > 1 && isDragging.value) {
-      // Pan when zoomed
       translate.value = {
         x: touch.clientX - dragStart.value.x,
         y: touch.clientY - dragStart.value.y
       }
     } else if (scale.value === 1 && isSwiping.value) {
-      // Swipe visual feedback (only X axis)
       const deltaX = touch.clientX - touchStart.value.x
       translate.value = {x: deltaX, y: 0}
     }
   } else if (e.touches.length === 2) {
-    // Pinch zoom
     const currentDistance = getDistance(e.touches)
     if (initialTouchDistance.value > 0 && currentDistance) {
       const ratio = currentDistance / initialTouchDistance.value
-      // Limit zoom level
       scale.value = Math.min(Math.max(initialTouchScale.value * ratio, 0.5), 5)
     }
   }
@@ -604,12 +542,9 @@ function handleTouchMove(e: TouchEvent) {
 
 function handleTouchEnd(e: TouchEvent) {
   if (e.touches.length === 0) {
-    // All fingers lifted
     if (scale.value <= 1 && isSwiping.value) {
-      // Ensure scale resets to 1 if slightly zoomed out
-      // Check for swipe gesture
       const deltaX = translate.value.x
-      const threshold = 50 // Swipe threshold
+      const threshold = 50
 
       if (Math.abs(deltaX) > threshold) {
         if (deltaX > 0) {
@@ -618,15 +553,12 @@ function handleTouchEnd(e: TouchEvent) {
           next()
         }
       } else {
-        // Snap back if threshold not met
         resetZoom()
       }
     }
     isDragging.value = false
     isSwiping.value = false
   } else if (e.touches.length === 1 && e.touches[0]) {
-    // One finger remains (e.g. after pinch)
-    // Switch to panning mode smoothly
     const touch = e.touches[0]
     dragStart.value = {
       x: touch.clientX - translate.value.x,
@@ -638,9 +570,8 @@ function handleTouchEnd(e: TouchEvent) {
 }
 
 function originScale(): boolean {
-  return scale.value == 1 && translate.value.x === 0 && translate.value.y === 0;
+  return scale.value == 1 && translate.value.x === 0 && translate.value.y === 0
 }
-
 
 async function downloadImage() {
   if (!currentImage.value) return
@@ -662,11 +593,14 @@ async function deleteImage() {
     confirmText: '删除'
   })
 
-  if (!confirmed) {
-    return
-  }
+  if (!confirmed) return
 
-  await imageStore.deleteBatch([currentImage.value.id])
+  try {
+    await imageApi.deleteBatch([currentImage.value.id])
+    emit('delete', currentImage.value.id)
+  } catch (error) {
+    console.error('Delete failed:', error)
+  }
 }
 
 function formatDate(dateString: string): string {
@@ -686,9 +620,7 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
-// 键盘快捷键
 function handleKeydown(event: KeyboardEvent) {
-  // 只在查看器可见时响应键盘事件
   if (!isVisible.value) return
 
   switch (event.key) {
@@ -720,38 +652,27 @@ function handleKeydown(event: KeyboardEvent) {
 
 const mainImageRef = ref<HTMLImageElement>()
 
-watch(
-    () => imageStore.viewerIndex,
-    async (newIndex) => {
-      if (!imageStore.images[newIndex + 10 < imageStore.images.length ? newIndex + 10 : imageStore.images.length - 1]) {
-        const page = Math.floor((newIndex + 10) / 20) + 1
-        await imageStore.fetchImages(page)
-      }
-
-      if (showThumbnails.value && thumbnailsRef.value) {
-        // 自动滚动到当前缩略图
-        const container = thumbnailsRef.value
-        const children = container.children
-        if (children[newIndex]) {
-          const element = children[newIndex] as HTMLElement
-          const containerCenter = container.clientWidth / 2
-          const elementCenter = element.offsetLeft + element.clientWidth / 2
-          container.scrollTo({
-            left: elementCenter - containerCenter,
-            behavior: 'smooth'
-          })
-        }
-      }
+watch(index, async (newIndex) => {
+  if (showThumbnails.value && thumbnailsRef.value) {
+    const container = thumbnailsRef.value
+    const children = container.children
+    if (children[newIndex]) {
+      const element = children[newIndex] as HTMLElement
+      const containerCenter = container.clientWidth / 2
+      const elementCenter = element.offsetLeft + element.clientWidth / 2
+      container.scrollTo({
+        left: elementCenter - containerCenter,
+        behavior: 'smooth'
+      })
     }
-)
+  }
+})
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
-  // Check WeChat
   const ua = navigator.userAgent.toLowerCase()
   isWeChat.value = ua.includes('micromessenger')
 
-  // 首次加载时触发下载
   if (currentImage.value?.url) {
     downloadImageWithProgress(currentImage.value.url, currentImage.value.file_size)
   }
@@ -760,7 +681,6 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
 
-  // 清理资源
   if (abortController.value) {
     abortController.value.abort()
   }
@@ -770,9 +690,7 @@ onUnmounted(() => {
 })
 </script>
 
-<!--suppress CssUnusedSymbol -->
 <style scoped>
-/* 基础动画 */
 .slide-left-enter-active,
 .slide-left-leave-active,
 .slide-right-enter-active,
@@ -780,50 +698,23 @@ onUnmounted(() => {
   transition: transform 0.25s ease-in-out;
 }
 
-.slide-left-enter-from {
-  transform: translateX(100%);
-}
+.slide-left-enter-from { transform: translateX(100%); }
+.slide-left-leave-to { transform: translateX(-100%); }
+.slide-right-enter-from { transform: translateX(-100%); }
+.slide-right-leave-to { transform: translateX(100%); }
 
-.slide-left-leave-to {
-  transform: translateX(-100%);
-}
+.liquid-glass-container { perspective: 1000px; }
 
-.slide-right-enter-from {
-  transform: translateX(-100%);
-}
-
-.slide-right-leave-to {
-  transform: translateX(100%);
-}
-
-/* --- Liquid Glass Style --- */
-
-/* 容器背景 */
-.liquid-glass-container {
-  perspective: 1000px;
-}
-
-/* 玻璃背景层 */
 .liquid-glass-backdrop {
   background: radial-gradient(circle at center, rgba(40, 40, 50, 0.4) 0%, rgba(10, 10, 15, 0.08) 100%);
   backdrop-filter: blur(10px);
 }
 
-/* 鼠标悬停效果 */
-.menu-item {
-  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
+.menu-item { transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); }
 
-/* 文字阴影增强可读性 */
-.text-shadow {
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-}
+.text-shadow { text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); }
+.text-shadow-sm { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
 
-.text-shadow-sm {
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-/* 控制按钮玻璃风格 */
 .glass-control {
   background: rgba(80, 80, 80, 0.3);
   backdrop-filter: blur(8px);
@@ -834,52 +725,29 @@ onUnmounted(() => {
 .glass-control:hover {
   background: rgba(80, 80, 80, 0.5);
   border-color: rgba(255, 255, 255, 0.3);
-  transform: scale(1.05); /* Keep vertical center */
-}
-
-/* Top close button needs simpler hover transform */
-.glass-control.top-4:hover {
   transform: scale(1.05);
 }
 
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: all 0.3s ease;
-}
+.glass-control.top-4:hover { transform: scale(1.05); }
 
-.slide-up-enter-from,
-.slide-up-leave-to {
-  transform: translateY(100%);
-  opacity: 0;
-}
+.slide-up-enter-active, .slide-up-leave-active { transition: all 0.3s ease; }
+.slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); opacity: 0; }
 
-.thumbnail-slide-enter-active,
-.thumbnail-slide-leave-active {
+.thumbnail-slide-enter-active, .thumbnail-slide-leave-active {
   transition: all 0.3s ease;
   max-height: 100px;
   opacity: 1;
 }
-
-.thumbnail-slide-enter-from,
-.thumbnail-slide-leave-to {
+.thumbnail-slide-enter-from, .thumbnail-slide-leave-to {
   max-height: 0;
   margin-top: 0;
   opacity: 0;
 }
 
-/* 呼吸动画 */
 @keyframes breathe {
-  0%, 100% {
-    filter: brightness(0.8) blur(8px);
-    transform: scale(1.02);
-  }
-  50% {
-    filter: brightness(1.1) blur(12px);
-    transform: scale(1.03);
-  }
+  0%, 100% { filter: brightness(0.8) blur(8px); transform: scale(1.02); }
+  50% { filter: brightness(1.1) blur(12px); transform: scale(1.03); }
 }
 
-.animate-breathe {
-  animation: breathe 2s ease-in-out infinite;
-}
+.animate-breathe { animation: breathe 2s ease-in-out infinite; }
 </style>

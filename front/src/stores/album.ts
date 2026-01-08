@@ -56,7 +56,7 @@ export const useAlbumStore = defineStore('album', () => {
       sectionRef.value.loadingPages.add(page)
       if (page === 1) sectionRef.value.loading = true
 
-      const { data } = await albumApi.getList({ page, pageSize, isSmart })
+      const {data} = await albumApi.getList({page, pageSize, isSmart})
 
       if (page === 1) {
         // 初始化占位符数组
@@ -99,7 +99,7 @@ export const useAlbumStore = defineStore('album', () => {
   }
 
   async function createAlbum(name: string, description?: string) {
-    const { data } = await albumApi.create({ name, description })
+    const {data} = await albumApi.create({name, description})
     // 普通相册添加到 normalSection 开头
     normalSection.value.albums.unshift(data)
     normalSection.value.total += 1
@@ -107,18 +107,18 @@ export const useAlbumStore = defineStore('album', () => {
   }
 
   async function updateAlbum(id: number, name: string, description?: string) {
-    const { data } = await albumApi.update(id, { name, description })
+    const {data} = await albumApi.update(id, {name, description})
     // 在两个分区中查找并更新
     const normalIndex = normalSection.value.albums.findIndex(a => a?.id === id)
     if (normalIndex !== -1) {
-      normalSection.value.albums[normalIndex] = { ...normalSection.value.albums[normalIndex]!, ...data }
+      normalSection.value.albums[normalIndex] = {...normalSection.value.albums[normalIndex]!, ...data}
     }
     const smartIndex = smartSection.value.albums.findIndex(a => a?.id === id)
     if (smartIndex !== -1) {
-      smartSection.value.albums[smartIndex] = { ...smartSection.value.albums[smartIndex]!, ...data }
+      smartSection.value.albums[smartIndex] = {...smartSection.value.albums[smartIndex]!, ...data}
     }
     if (currentAlbum.value?.id === id) {
-      currentAlbum.value = { ...currentAlbum.value, ...data }
+      currentAlbum.value = {...currentAlbum.value, ...data}
     }
     return data
   }
@@ -127,40 +127,33 @@ export const useAlbumStore = defineStore('album', () => {
     await albumApi.setCover(id, imageId)
   }
 
-  async function deleteAlbum(id: number) {
-    await albumApi.delete(id)
+  async function deleteAlbum(ids: number | number[]) {
+    const idArray = Array.isArray(ids) ? ids : [ids]
+    await albumApi.delete(idArray)
     // 从两个分区中移除
-    const normalIndex = normalSection.value.albums.findIndex(a => a?.id === id)
-    if (normalIndex !== -1) {
-      normalSection.value.albums.splice(normalIndex, 1)
-      normalSection.value.total -= 1
-    }
-    const smartIndex = smartSection.value.albums.findIndex(a => a?.id === id)
-    if (smartIndex !== -1) {
-      smartSection.value.albums.splice(smartIndex, 1)
-      smartSection.value.total -= 1
-    }
-    selectedAlbums.value.delete(id)
-    if (currentAlbum.value?.id === id) {
+    normalSection.value.albums = normalSection.value.albums.filter(a => a === null || !idArray.includes(a.id))
+    smartSection.value.albums = smartSection.value.albums.filter(a => a === null || !idArray.includes(a.id))
+    // 更新 total
+    normalSection.value.total = normalSection.value.albums.filter(a => a !== null).length
+    smartSection.value.total = smartSection.value.albums.filter(a => a !== null).length
+    // 清除选中状态
+    idArray.forEach(id => selectedAlbums.value.delete(id))
+    if (currentAlbum.value && idArray.includes(currentAlbum.value.id)) {
       currentAlbum.value = null
     }
   }
 
   async function deleteSelectedAlbums() {
     const ids = Array.from(selectedAlbums.value)
-    for (const id of ids) {
-      await albumApi.delete(id)
-    }
-    // 从两个分区中移除
-    normalSection.value.albums = normalSection.value.albums.filter(a => a === null || !ids.includes(a.id))
-    smartSection.value.albums = smartSection.value.albums.filter(a => a === null || !ids.includes(a.id))
-    // 更新 total（简化处理，重新计算）
-    normalSection.value.total = normalSection.value.albums.filter(a => a !== null).length
-    smartSection.value.total = smartSection.value.albums.filter(a => a !== null).length
-    if (currentAlbum.value && ids.includes(currentAlbum.value.id)) {
-      currentAlbum.value = null
-    }
-    selectedAlbums.value.clear()
+    await deleteAlbum(ids)
+  }
+
+  // 复制相册
+  async function copyAlbum(ids: number | number[]) {
+    const idArray = Array.isArray(ids) ? ids : [ids]
+    await albumApi.copy(idArray)
+    // 刷新相册列表
+    await refreshAlbums()
   }
 
   function toggleAlbumSelection(id: number) {
@@ -185,30 +178,31 @@ export const useAlbumStore = defineStore('album', () => {
 
   return {
     // 分区状态
-    normalSection,
-    smartSection,
+    normalSection: normalSection,
+    smartSection: smartSection,
     // 向后兼容的状态
-    albums,
-    currentAlbum,
-    loading,
-    total,
-    selectedAlbums,
+    albums: albums,
+    currentAlbum: currentAlbum,
+    loading: loading,
+    total: total,
+    selectedAlbums: selectedAlbums,
     // Computed
-    selectedCount,
-    hasSelection,
-    selectedAlbumList,
+    selectedCount: selectedCount,
+    hasSelection: hasSelection,
+    selectedAlbumList: selectedAlbumList,
     // Actions
-    fetchSection,
-    refreshAlbums,
-    fetchAlbums,
-    createAlbum,
-    updateAlbum,
-    setAlbumCover,
-    deleteAlbum,
-    deleteSelectedAlbums,
-    toggleAlbumSelection,
-    clearSelection,
-    selectAll,
-    clearCurrentAlbum,
+    fetchSection: fetchSection,
+    refreshAlbums: refreshAlbums,
+    fetchAlbums: fetchAlbums,
+    createAlbum: createAlbum,
+    updateAlbum: updateAlbum,
+    setAlbumCover: setAlbumCover,
+    deleteAlbum: deleteAlbum,
+    deleteSelectedAlbums: deleteSelectedAlbums,
+    copyAlbum: copyAlbum,
+    toggleAlbumSelection: toggleAlbumSelection,
+    clearSelection: clearSelection,
+    selectAll: selectAll,
+    clearCurrentAlbum: clearCurrentAlbum,
   }
 })

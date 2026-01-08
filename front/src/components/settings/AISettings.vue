@@ -41,6 +41,17 @@
             />
             <p class="mt-1 text-xs text-gray-500">用于搜索提示词优化默认模型</p>
           </div>
+
+          <!-- 默认命名模型 -->
+          <div>
+            <BaseSelect
+                v-model="config.global_config!.default_naming_model_id"
+                :options="llmsModelOptions"
+                label="默认命名模型"
+                placeholder="选择默认命名模型"
+            />
+            <p class="mt-1 text-xs text-gray-500">用于 AI 智能命名相册的默认模型</p>
+          </div>
         </div>
 
         <!-- 提示词优化配置 -->
@@ -55,11 +66,46 @@
           <div>
             <textarea
                 v-model="config.global_config!.prompt_optimize_system_prompt"
-                class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm resize-none"
+                class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm resize-y"
                 placeholder="留空使用默认提示词..."
                 rows="4"
             />
             <p class="mt-1 text-xs text-gray-500">默认提示词会将中文搜索词翻译为英文并扩展为详细的视觉描述</p>
+          </div>
+        </div>
+
+        <!-- 命名提示词配置 -->
+        <div class="pt-4 border-t border-white/5">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h4 class="text-sm font-medium text-white">相册命名配置</h4>
+            </div>
+          </div>
+
+          <!-- 最大图片数量 -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-400 mb-1.5">命名使用的最大图片数量</label>
+            <input
+                v-model.number="config.global_config!.naming_max_images"
+                class="w-32 rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                max="10"
+                min="1"
+                placeholder="默认: 3"
+                type="number"
+            />
+            <p class="mt-1 text-xs text-gray-500">AI 命名时从相册中选取的代表性图片数量（默认 3）</p>
+          </div>
+
+          <!-- 命名提示词输入框 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-400 mb-1.5">命名系统提示词</label>
+            <textarea
+                v-model="config.global_config!.naming_system_prompt"
+                class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:outline-none transition-colors text-sm resize-y"
+                placeholder="留空使用默认提示词..."
+                rows="4"
+            />
+            <p class="mt-1 text-xs text-gray-500">用于根据相册内容生成合适的中文名称，留空使用默认提示词</p>
           </div>
         </div>
       </div>
@@ -218,17 +264,6 @@
             </div>
           </div>
         </div>
-
-        <!-- 保存按钮 -->
-        <div class="p-4">
-          <button
-              @click="handleSave"
-              :disabled="saving"
-              class="px-6 py-2.5 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 ring-1 ring-primary-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {{ saving ? '保存中...' : '保存 AI 设置' }}
-          </button>
-        </div>
       </div>
     </div>
 
@@ -279,17 +314,23 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, reactive, ref} from 'vue'
+import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {PlusIcon, TrashIcon, XMarkIcon} from '@heroicons/vue/24/outline'
 import {useDialogStore} from '@/stores/dialog'
 import type {AIConfig, ModelConfig, ModelItem} from '@/types/ai'
 import {createModelId} from '@/types/ai'
-import type {SelectOption} from '@/components/common/BaseSelect.vue'
-import BaseSelect from '@/components/common/BaseSelect.vue'
-import Modal from '@/components/common/Modal.vue'
-import {aiApi} from "@/api/ai.ts";
+import type {SelectOption} from '@/components/widgets/common/BaseSelect.vue'
+import BaseSelect from '@/components/widgets/common/BaseSelect.vue'
+import Modal from '@/components/widgets/common/Modal.vue'
+import {aiApi} from "@/api/ai.ts"
 
 const dialogStore = useDialogStore()
+
+// 定义 emits
+const emit = defineEmits<{
+  change: [hasChanges: boolean]
+  saving: [isSaving: boolean]
+}>()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -302,8 +343,35 @@ const config = reactive<AIConfig>({
     default_tag_model_id: '',
     default_prompt_optimize_model_id: '',
     prompt_optimize_system_prompt: '',
+    default_naming_model_id: '',
+    naming_system_prompt: '',
+    naming_max_images: 3,
   }
 })
+
+// 原始配置，用于对比是否有变化
+const originalConfig = reactive<AIConfig>({
+  models: [],
+  global_config: {
+    default_search_model_id: '',
+    default_tag_model_id: '',
+    default_prompt_optimize_model_id: '',
+    prompt_optimize_system_prompt: '',
+    default_naming_model_id: '',
+    naming_system_prompt: '',
+    naming_max_images: 3,
+  }
+})
+
+// 监听配置变化
+watch(
+  () => config,
+  () => {
+    const hasChanges = JSON.stringify(config) !== JSON.stringify(originalConfig)
+    emit('change', hasChanges)
+  },
+  { deep: true }
+)
 
 // 计算启用的模型选项（用于全局设置下拉框）
 // 生成所有 providerId,apiModelName 的组合
@@ -358,9 +426,14 @@ async function loadSettings() {
         default_search_model_id: response.data.global_config?.default_search_model_id || '',
         default_tag_model_id: response.data.global_config?.default_tag_model_id || '',
         default_prompt_optimize_model_id: response.data.global_config?.default_prompt_optimize_model_id || '',
-        prompt_optimize_system_prompt: response.data.global_config?.prompt_optimize_system_prompt || 'You are a prompt optimizer for image search. Convert Chinese queries into English descriptions for SigLIP model.\nRules:\n1. Translate Chinese to English accurately\n2. Expand into detailed visual descriptions (1-2 sentences)\n3. Include visual attributes: colors, lighting, style, mood\n4. Output ONLY the English prompt, nothing else\n\nExamples:\n- "日落海滩" -> "A beautiful sunset at the beach with warm orange and pink sky reflecting on calm ocean waves"\n- "可爱的猫咪" -> "An adorable cute cat with fluffy fur and expressive eyes in a cozy home setting"\n- "城市夜景" -> "Urban cityscape at night with illuminated skyscrapers and city lights"'
+        prompt_optimize_system_prompt: response.data.global_config?.prompt_optimize_system_prompt || 'You are a prompt optimizer for image search. Convert Chinese queries into English descriptions for SigLIP model.\nRules:\n1. Translate Chinese to English accurately\n2. Expand into detailed visual descriptions (1-2 sentences)\n3. Include visual attributes: colors, lighting, style, mood\n4. Output ONLY the English prompt, nothing else\n\nExamples:\n- "日落海滩" -> "A beautiful sunset at the beach with warm orange and pink sky reflecting on calm ocean waves"\n- "可爱的猫咪" -> "An adorable cute cat with fluffy fur and expressive eyes in a cozy home setting"\n- "城市夜景" -> "Urban cityscape at night with illuminated skyscrapers and city lights"',
+        default_naming_model_id: response.data.global_config?.default_naming_model_id || '',
+        naming_system_prompt: response.data.global_config?.naming_system_prompt || 'You are an AI assistant specialized in naming photo albums. Based on the images in the album, generate a concise and descriptive Chinese name (2-8 characters).\nRules:\n1. Output ONLY the album name in Chinese, nothing else\n2. Keep it short (2-8 characters)\n3. Capture the main theme or emotion\n4. Be specific and descriptive\n\nExamples:\n- Images of sunset at beach -> "海边日落"\n- Images of cats -> "可爱猫咪"\n- Images of city nightscape -> "都市夜景"\n- Images of family gathering -> "家庭聚会"',
+        naming_max_images: response.data.global_config?.naming_max_images || 3,
       }
     }
+    // 保存原始数据
+    Object.assign(originalConfig, JSON.parse(JSON.stringify(config)))
     console.log(embeddingModelOptions.value)
   } catch (error) {
     console.error('Failed to load AI settings:', error)
@@ -555,15 +628,36 @@ async function handleSave() {
 
 
   saving.value = true
+  emit('saving', true)
   try {
     await aiApi.updateSettings(config)
+    // 更新原始数据
+    Object.assign(originalConfig, JSON.parse(JSON.stringify(config)))
+    emit('change', false)
     dialogStore.notify({title: '成功', message: 'AI 设置更新成功', type: 'success'})
   } catch (error: any) {
     dialogStore.notify({title: '错误', message: error.message || '更新 AI 设置失败', type: 'error'})
   } finally {
     saving.value = false
+    emit('saving', false)
   }
 }
+
+// 暴露 save 方法
+function save() {
+  return handleSave()
+}
+
+// 还原配置方法
+function restore() {
+  Object.assign(config, JSON.parse(JSON.stringify(originalConfig)))
+  emit('change', false)
+}
+
+defineExpose({
+  save,
+  restore
+})
 
 onMounted(() => {
   loadSettings()

@@ -1,9 +1,9 @@
 <template>
   <Modal
-    :model-value="visible"
-    size="xl"
-    :closable="true"
-    @update:model-value="$emit('close')"
+      ref="modal"
+      :closable="true"
+      :model-value="visible"
+      size="xl"
   >
     <template #header>
       <div class="flex items-center gap-3">
@@ -30,29 +30,31 @@
       <!-- 操作栏 -->
       <div class="flex items-center justify-between pb-2 border-b border-white/10">
         <span class="text-sm font-medium text-white/80 flex items-center gap-2">
-          <ExclamationCircleIcon class="w-4 h-4 text-red-400" />
+          <ExclamationCircleIcon class="w-4 h-4 text-red-400"/>
           失败任务列表
         </span>
         <button
             v-if="queue.failed_count > 0"
             @click="retryAll"
             :disabled="aiStore.loading"
-            class="glass-button-primary flex items-center gap-1.5 px-3 py-1.5 text-sm"
+            class="flex items-center gap-1.5 px-5 py-3 text-sm rounded-xl border border-white/10 bg-white/5  font-medium text-white hover:bg-white/10 transition-colors"
         >
-          <ArrowPathIcon class="h-4 w-4" :class="{ 'animate-spin': aiStore.loading }" />
+          <ArrowPathIcon :class="{ 'animate-spin': aiStore.loading }" class="h-4 w-4"/>
           全部重试
         </button>
       </div>
 
       <!-- 失败图片列表 -->
-      <div ref="scrollContainer" class="min-h-[300px] max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar" @scroll="handleScroll">
+      <div ref="scrollContainer" class="min-h-[300px] max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar"
+           @scroll="handleScroll">
         <div v-if="initialLoading" class="flex flex-col items-center justify-center py-12 space-y-3">
           <div class="animate-spin rounded-full h-8 w-8 border-2 border-primary-500 border-t-transparent"></div>
           <span class="text-sm text-white/50">加载中...</span>
         </div>
 
-        <div v-else-if="failedItems.length === 0" class="flex flex-col items-center justify-center py-12 text-white/30 space-y-3">
-          <CheckCircleIcon class="h-16 w-16 opacity-50" />
+        <div v-else-if="failedItems.length === 0"
+             class="flex flex-col items-center justify-center py-12 text-white/30 space-y-3">
+          <CheckCircleIcon class="h-16 w-16 opacity-50"/>
           <span class="text-sm">暂无失败任务</span>
         </div>
 
@@ -63,11 +65,13 @@
               class="glass-list-item group"
           >
             <!-- 缩略图/图标 -->
-            <div class="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-black/40 border border-white/10 relative flex items-center justify-center">
+            <div
+                class="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-black/40 border border-white/10 relative flex items-center justify-center">
               <!-- 标签类型：显示标签图标 -->
               <template v-if="item.item_type === 'tag-embedding'">
-                <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-500/20 to-purple-500/20">
-                  <TagIcon class="h-8 w-8 text-primary-400" />
+                <div
+                    class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-500/20 to-purple-500/20">
+                  <TagIcon class="h-8 w-8 text-primary-400"/>
                 </div>
               </template>
               <!-- 图片类型：显示缩略图 -->
@@ -79,7 +83,7 @@
                     class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
                 <div v-else class="w-full h-full flex items-center justify-center text-white/20">
-                  <PhotoIcon class="h-8 w-8" />
+                  <PhotoIcon class="h-8 w-8"/>
                 </div>
               </template>
             </div>
@@ -89,7 +93,8 @@
               <div class="text-sm font-medium text-white/90 truncate mb-1">
                 {{ item.item_name || `#${item.item_id}` }}
               </div>
-              <div v-if="item.error" class="text-xs text-red-300/90 bg-red-500/10 rounded px-2 py-1 border border-red-500/10 whitespace-pre-wrap break-words">
+              <div v-if="item.error"
+                   class="text-xs text-red-300/90 bg-red-500/10 rounded px-2 py-1 border border-red-500/10 whitespace-pre-wrap break-words">
                 {{ item.error }}
               </div>
               <div class="text-[10px] text-white/40 mt-1.5 font-mono">
@@ -98,14 +103,15 @@
             </div>
 
             <!-- 操作按钮 -->
-            <div class="shrink-0 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div
+                class="shrink-0 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <button
                   @click="retryItem(item.id)"
                   :disabled="aiStore.loading"
                   class="glass-icon-btn text-primary-400 hover:text-primary-300 hover:bg-primary-500/20"
                   title="重试"
               >
-                <ArrowPathIcon class="h-4 w-4" />
+                <ArrowPathIcon class="h-4 w-4"/>
               </button>
               <button
                   @click="ignoreItem(item.id)"
@@ -113,7 +119,7 @@
                   class="glass-icon-btn text-gray-400 hover:text-white hover:bg-white/10"
                   title="忽略"
               >
-                <XMarkIcon class="h-4 w-4" />
+                <XMarkIcon class="h-4 w-4"/>
               </button>
             </div>
           </div>
@@ -146,7 +152,8 @@ import {
 import {useAIStore} from '@/stores/ai.ts'
 import type {AIQueueInfo, AITaskItemInfo} from '@/types/ai.ts'
 import {getQueueDisplayName} from '@/types/ai.ts'
-import Modal from '@/components/common/Modal.vue'
+import Modal from '@/components/widgets/common/Modal.vue'
+import {useDialogStore} from "@/stores/dialog.ts";
 
 const props = defineProps<{
   queue: AIQueueInfo
@@ -154,7 +161,9 @@ const props = defineProps<{
 }>()
 
 const aiStore = useAIStore()
+const dialogStore = useDialogStore();
 
+const modal = ref<InstanceType<typeof Modal> | null>(null)
 const scrollContainer = ref<HTMLElement | null>(null)
 const initialLoading = ref(false)
 const loadingMore = ref(false)
@@ -251,7 +260,11 @@ async function retryItem(taskItemId: number) {
       failedItems.value.splice(index, 1)
     }
   } catch (error) {
-    console.error('重试失败:', error)
+    dialogStore.notify({
+      title: '错误',
+      message: (error as Error)?.message || '重试失败',
+      type: 'error'
+    })
   }
 }
 
@@ -265,18 +278,30 @@ async function ignoreItem(taskItemId: number) {
       failedItems.value.splice(index, 1)
     }
   } catch (error) {
-    console.error('忽略失败:', error)
+    dialogStore.notify({
+      title: '错误',
+      message: (error as Error)?.message || '忽略失败',
+      type: 'error'
+    })
   }
 }
 
 // 全部重试
 async function retryAll() {
   try {
+    modal?.value?.close()
     await aiStore.retryQueueFailedImages(props.queue.id)
-    // 重新加载数据
-    await initLoadData()
+    dialogStore.notify({
+      title: '成功',
+      message: '重试请求发送成功!',
+      type: 'success'
+    })
   } catch (error) {
-    console.error('全部重试失败:', error)
+    dialogStore.notify({
+      title: '错误',
+      message: (error as Error)?.message || '重试失败',
+      type: 'error'
+    })
   }
 }
 
@@ -291,7 +316,7 @@ watch(() => props.visible, (newVal) => {
       }
     })
   }
-}, { immediate: true })
+}, {immediate: true})
 
 // 监听队列变化
 watch(() => props.queue.id, () => {
@@ -307,7 +332,7 @@ watch(() => props.queue.id, () => {
   border-radius: 1rem;
   text-align: center;
   border-width: 1px;
-  background-image: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+  background-image: linear-gradient(145deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
 }
 
 .glass-button-primary {

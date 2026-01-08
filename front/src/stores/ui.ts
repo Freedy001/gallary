@@ -2,10 +2,8 @@ import {defineStore} from 'pinia'
 import {computed, ref} from 'vue'
 import {createThumbnail} from "@/utils/image.ts";
 import {imageApi} from "@/api/image.ts";
-import {useImageStore} from "@/stores/image.ts";
 import {useAlbumStore} from "@/stores/album.ts";
 
-const imageStore = useImageStore()
 const albumStore = useAlbumStore()
 
 export interface UploadTask {
@@ -38,6 +36,9 @@ export const useUIStore = defineStore('ui', () => {
   const timeLineState = ref<{ date: string, location: string | null } | null>(null)
   //setting tab
   const settingActiveTab = ref('security')
+
+  // 上传完成回调
+  const onUploadCompleteCallback = ref<(() => void) | null>(null)
 
   // Computed
   const gridColumns = computed(() => {
@@ -171,9 +172,9 @@ export const useUIStore = defineStore('ui', () => {
       if (results.some(r => r)) hasSuccess = true
     }
 
-    // 只在有成功上传时刷新图片列表和总数
-    if (hasSuccess) {
-      await imageStore.refreshImages()
+    // 只在有成功上传时触发回调
+    if (hasSuccess && onUploadCompleteCallback.value) {
+      onUploadCompleteCallback.value()
     }
   }
 
@@ -243,6 +244,10 @@ export const useUIStore = defineStore('ui', () => {
     timeLineState.value = date
   }
 
+  function setOnUploadComplete(callback: (() => void) | null) {
+    onUploadCompleteCallback.value = callback
+  }
+
   return {
     // State
     gridDensity,
@@ -276,5 +281,6 @@ export const useUIStore = defineStore('ui', () => {
     clearCompletedTasks,
     setSelectionMode,
     setTimeLineState,
+    setOnUploadComplete,
   }
 })

@@ -112,15 +112,15 @@ func (img *Image) GetLatLng() (*float64, *float64) {
 
 // SearchParams 搜索参数
 type SearchParams struct {
-	Keyword   string   `json:"keyword" form:"keyword"`
-	StartDate *string  `json:"start_date" form:"start_date"`
-	EndDate   *string  `json:"end_date" form:"end_date"`
-	Tags      []int64  `json:"tags" form:"tags"`
-	Page      int      `json:"page" form:"page"`
-	PageSize  int      `json:"page_size" form:"page_size"`
-	ModelId   string   `json:"model_id" form:"model_id"`   // 使用的模型名称
-	Latitude  *float64 `json:"latitude" form:"latitude"`   // 中心纬度
-	Longitude *float64 `json:"longitude" form:"longitude"` // 中心经度
-	Radius    *float64 `json:"radius" form:"radius"`       // 搜索半径（公里），默认 10km
-	ImageData []byte   `json:"-" form:"-"`                 // 图片搜索数据（由 handler 处理文件上传）
+	Keyword   string         `json:"keyword" form:"keyword"`
+	StartDate *string        `json:"start_date" form:"start_date"`
+	EndDate   *string        `json:"end_date" form:"end_date"`
+	Tags      []int64        `json:"tags" form:"tags"`
+	Page      int            `json:"page" form:"page"`
+	PageSize  int            `json:"page_size" form:"page_size"`
+	ModelId   CopositModelId `json:"model_id" form:"model_id"`   // 使用的模型名称
+	Latitude  *float64       `json:"latitude" form:"latitude"`   // 中心纬度
+	Longitude *float64       `json:"longitude" form:"longitude"` // 中心经度
+	Radius    *float64       `json:"radius" form:"radius"`       // 搜索半径（公里），默认 10km
+	ImageData []byte         `json:"-" form:"-"`                 // 图片搜索数据（由 handler 处理文件上传）
 }

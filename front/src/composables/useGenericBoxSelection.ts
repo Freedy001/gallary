@@ -141,9 +141,9 @@ export function useGenericBoxSelection<T>(options: GenericBoxSelectionOptions<T>
   })
 
   return {
-    selectionBoxStyle,
-    handleMouseDown,
-    isSelecting,
+    selectionBoxStyle: selectionBoxStyle,
+    handleMouseDown: handleMouseDown,
+    isSelecting: isSelecting,
     isDragOperation: () => isDragOperation
   }
 }

@@ -16,7 +16,10 @@
       </div>
 
       <!-- 图片查看器 -->
-      <ImageViewer/>
+      <ImageViewer
+        v-model:index="imageList.viewerIndex.value"
+        :images="imageList.images.value"
+      />
     </div>
   </AppLayout>
 </template>
@@ -27,11 +30,10 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import ImageViewer from '@/components/gallery/ImageViewer.vue'
 import {imageApi} from '@/api/image'
 import {useUIStore} from '@/stores/ui'
-import type {ClusterResult, GeoBounds} from '@/types'
+import {useImageList} from '@/composables/useImageList'
+import type {ClusterResult, GeoBounds, Image, Pageable} from '@/types'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import "@amap/amap-jsapi-types";
-
-import {useImageStore} from "@/stores/image.ts";
 
 let map: any = null
 let markers: any[] = []
@@ -39,7 +41,19 @@ const loading = ref(true)
 const amapConfigured = computed(() => !!import.meta.env.VITE_AMAP_KEY)
 
 const uiStore = useUIStore()
-const imageStore = useImageStore()
+
+// 使用本地 imageList 替代全局 imageStore
+let currentFetcher: (page: number, size: number) => Promise<Pageable<Image>> = async () => ({
+  list: [],
+  total: 0,
+  page: 1,
+  page_size: uiStore.imagePageSize
+})
+
+const imageList = useImageList({
+  originFetcher: (page, size) => currentFetcher(page, size),
+  pageSize: uiStore.imagePageSize
+})
 
 // 更新聚合点
 const updateClusters = async () => {
@@ -99,8 +113,9 @@ const renderMarkers = (clusters: ClusterResult[]) => {
     // 添加点击事件
     marker.on('click', async () => {
       try {
-        await imageStore.refreshImages(async (page, size) => (await imageApi.getClusterImages(min_lat, max_lat, min_lng, max_lng, page, size)).data, uiStore.imagePageSize)
-        imageStore.viewerIndex = 1
+        currentFetcher = async (page, size) => (await imageApi.getClusterImages(min_lat, max_lat, min_lng, max_lng, page, size)).data
+        await imageList.refresh(uiStore.imagePageSize)
+        imageList.viewerIndex.value = 0
       } catch (error) {
         console.error('加载聚合图片失败:', error)
       }

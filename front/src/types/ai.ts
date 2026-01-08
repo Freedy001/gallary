@@ -43,6 +43,9 @@ export interface AIGlobalConfig {
   default_tag_model_id: string     // 默认打标签模型 ID（组合格式: providerId,apiModelName）
   default_prompt_optimize_model_id: string     // 默认打标签模型 ID（组合格式: providerId,apiModelName）
   prompt_optimize_system_prompt: string  // 提示词优化配置
+  default_naming_model_id: string  // 默认命名模型 ID（组合格式: providerId,apiModelName）
+  naming_system_prompt: string     // 命名提示词
+  naming_max_images: number        // 命名最大图片数量（默认3）
 }
 
 // AI 配置（与后端 AIPo 对应）
@@ -62,7 +65,7 @@ export function createModelId(providerId: string, apiModelName: string): string 
 // ================== 队列相关类型 ==================
 
 // 任务类型
-export type TaskType = 'image-embedding' | 'tag-embedding' | 'aesthetic-scoring'
+export type TaskType = 'image-embedding' | 'tag-embedding' | 'aesthetic-scoring' | 'album-naming'
 
 // AI 队列状态汇总
 export interface AIQueueStatus {
@@ -111,19 +114,13 @@ export interface TestConnectionRequest {
   model?: ModelItem          // 可选的模型项（非自托管模型时需要指定）
 }
 
-// 语义搜索请求
-export interface SemanticSearchRequest {
-  query: string
-  model_name?: string
-  limit?: number
-}
-
 // ================== 显示标签 ==================
 
 // 任务类型显示名称
 export const TaskTypeLabels: Record<TaskType, string> = {
   'image-embedding': '图片向量嵌入',
   'tag-embedding': '标签向量嵌入',
+  'album-naming': '相册命名',
   'aesthetic-scoring': '美学评分'
 }
 

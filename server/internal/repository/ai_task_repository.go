@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"gallary/server/internal/model"
@@ -28,7 +27,7 @@ type AITaskRepository interface {
 	UpdateTaskItem(ctx context.Context, taskItem *model.AITaskItem) error
 
 	// 统计
-	GetQueueStats(ctx context.Context, queueID int64) (pending, processing, failed int, err error)
+	GetQueueStats(ctx context.Context, queueID int64) (pending, failed int, err error)
 	GetQueueStatus(ctx context.Context) (*model.AIQueueStatus, error)
 
 	// 队列详情
@@ -40,12 +39,6 @@ type AITaskRepository interface {
 
 	// 查找有待处理项目的队列
 	FindQueuesWithPendingItems(ctx context.Context, limit int) ([]*model.AIQueue, error)
-
-	// 智能相册任务管理
-	CreateSmartAlbumTask(ctx context.Context, extra *model.AITaskItemExtra) (*model.AITaskItem, error)
-	UpdateTaskExtra(ctx context.Context, taskID int64, extra *model.AITaskItemExtra) error
-	GetPendingSmartAlbumTasks(ctx context.Context, limit int) ([]*model.AITaskItem, error)
-	GetSmartAlbumTaskByID(ctx context.Context, taskID int64) (*model.AITaskItem, error)
 }
 
 type aiTaskRepository struct{}
@@ -202,7 +195,7 @@ func (r *aiTaskRepository) UpdateTaskItem(ctx context.Context, taskItem *model.A
 // ================== 统计 ==================
 
 // GetQueueStats 获取队列统计（动态计算）
-func (r *aiTaskRepository) GetQueueStats(ctx context.Context, queueID int64) (pending, processing, failed int, err error) {
+func (r *aiTaskRepository) GetQueueStats(ctx context.Context, queueID int64) (pending, failed int, err error) {
 	db := database.GetDB(ctx).WithContext(ctx)
 
 	var pendingCount, failedCount int64
@@ -215,7 +208,7 @@ func (r *aiTaskRepository) GetQueueStats(ctx context.Context, queueID int64) (pe
 		Where("task_id = ? AND status = ?", queueID, model.AITaskItemStatusFailed).
 		Count(&failedCount)
 
-	return int(pendingCount), 0, int(failedCount), nil
+	return int(pendingCount), int(failedCount), nil
 }
 
 // GetQueueStatus 获取所有队列状态汇总
@@ -233,7 +226,7 @@ func (r *aiTaskRepository) GetQueueStatus(ctx context.Context) (*model.AIQueueSt
 	var totalPending, totalFailed int
 
 	for _, queue := range queues {
-		pending, _, failed, err := r.GetQueueStats(ctx, queue.ID)
+		pending, failed, err := r.GetQueueStats(ctx, queue.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -341,65 +334,9 @@ func (r *aiTaskRepository) FindQueuesWithPendingItems(ctx context.Context, limit
 // ================== 智能相册任务管理 ==================
 
 // CreateSmartAlbumTask 创建智能相册任务
-func (r *aiTaskRepository) CreateSmartAlbumTask(ctx context.Context, extra *model.AITaskItemExtra) (*model.AITaskItem, error) {
-	// 序列化 Extra 数据
-	extraJSON, err := json.Marshal(extra)
-	if err != nil {
-		return nil, err
-	}
-
-	// 创建任务项（ItemID 为 0 表示这是一个全局任务，不关联特定实体）
-	taskItem := &model.AITaskItem{
-		TaskID:   0, // 智能相册任务不需要队列，设为 0
-		ItemID:   0, // 不关联特定图片
-		TaskType: model.SmartAlbumTaskType,
-		QueueKey: string(model.SmartAlbumTaskType),
-		Status:   model.AITaskItemStatusPending,
-		Extra:    extraJSON,
-	}
-
-	err = database.GetDB(ctx).WithContext(ctx).Create(taskItem).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return taskItem, nil
-}
 
 // UpdateTaskExtra 更新任务的 Extra 信息
-func (r *aiTaskRepository) UpdateTaskExtra(ctx context.Context, taskID int64, extra *model.AITaskItemExtra) error {
-	extraJSON, err := json.Marshal(extra)
-	if err != nil {
-		return err
-	}
-
-	return database.GetDB(ctx).WithContext(ctx).
-		Model(&model.AITaskItem{}).
-		Where("id = ?", taskID).
-		Update("extra", extraJSON).
-		Update("updated_at", time.Now()).
-		Error
-}
 
 // GetPendingSmartAlbumTasks 获取待处理的智能相册任务
-func (r *aiTaskRepository) GetPendingSmartAlbumTasks(ctx context.Context, limit int) ([]*model.AITaskItem, error) {
-	var taskItems []*model.AITaskItem
-	err := database.GetDB(ctx).WithContext(ctx).
-		Where("task_type = ? AND status = ?", model.SmartAlbumTaskType, model.AITaskItemStatusPending).
-		Order("created_at ASC").
-		Limit(limit).
-		Find(&taskItems).Error
-	return taskItems, err
-}
 
 // GetSmartAlbumTaskByID 根据 ID 获取智能相册任务
-func (r *aiTaskRepository) GetSmartAlbumTaskByID(ctx context.Context, taskID int64) (*model.AITaskItem, error) {
-	var taskItem model.AITaskItem
-	err := database.GetDB(ctx).WithContext(ctx).
-		Where("id = ? AND task_type = ?", taskID, model.SmartAlbumTaskType).
-		First(&taskItem).Error
-	if err != nil {
-		return nil, err
-	}
-	return &taskItem, nil
-}

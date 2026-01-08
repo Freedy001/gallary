@@ -7,10 +7,23 @@ import (
 	"net/http"
 )
 
-// ChatMessage Chat 消息结构
+// ChatMessage Chat 消息结构（支持多模态）
 type ChatMessage struct {
-	Role    string `json:"role"` // "system", "user", "assistant"
-	Content string `json:"content"`
+	Role    string      `json:"role"`    // "system", "user", "assistant"
+	Content interface{} `json:"content"` // string 或 []ContentPart
+}
+
+// ContentPart 消息内容部分（文本或图片）
+type ContentPart struct {
+	Type     string    `json:"type"`                // "text" 或 "image_url"
+	Text     string    `json:"text,omitempty"`      // type="text" 时使用
+	ImageURL *ImageURL `json:"image_url,omitempty"` // type="image_url" 时使用
+}
+
+// ImageURL 图片 URL 结构
+type ImageURL struct {
+	URL    string `json:"url"`              // base64 data URL 或 http URL
+	Detail string `json:"detail,omitempty"` // "low", "high", "auto"
 }
 
 // ModelClient 统一模型客户端接口
@@ -32,10 +45,15 @@ type EmbeddingClient interface {
 	Embedding(ctx context.Context, imageData []byte, text string) ([]float32, error)
 }
 
+// LLMSClient 通用大模型客户端接口（支持多模态，标准 OpenAI API）
 type LLMSClient interface {
 	ModelClient
 
 	// ChatCompletion 执行 Chat Completion 请求
+	// 支持纯文本或多模态内容（图片+文本）
+	// 消息的 Content 字段可以是：
+	//   - string: 纯文本内容
+	//   - []ContentPart: 多模态内容（文本和图片的组合）
 	ChatCompletion(ctx context.Context, messages []ChatMessage) (string, error)
 }
 

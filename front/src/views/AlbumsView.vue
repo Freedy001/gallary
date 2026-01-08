@@ -2,14 +2,14 @@
   <AppLayout>
     <template #header>
       <TopBar
-        :grid-density="uiStore.gridDensity"
-        :is-selection-mode="albumStore.hasSelection"
-        :selected-count="albumStore.selectedCount"
-        :show-density-slider="true"
-        :total-count="albumStore.total"
-        @select-all="handleSelectAll"
-        @exit-selection="albumStore.clearSelection()"
-        @density-change="uiStore.setGridDensity"
+          :grid-density="uiStore.gridDensity"
+          :is-selection-mode="albumStore.hasSelection"
+          :selected-count="albumStore.selectedCount"
+          :show-density-slider="true"
+          :total-count="albumStore.total"
+          @select-all="handleSelectAll"
+          @exit-selection="albumStore.clearSelection()"
+          @density-change="uiStore.setGridDensity"
       >
         <template #left>
           <div class="flex items-center gap-3">
@@ -62,7 +62,7 @@
           @mousedown="handleMouseDown"
       >
         <!-- 框选框 -->
-        <SelectionBox :style="selectionBoxStyle" />
+        <SelectionBox :style="selectionBoxStyle"/>
 
         <!-- 加载状态 -->
         <div v-if="albumStore.loading && albumStore.total === 0" class="flex h-64 items-center justify-center">
@@ -105,7 +105,7 @@
                   @click="album && handleAlbumClick($event, album)"
                   @contextmenu.prevent="album && handleContextMenu($event, album)"
               >
-                <AlbumCardSkeleton v-if="!album" />
+                <AlbumCardSkeleton v-if="!album"/>
                 <AlbumCard
                     v-else
                     :album="album"
@@ -117,7 +117,8 @@
           </div>
 
           <!-- 分隔线 -->
-          <div v-if="albumStore.normalSection.total > 0 && albumStore.smartSection.total > 0" class="border-t border-white/10"></div>
+          <div v-if="albumStore.normalSection.total > 0 && albumStore.smartSection.total > 0"
+               class="border-t border-white/10"></div>
 
           <!-- 智能相册区域 -->
           <div v-if="albumStore.smartSection.total > 0">
@@ -137,7 +138,7 @@
                   @click="album && handleAlbumClick($event, album)"
                   @contextmenu.prevent="album && handleContextMenu($event, album)"
               >
-                <AlbumCardSkeleton v-if="!album" />
+                <AlbumCardSkeleton v-if="!album"/>
                 <AlbumCard
                     v-else
                     :album="album"
@@ -153,50 +154,56 @@
 
       <!-- 创建/编辑相册弹窗 -->
       <EditAlbumModal
-        v-model="showCreateModal"
-        :edit-mode="isEditMode"
-        :initial-data="editingAlbum"
-        @created="onAlbumCreated"
-        @updated="onAlbumUpdated"
+          v-model="showCreateModal"
+          :edit-mode="isEditMode"
+          :initial-data="editingAlbum"
+          @created="onAlbumCreated"
+          @updated="onAlbumUpdated"
       />
 
       <!-- 生成智能相册弹窗 -->
       <GenerateSmartAlbumModal
-        v-model="showSmartAlbumModal"
-        @generated="albumStore.fetchAlbums()"
+          v-model="showSmartAlbumModal"
+          @generated="albumStore.fetchAlbums()"
       />
 
       <!-- 选择向量模型弹窗 -->
       <SelectModelModal
-        v-model="showSelectModelModal"
-        @selected="handleModelSelected"
+          v-model="showSelectModelModal"
+          @selected="handleModelSelected"
       />
 
       <!-- 右键菜单 -->
       <ContextMenu v-model="contextMenu.visible" :x="contextMenu.x" :y="contextMenu.y">
-        <ContextMenuItem :icon="PencilIcon" @click="handleEditAlbum">
+        <!-- 单选时显示编辑选项 -->
+        <ContextMenuItem v-if="contextMenuTargetIds.length === 1" :icon="PencilIcon" @click="handleEditAlbum">
           编辑相册
         </ContextMenuItem>
         <ContextMenuItem :icon="DocumentDuplicateIcon" @click="handleCopyAlbum">
-          复制相册
+          复制相册 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
+        </ContextMenuItem>
+        <ContextMenuItem :icon="SparklesIcon" @click="handleAINaming">
+          AI 命名 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
         </ContextMenuItem>
 
-        <!-- 封面管理 -->
-        <div class="h-px bg-white/10 my-1"></div>
-        <ContextMenuItem
-          v-if="selectedAlbumForMenu?.cover_image_id"
-          :icon="XMarkIcon"
-          @click="handleRemoveCover"
-        >
-          移除封面
-        </ContextMenuItem>
-        <ContextMenuItem :icon="SparklesIcon" @click="handleSetAverageCover">
-          设为平均封面
-        </ContextMenuItem>
+        <!-- 封面管理（仅单选时显示） -->
+        <template v-if="contextMenuTargetIds.length === 1">
+          <div class="h-px bg-white/10 my-1"></div>
+          <ContextMenuItem
+              v-if="selectedAlbumForMenu?.cover_image_id"
+              :icon="XMarkIcon"
+              @click="handleRemoveCover"
+          >
+            移除封面
+          </ContextMenuItem>
+          <ContextMenuItem :icon="SparklesIcon" @click="handleSetAverageCover">
+            设为平均封面
+          </ContextMenuItem>
+        </template>
 
         <div class="h-px bg-white/10 my-1"></div>
         <ContextMenuItem :icon="TrashIcon" :danger="true" @click="handleDeleteAlbum">
-          删除相册
+          删除相册 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
         </ContextMenuItem>
       </ContextMenu>
     </template>
@@ -204,13 +211,17 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({name: 'AlbumsView'})
+
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {useAlbumStore} from '@/stores/album'
 import {useDialogStore} from '@/stores/dialog'
 import {useUIStore} from '@/stores/ui'
 import {useGenericBoxSelection} from '@/composables/useGenericBoxSelection'
+import {useScrollPosition} from '@/composables/useScrollPosition'
 import {albumApi} from '@/api/album'
+import {aiApi} from '@/api/ai'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TopBar from '@/components/layout/TopBar.vue'
 import EditAlbumModal from '@/components/album/EditAlbumModal.vue'
@@ -218,9 +229,9 @@ import GenerateSmartAlbumModal from '@/components/album/GenerateSmartAlbumModal.
 import SelectModelModal from '@/components/album/SelectModelModal.vue'
 import AlbumCard from '@/components/album/AlbumCard.vue'
 import AlbumCardSkeleton from '@/components/album/AlbumCardSkeleton.vue'
-import SelectionBox from '@/components/common/SelectionBox.vue'
-import ContextMenu from '@/components/common/ContextMenu.vue'
-import ContextMenuItem from '@/components/common/ContextMenuItem.vue'
+import SelectionBox from '@/components/widgets/common/SelectionBox.vue'
+import ContextMenu from '@/components/widgets/common/ContextMenu.vue'
+import ContextMenuItem from '@/components/widgets/common/ContextMenuItem.vue'
 import {
   DocumentDuplicateIcon,
   PencilIcon,
@@ -237,6 +248,9 @@ const albumStore = useAlbumStore()
 const dialogStore = useDialogStore()
 const uiStore = useUIStore()
 
+// 保存滚动位置
+useScrollPosition()
+
 const containerRef = ref<HTMLElement | null>(null)
 const showCreateModal = ref(false)
 const showSmartAlbumModal = ref(false)
@@ -245,8 +259,9 @@ const isEditMode = ref(false)
 const editingAlbum = ref<Album | null>(null)
 
 // 右键菜单状态
-const contextMenu = ref({ visible: false, x: 0, y: 0 })
+const contextMenu = ref({visible: false, x: 0, y: 0})
 const selectedAlbumForMenu = ref<Album | null>(null)
+const contextMenuTargetIds = ref<number[]>([])
 
 // 合并所有已加载相册用于框选
 const allLoadedAlbums = computed(() => [
@@ -279,7 +294,7 @@ function setItemRef(section: 'normal' | 'smart', index: number, el: HTMLElement 
 const observer = ref<IntersectionObserver | null>(null)
 const pageSize = 20
 
-const { selectionBoxStyle, handleMouseDown, isDragOperation } = useGenericBoxSelection<Album>({
+const {selectionBoxStyle, handleMouseDown, isDragOperation} = useGenericBoxSelection<Album>({
   containerRef,
   itemRefs: combinedItemRefs,
   getItems: () => allLoadedAlbums.value,
@@ -356,6 +371,14 @@ function handleContextMenu(event: MouseEvent, album: Album) {
     x: event.clientX,
     y: event.clientY
   }
+
+  // 如果当前相册已被选中，则操作所有选中的相册
+  if (albumStore.selectedAlbums.has(album.id)) {
+    contextMenuTargetIds.value = Array.from(albumStore.selectedAlbums)
+  } else {
+    // 如果当前相册未被选中，则只操作当前相册
+    contextMenuTargetIds.value = [album.id]
+  }
 }
 
 function handleEditAlbum() {
@@ -369,12 +392,17 @@ function handleEditAlbum() {
 
 async function handleDeleteAlbum() {
   contextMenu.value.visible = false
+  const ids = contextMenuTargetIds.value
+  if (ids.length === 0) return
+
+  const isBatch = ids.length > 1
   const album = selectedAlbumForMenu.value
-  if (!album) return
 
   const confirmed = await dialogStore.confirm({
     title: '确认删除',
-    message: `确定要删除相册“${album.name}”吗？相册内的照片不会被删除。`,
+    message: isBatch
+        ? `确定要删除选中的 ${ids.length} 个相册吗？相册内的照片不会被删除。`
+        : `确定要删除相册"${album?.name}"吗？相册内的照片不会被删除。`,
     type: 'warning',
     confirmText: '删除'
   })
@@ -382,31 +410,80 @@ async function handleDeleteAlbum() {
   if (!confirmed) return
 
   try {
-    await albumStore.deleteAlbum(album.id)
+    await albumStore.deleteAlbum(ids)
+    if (isBatch) {
+      dialogStore.notify({
+        title: '删除成功',
+        message: `已删除 ${ids.length} 个相册`,
+        type: 'success'
+      })
+    }
   } catch (err) {
     console.error('删除相册失败', err)
-    dialogStore.alert({ title: '错误', message: '删除失败', type: 'error' })
+    dialogStore.alert({title: '错误', message: '删除失败', type: 'error'})
   }
 }
 
 // 复制相册
 async function handleCopyAlbum() {
   contextMenu.value.visible = false
-  const album = selectedAlbumForMenu.value
-  if (!album) return
+  const ids = contextMenuTargetIds.value
+  if (ids.length === 0) return
 
   try {
-    await albumApi.copy(album.id)
+    await albumStore.copyAlbum(ids)
     dialogStore.notify({
       title: '成功',
-      message: `已复制相册“${album.name}”`,
+      message: ids.length > 1 ? `已复制 ${ids.length} 个相册` : `已复制相册"${selectedAlbumForMenu.value?.name}"`,
       type: 'success'
     })
-    // 刷新相册列表
-    await albumStore.fetchAlbums()
+    albumStore.clearSelection()
   } catch (err) {
     console.error('复制相册失败', err)
-    dialogStore.alert({ title: '错误', message: '复制相册失败', type: 'error' })
+    dialogStore.alert({title: '错误', message: '复制相册失败', type: 'error'})
+  }
+}
+
+// AI 命名相册（任务加入队列）
+async function handleAINaming() {
+  contextMenu.value.visible = false
+  const ids = contextMenuTargetIds.value
+  if (ids.length === 0) return
+
+  try {
+    // 检测是否配置了默认命名模型
+    const hasConfigedModel = await aiApi.configedDefaultModel('DefaultNamingModelId')
+    if (!hasConfigedModel.data) {
+      const confirmed = await dialogStore.confirm({
+        title: '未配置默认命名模型',
+        message: '请先在设置页面配置默认命名模型，是否现在去配置？',
+        type: 'warning',
+        confirmText: '去配置'
+      })
+      if (confirmed) {
+        uiStore.settingActiveTab = 'ai'
+        await router.push('/gallery/settings')
+      }
+      return
+    }
+
+    const response = await albumApi.aiNaming(ids)
+    const addedCount = response.data?.added || 0
+
+    if (addedCount > 0) {
+      dialogStore.notify({
+        title: '已加入队列',
+        message: `已将 ${addedCount} 个相册的命名任务添加到 AI 处理队列`,
+        type: 'success'
+      })
+      albumStore.clearSelection()
+    } else {
+      dialogStore.alert({title: '提示', message: '任务已存在或无法添加', type: 'warning'})
+    }
+  } catch (err: any) {
+    console.error('AI 命名失败', err)
+    const errorMsg = err.response?.data?.message || 'AI 命名失败'
+    dialogStore.alert({title: '错误', message: errorMsg, type: 'error'})
   }
 }
 
@@ -434,7 +511,7 @@ async function handleBatchDelete() {
     })
   } catch (err) {
     console.error('批量删除相册失败', err)
-    dialogStore.alert({ title: '错误', message: '删除失败', type: 'error' })
+    dialogStore.alert({title: '错误', message: '删除失败', type: 'error'})
   }
 }
 
@@ -455,7 +532,7 @@ async function handleRemoveCover() {
     await albumStore.fetchAlbums()
   } catch (err) {
     console.error('移除封面失败', err)
-    dialogStore.alert({ title: '错误', message: '移除封面失败', type: 'error' })
+    dialogStore.alert({title: '错误', message: '移除封面失败', type: 'error'})
   }
 }
 
@@ -482,7 +559,7 @@ async function handleModelSelected(modelName: string) {
   } catch (err: any) {
     console.error('设置平均封面失败', err)
     const errorMsg = err.response?.data?.message || '设置平均封面失败'
-    dialogStore.alert({ title: '错误', message: errorMsg, type: 'error' })
+    dialogStore.alert({title: '错误', message: errorMsg, type: 'error'})
   }
 }
 
@@ -496,31 +573,31 @@ onUnmounted(() => {
 onMounted(() => {
   // 初始化 IntersectionObserver
   observer.value = new IntersectionObserver(
-    (entries) => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting) return
+      (entries) => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return
 
-        const el = entry.target as HTMLElement
-        const section = el.dataset.section as 'normal' | 'smart'
-        const index = Number(el.dataset.index)
+          const el = entry.target as HTMLElement
+          const section = el.dataset.section as 'normal' | 'smart'
+          const index = Number(el.dataset.index)
 
-        if (!section || isNaN(index)) return
+          if (!section || isNaN(index)) return
 
-        // 检查该位置是否已加载
-        const sectionData = section === 'normal'
-          ? albumStore.normalSection
-          : albumStore.smartSection
+          // 检查该位置是否已加载
+          const sectionData = section === 'normal'
+              ? albumStore.normalSection
+              : albumStore.smartSection
 
-        if (!sectionData.albums[index]) {
-          const page = Math.floor(index / pageSize) + 1
-          albumStore.fetchSection(section, page, pageSize)
-        }
-      })
-    },
-    {
-      rootMargin: '200px 0px',
-      threshold: 0
-    }
+          if (!sectionData.albums[index]) {
+            const page = Math.floor(index / pageSize) + 1
+            albumStore.fetchSection(section, page, pageSize)
+          }
+        })
+      },
+      {
+        rootMargin: '200px 0px',
+        threshold: 0
+      }
   )
 
   // 观察所有已存在的元素
@@ -533,12 +610,12 @@ onMounted(() => {
 
 // 监听分区数组长度变化，观察新元素
 watch(
-  () => [albumStore.normalSection.albums.length, albumStore.smartSection.albums.length],
-  () => {
-    nextTick(() => {
-      normalItemRefs.forEach(el => observer.value?.observe(el))
-      smartItemRefs.forEach(el => observer.value?.observe(el))
-    })
-  }
+    () => [albumStore.normalSection.albums.length, albumStore.smartSection.albums.length],
+    () => {
+      nextTick(() => {
+        normalItemRefs.forEach(el => observer.value?.observe(el))
+        smartItemRefs.forEach(el => observer.value?.observe(el))
+      })
+    }
 )
 </script>

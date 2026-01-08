@@ -259,7 +259,7 @@
 <script setup lang="ts">
 import {computed, onMounted, ref} from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import Modal from '@/components/common/Modal.vue'
+import Modal from '@/components/widgets/common/Modal.vue'
 import {shareApi} from '@/api/share'
 import {useDialogStore} from '@/stores/dialog'
 import type {Share} from '@/types'

@@ -14,7 +14,7 @@ const (
 	ImageEmbeddingTaskType   TaskType = "image-embedding"   // 向量嵌入
 	TagEmbeddingTaskType     TaskType = "tag-embedding"     // LLM 描述
 	AestheticScoringTaskType TaskType = "aesthetic-scoring" // 美学评分
-	SmartAlbumTaskType       TaskType = "smart-album"       // 智能相册生成
+	AlbumNamingTaskType      TaskType = "album-naming"      // 相册 AI 命名
 )
 
 // AI 队列状态常量（队列永久存在，只有 idle 和 processing 两种状态）
@@ -145,34 +145,16 @@ type HDBSCANParamsDTO struct {
 	UMAPNeighbors           int     `json:"umap_n_neighbors,omitempty"`
 }
 
-// AITaskItemExtra 任务扩展信息（存储在 AITaskItem.Extra 字段）
-type AITaskItemExtra struct {
-	// 通用字段
-	Progress     int    `json:"progress,omitempty"`       // 进度 0-100
-	Message      string `json:"message,omitempty"`        // 当前阶段描述
-	PythonTaskID string `json:"python_task_id,omitempty"` // Python 任务 ID
-
-	// 智能相册专用 - 配置
-	ModelName     string            `json:"model_name,omitempty"`
-	Algorithm     string            `json:"algorithm,omitempty"`
-	HDBSCANParams *HDBSCANParamsDTO `json:"hdbscan_params,omitempty"`
-
-	// 智能相册专用 - 结果
-	AlbumIDs     []int64 `json:"album_ids,omitempty"`     // 创建的相册 ID 列表
-	ClusterCount int     `json:"cluster_count,omitempty"` // 聚类数量
-	NoiseCount   int     `json:"noise_count,omitempty"`   // 噪声点数量
-	TotalImages  int     `json:"total_images,omitempty"`  // 总图片数
-}
-
 // SmartAlbumProgressVO 智能相册任务进度（WebSocket 推送）
 type SmartAlbumProgressVO struct {
-	TaskID       int64   `json:"task_id"`
-	Status       string  `json:"status"`                  // pending, collecting, clustering, creating, completed, failed
-	Progress     int     `json:"progress"`                // 0-100
-	Message      string  `json:"message"`                 // 当前阶段描述
-	Error        *string `json:"error,omitempty"`         // 错误信息
-	AlbumIDs     []int64 `json:"album_ids,omitempty"`     // 创建的相册 ID 列表
-	ClusterCount int     `json:"cluster_count,omitempty"` // 聚类数量
-	NoiseCount   int     `json:"noise_count,omitempty"`   // 噪声点数量
-	TotalImages  int     `json:"total_images,omitempty"`  // 总图片数
+	TaskID        int64   `json:"task_id"`
+	Status        string  `json:"status"`                    // pending, collecting, clustering, creating, completed, failed
+	Progress      int     `json:"progress"`                  // 0-100
+	Message       string  `json:"message"`                   // 当前阶段描述
+	Error         *string `json:"error,omitempty"`           // 错误信息
+	AlbumIDs      []int64 `json:"album_ids,omitempty"`       // 创建的相册 ID 列表
+	ClusterCount  int     `json:"cluster_count,omitempty"`   // 聚类数量
+	NoiseCount    int     `json:"noise_count,omitempty"`     // 噪声点数量
+	NoiseImageIDs []int64 `json:"noise_image_ids,omitempty"` // 噪声点图片ID列表
+	TotalImages   int     `json:"total_images,omitempty"`    // 总图片数
 }

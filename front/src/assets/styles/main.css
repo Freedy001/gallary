@@ -187,6 +187,37 @@ body::before {
     background: rgba(255, 255, 255, 0.2);
 }
 
+/* Textarea 调整大小手柄样式 */
+textarea::-webkit-resizer {
+    background: linear-gradient(135deg, transparent 0%, transparent 40%, rgba(69, 63, 85, 0.6) 40%, rgba(89, 69, 117, 0.8) 60%, transparent 60%);
+    border-radius: 0 0 0.5rem 0;
+}
+
+
+/* Textarea 滚动条样式优化 */
+textarea::-webkit-scrollbar {
+    width: 8px;
+}
+
+textarea::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 0.5rem 0;
+}
+
+textarea::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+textarea::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
 /* Vue 过渡动画 - 更平滑的曲线 */
 .fade-enter-active,
 .fade-leave-active {

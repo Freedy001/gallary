@@ -371,13 +371,25 @@ const (
 // CopositModelId 模型组合标识符（提供商ID,api_model_name）
 type CopositModelId string
 
-// Parse 解析组合ID，返回提供商ID和api模型名称
-func (id CopositModelId) Parse() (providerId string, modelName string) {
-	parts := strings.SplitN(string(id), ",", 2)
-	if len(parts) == 2 {
-		return parts[0], parts[1]
+func (id CopositModelId) Illegal() bool {
+	return strings.Count(string(id), ",") != 1
+}
+
+// ProviderIdANdModelName 解析组合ID，返回提供商ID和api模型名称
+func (id CopositModelId) ProviderIdANdModelName() (providerId string, modelName string) {
+	if id.Illegal() {
+		return "", ""
 	}
-	return string(id), ""
+
+	parts := strings.SplitN(string(id), ",", 2)
+	return parts[0], parts[1]
+}
+
+func (id CopositModelId) ModelName() string {
+	if id.Illegal() {
+		return ""
+	}
+	return string(id)[strings.Index(string(id), ",")+1:]
 }
 
 // CreateModelId 创建组合ID
@@ -391,13 +403,13 @@ type ModelItem struct {
 	ModelName    string `json:"model_name"`     // 内部标识/负载均衡分组
 }
 
-// EmbeddingModelInfo 嵌入模型信息（包含模型名称和供应商ID）
-type EmbeddingModelInfo struct {
+// ProviderAndModelName 嵌入模型信息（包含模型名称和供应商ID）
+type ProviderAndModelName struct {
 	ModelName  string `json:"model_name"`  // 模型名称（用于负载均衡分组）
 	ProviderID string `json:"provider_id"` // 供应商 ID
 }
 
-func (e *EmbeddingModelInfo) ToModelId() CopositModelId {
+func (e *ProviderAndModelName) ToModelId() CopositModelId {
 	return CreateModelId(e.ProviderID, e.ModelName)
 }
 
@@ -443,10 +455,13 @@ func (m *ModelConfig) Hash() string {
 
 // AIGlobalConfig AI 全局配置
 type AIGlobalConfig struct {
-	DefaultSearchModelId         string `json:"default_search_model_id"`          // 默认搜索模型 ID
-	DefaultTagModelId            string `json:"default_tag_model_id"`             // 默认打标签模型 ID
-	DefaultPromptOptimizeModelId string `json:"default_prompt_optimize_model_id"` // 默认打标签模型 ID
-	PromptOptimizeSystemPrompt   string `json:"prompt_optimize_system_prompt"`
+	DefaultSearchModelId         CopositModelId `json:"default_search_model_id"`          // 默认搜索模型 ID
+	DefaultTagModelId            CopositModelId `json:"default_tag_model_id"`             // 默认打标签模型 ID
+	DefaultPromptOptimizeModelId CopositModelId `json:"default_prompt_optimize_model_id"` // 默认打标签模型 ID
+	PromptOptimizeSystemPrompt   string         `json:"prompt_optimize_system_prompt"`
+	DefaultNamingModelId         CopositModelId `json:"default_naming_model_id"` // 默认命名模型 ID
+	NamingSystemPrompt           string         `json:"naming_system_prompt"`    // 命名提示词
+	NamingMaxImages              int            `json:"naming_max_images"`       // 命名最大图片数量（1-10，默认3）
 }
 
 // AIPo AI 配置 PO
@@ -470,15 +485,18 @@ func (a AIPo) GetEnabled() []*ModelConfig {
 
 // FindById 根据组合ID查找模型配置和模型项
 // compositeId 格式: "providerId,apiModelName" 或旧格式 "providerId"
-func (a AIPo) FindById(compositeId string) (*ModelConfig, *ModelItem) {
-	providerId, modelName := CopositModelId(compositeId).Parse()
+func (a AIPo) FindById(id CopositModelId) (*ModelConfig, *ModelItem) {
+	if id.Illegal() {
+		return nil, nil
+	}
+	providerId, modelName := id.ProviderIdANdModelName()
 
 	provider, find := lo.Find(a.GetEnabled(), func(item *ModelConfig) bool { return item.ID == providerId })
 	if !find {
 		return nil, nil
 	}
 
-	// 如果指定了 modelName，查找对应的模型项
+	// 如果指定了 ModelName，查找对应的模型项
 	if modelName != "" {
 		modelItem, find := lo.Find(provider.Models, func(item *ModelItem) bool { return item.ModelName == modelName })
 		if find {
@@ -487,7 +505,7 @@ func (a AIPo) FindById(compositeId string) (*ModelConfig, *ModelItem) {
 		return nil, nil
 	}
 
-	// 未指定 modelName，返回第一个模型项
+	// 未指定 ModelName，返回第一个模型项
 	return provider, provider.GetFirstModelItem()
 }
 
@@ -515,7 +533,7 @@ func (a AIPo) FindModelConfigByModelName(modelName string) []*ProviderWithModelI
 
 // GetDefaultTagModelName 获取默认打标签模型的 ModelId（用于负载均衡）
 func (a AIPo) GetDefaultTagModelName() string {
-	if a.GlobalConfig != nil && a.GlobalConfig.DefaultTagModelId != "" {
+	if a.GlobalConfig != nil && !a.GlobalConfig.DefaultTagModelId.Illegal() {
 		provider, modelItem := a.FindById(a.GlobalConfig.DefaultTagModelId)
 		if provider != nil && provider.Enabled && modelItem != nil {
 			return modelItem.ModelName

@@ -13,6 +13,7 @@ import (
 	"gallary/server/internal/repository"
 	"gallary/server/pkg/logger"
 
+	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
@@ -43,13 +44,16 @@ type AIService interface {
 
 	// 搜索
 	// 图片搜索（以图搜图，支持图片+文本混合查询）
-	SemanticSearchWithinIDs(ctx context.Context, imageData []byte, text string, modelId string, candidateIDs []int64, limit int) ([]*model.Image, error)
+	SemanticSearchWithinIDs(ctx context.Context, imageData []byte, text string, modelId model.CopositModelId, candidateIDs []int64, limit int) ([]*model.Image, error)
 
 	// 获取可用的嵌入模型列表（包含模型名称和供应商ID）
-	GetEmbeddingModels(ctx context.Context) ([]*model.EmbeddingModelInfo, error)
+	GetEmbeddingModels(ctx context.Context) ([]*model.ProviderAndModelName, error)
 
 	// 优化提示词
 	OptimizePrompt(ctx context.Context, query string) (string, error)
+
+	// 相册 AI 命名（将任务添加到队列）
+	QueueAlbumNaming(ctx context.Context, albumIDs []int64) (int, error)
 }
 
 type aiService struct {
@@ -131,7 +135,7 @@ func (s *aiService) GetQueueDetail(ctx context.Context, queueID int64, page, pag
 	}
 
 	// 获取队列统计
-	pending, _, failed, err := s.taskRepo.GetQueueStats(ctx, queueID)
+	pending, failed, err := s.taskRepo.GetQueueStats(ctx, queueID)
 	if err != nil {
 		return nil, err
 	}
@@ -236,11 +240,13 @@ func (s *aiService) batchFillTaskItemInfo(ctx context.Context, taskType model.Ta
 
 // RetryTaskItem 重试单个任务项
 func (s *aiService) RetryTaskItem(ctx context.Context, taskItemID int64) error {
+	defer s.notifyStatusChange(ctx)
 	return s.taskRepo.RetryTaskItem(ctx, taskItemID)
 }
 
 // IgnoreTaskItem 忽略单个任务项（删除关联）
 func (s *aiService) IgnoreTaskItem(ctx context.Context, taskItemID int64) error {
+	defer s.notifyStatusChange(ctx)
 	return s.taskRepo.RemoveTaskItem(ctx, taskItemID)
 }
 
@@ -248,6 +254,7 @@ func (s *aiService) IgnoreTaskItem(ctx context.Context, taskItemID int64) error 
 
 // RetryQueueFailedItems 重试队列所有失败项目
 func (s *aiService) RetryQueueFailedItems(ctx context.Context, queueID int64) error {
+	defer s.notifyStatusChange(ctx)
 	return s.taskRepo.RetryQueueFailedItems(ctx, queueID)
 }
 
@@ -309,17 +316,14 @@ func (s *aiService) aiTaskAdder() {
 	ctx := context.Background()
 
 	// ========== 获取所有可用的嵌入模型 ==========
-	models, err := s.loadBalancer.GetAllEmbeddingModels()
+	models, err := s.loadBalancer.GetAllgModelName()
 	if err != nil {
 		logger.Error("获取 AI 配置失败", zap.Error(err))
 		return
 	}
 
 	// 将可用模型放入 map 便于查找
-	validModels := make(map[string]bool)
-	for _, modelName := range models {
-		validModels[modelName] = true
-	}
+	validModels := lo.SliceToMap(models, func(modelName string) (string, bool) { return modelName, true })
 
 	// ========== 清理无效队列 ==========
 	allQueues, err := s.taskRepo.GetAllQueues(ctx)
@@ -342,9 +346,9 @@ func (s *aiService) aiTaskAdder() {
 						zap.String("model_name", queue.ModelName),
 						zap.Int64("queue_id", queue.ID))
 				}
+				s.notifyStatusChange(ctx)
 			}
 		}
-		s.notifyStatusChange(ctx)
 	}
 
 	// ========== 4. 遍历所有处理器，为每个模型同步任务项 ==========
@@ -434,7 +438,7 @@ func (s *aiService) processQueueItems() {
 	s.processQueue(ctx, queue)
 
 	// 检查队列是否还有待处理任务项
-	pending, _, _, err := s.taskRepo.GetQueueStats(ctx, queue.ID)
+	pending, _, err := s.taskRepo.GetQueueStats(ctx, queue.ID)
 	if err == nil && pending == 0 {
 		// 队列空闲
 		queue.Status = model.AIQueueStatusIdle
@@ -502,8 +506,11 @@ func (s *aiService) processQueue(ctx context.Context, queue *model.AIQueue) {
 // ================== 语义搜索 ==================
 
 // ImageSearchWithinIDs 通过图片（可选文本）进行语义搜索
-func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byte, text string, modelId string, candidateIDs []int64, limit int) ([]*model.Image, error) {
+func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byte, text string, modelId model.CopositModelId, candidateIDs []int64, limit int) ([]*model.Image, error) {
 	if candidateIDs != nil && len(candidateIDs) == 0 {
+		return []*model.Image{}, nil
+	}
+	if modelId.Illegal() {
 		return []*model.Image{}, nil
 	}
 
@@ -525,7 +532,7 @@ func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byt
 	}
 
 	// 在指定ID范围内执行向量搜索（使用 modelItem.ModelId 作为内部标识）
-	results, err := s.embeddingRepo.VectorSearchWithinIDs(ctx, modelId, queryEmbedding, candidateIDs, limit)
+	results, err := s.embeddingRepo.VectorSearchWithinIDs(ctx, modelId.ModelName(), queryEmbedding, candidateIDs, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -579,7 +586,7 @@ func (s *aiService) notifyStatusChange(ctx context.Context) {
 }
 
 // GetEmbeddingModels 获取可用的嵌入模型列表（包含模型名称和供应商ID）
-func (s *aiService) GetEmbeddingModels(_ context.Context) ([]*model.EmbeddingModelInfo, error) {
+func (s *aiService) GetEmbeddingModels(_ context.Context) ([]*model.ProviderAndModelName, error) {
 	models, err := s.loadBalancer.GetAllEmbeddingModelsWithProvider()
 	if err != nil {
 		return models, err
@@ -628,4 +635,57 @@ func (s *aiService) OptimizePrompt(ctx context.Context, query string) (string, e
 	}
 
 	return llmsClient.ChatCompletion(ctx, messages)
+}
+
+// QueueAlbumNaming 将相册命名任务添加到队列
+func (s *aiService) QueueAlbumNaming(ctx context.Context, albumIDs []int64) (int, error) {
+	if len(albumIDs) == 0 {
+		return 0, fmt.Errorf("请选择要命名的相册")
+	}
+
+	// 获取默认命名模型配置
+	if internal.PlatConfig.GlobalConfig == nil || internal.PlatConfig.GlobalConfig.DefaultNamingModelId == "" {
+		return 0, fmt.Errorf("未配置默认命名模型")
+	}
+
+	modelId := internal.PlatConfig.GlobalConfig.DefaultNamingModelId
+	if modelId.Illegal() {
+		return 0, fmt.Errorf("默认命名模型配置无效")
+	}
+
+	// 验证模型是否可用
+	client, err := s.loadBalancer.GetClientByID(modelId)
+	if err != nil {
+		return 0, fmt.Errorf("获取模型失败: %v", err)
+	}
+
+	// 验证模型是否支持 LLM 功能
+	if _, ok := client.(llms.LLMSClient); !ok {
+		return 0, fmt.Errorf("默认命名模型不支持 LLM 功能")
+	}
+
+	// 获取模型名称用于创建队列
+	modelName := modelId.ModelName()
+
+	// 查找或创建队列
+	queue, err := s.taskRepo.FindOrCreateQueue(ctx, model.AlbumNamingTaskType, modelName)
+	if err != nil {
+		return 0, fmt.Errorf("创建队列失败: %v", err)
+	}
+
+	// 添加任务到队列
+	added, err := s.taskRepo.AddItemsToQueue(ctx, queue.ID, queue.QueueKey, albumIDs, model.AlbumNamingTaskType)
+	if err != nil {
+		return 0, fmt.Errorf("添加任务到队列失败: %v", err)
+	}
+
+	// 通知状态变化
+	s.notifyStatusChange(ctx)
+
+	logger.Info("已添加相册命名任务到队列",
+		zap.Int("added_count", added),
+		zap.Int("total_requested", len(albumIDs)),
+		zap.String("model_name", modelName))
+
+	return added, nil
 }

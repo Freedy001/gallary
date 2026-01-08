@@ -93,7 +93,7 @@ import type {AIQueueInfo} from '@/types/ai.ts'
 import {getQueueDisplayName} from '@/types/ai.ts'
 import {onClickOutside} from '@vueuse/core'
 import AIQueueDetailModal from '@/components/widgets/AIQueueDetailModal.vue'
-import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
+import LiquidGlassCard from '@/components/widgets/common/LiquidGlassCard.vue'
 
 const props = defineProps<{
   visible: boolean

@@ -123,6 +123,37 @@ func (h *ImageHandler) GetByID(c *gin.Context) {
 	utils.Success(c, image)
 }
 
+// GetByIDs 批量获取图片
+//
+//	@Summary		批量获取图片
+//	@Description	根据ID列表获取图片信息
+//	@Tags			图片管理
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		object{ids=[]int64}	true	"图片ID列表"
+//	@Success		200		{object}	utils.Response{data=[]model.ImageVO}	"获取成功"
+//	@Failure		400		{object}	utils.Response	"请求参数错误"
+//	@Failure		500		{object}	utils.Response	"获取失败"
+//	@Router			/api/images/batch [post]
+func (h *ImageHandler) GetByIDs(c *gin.Context) {
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的请求参数")
+		return
+	}
+
+	images, err := h.service.GetByIDs(c.Request.Context(), req.IDs)
+	if err != nil {
+		logger.Error("批量获取图片失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.Success(c, images)
+}
+
 // Delete 删除图片
 //
 //	@Summary		删除图片

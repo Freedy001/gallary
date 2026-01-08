@@ -15,8 +15,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
-import { thumbnailCache } from '@/utils/imageCache'
+import {onMounted, ref, watch} from 'vue'
+import {thumbnailCache} from '@/utils/imageCache.ts'
 
 const props = withDefaults(defineProps<{
   src: string

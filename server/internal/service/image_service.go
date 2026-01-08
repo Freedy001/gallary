@@ -56,6 +56,7 @@ type MetadataUpdate struct {
 type ImageService interface {
 	Upload(ctx context.Context, file *multipart.FileHeader, albumID *int64) (*model.ImageVO, error)
 	GetByID(ctx context.Context, id int64) (*model.ImageVO, error)
+	GetByIDs(ctx context.Context, ids []int64) ([]*model.ImageVO, error)
 	List(ctx context.Context, page, pageSize int) ([]*model.ImageVO, int64, error)
 	Delete(ctx context.Context, id int64) error
 	DeleteBatch(ctx context.Context, ids []int64) error
@@ -349,6 +350,18 @@ func (s *imageService) GetByID(ctx context.Context, id int64) (*model.ImageVO, e
 	}
 
 	return s.storage.ToVO(image), nil
+}
+
+// GetByIDs 根据ID列表获取图片
+func (s *imageService) GetByIDs(ctx context.Context, ids []int64) ([]*model.ImageVO, error) {
+	if len(ids) == 0 {
+		return []*model.ImageVO{}, nil
+	}
+	images, err := s.repo.FindByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	return s.storage.ToVOList(images), nil
 }
 
 // List 获取图片列表

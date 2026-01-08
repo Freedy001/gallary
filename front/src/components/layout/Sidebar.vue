@@ -189,7 +189,7 @@
             ]"
           >
             <div v-if="isActive" class="absolute left-0 top-0 bottom-0 w-1 bg-primary-500 shadow-[0_0_10px_rgba(139,92,246,0.6)]"></div>
-            <Cog6ToothIcon :class="['h-5 w-5 flex-shrink-0 transition-transform duration-300', isActive ? 'text-primary-400 scale-110' : 'group-hover:scale-110']" />
+            <Cog6ToothIcon :class="['h-5 w-5 shrink-0 transition-transform duration-300', isActive ? 'text-primary-400 scale-110' : 'group-hover:scale-110']" />
             <span v-if="!uiStore.sidebarCollapsed" class="tracking-wide">系统设置</span>
           </button>
         </router-link>
@@ -226,18 +226,40 @@
           <AIQueueStatus :collapsed="uiStore.sidebarCollapsed"/>
         </div>
       </Transition>
+
+      <!-- 智能相册生成进度 -->
+      <Transition
+        enter-active-class="transition-all duration-300 ease-out"
+        enter-from-class="opacity-0 -translate-y-2 scale-95"
+        enter-to-class="opacity-100 translate-y-0 scale-100"
+        leave-active-class="transition-all duration-200 ease-in"
+        leave-from-class="opacity-100 translate-y-0 scale-100"
+        leave-to-class="opacity-0 -translate-y-2 scale-95"
+      >
+        <SmartAlbumStatus
+          v-if="smartAlbumStore.taskInProgress || smartAlbumStore.result || smartAlbumStore.errorMessage"
+          :collapsed="uiStore.sidebarCollapsed"
+          @click="showResultModal = true"
+        />
+      </Transition>
     </div>
+
+    <!-- 智能相册结果弹窗 -->
+    <SmartAlbumResultModal v-model="showResultModal" />
   </aside>
 </template>
 
 <script setup lang="ts">
-import {computed} from 'vue'
+import {computed, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {useUIStore} from '@/stores/ui'
 import {useNotificationStore} from '@/stores/notification'
+import {useSmartAlbumStore} from '@/stores/smartAlbum'
 import UploadDrawer from '@/components/upload/UploadDrawer.vue'
 import StorageUsage from '@/components/widgets/StorageUsage.vue'
 import AIQueueStatus from '@/components/widgets/AIQueueStatus.vue'
+import SmartAlbumStatus from '@/components/widgets/SmartAlbumStatus.vue'
+import SmartAlbumResultModal from '@/components/album/SmartAlbumResultModal.vue'
 import {
   Bars3Icon,
   ChevronLeftIcon,
@@ -253,17 +275,18 @@ const router = useRouter()
 const route = useRoute()
 const uiStore = useUIStore()
 const notificationStore = useNotificationStore()
+const smartAlbumStore = useSmartAlbumStore()
+
+const showResultModal = ref(false)
 
 // 判断是否有 AI 任务（pending 或 failed，或有队列正在处理中）
 const hasAITasks = computed(() => {
   const status = notificationStore.aiQueueStatus
   if (!status) return false
-  const hasProcessing = status.queues?.some(q => q.status === 'processing') || false
-  return (status.total_pending > 0 || hasProcessing || status.total_failed > 0)
+  return (status.total_pending > 0 || status.total_failed > 0)
 })
 
 function navigateTo(path: string) {
   router.push(path)
 }
-
 </script>

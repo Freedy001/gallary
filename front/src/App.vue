@@ -15,7 +15,11 @@
 
     <!-- 主体内容 -->
     <div class="relative z-10">
-      <router-view />
+      <router-view v-slot="{ Component, route }">
+        <keep-alive :include="keepAliveComponents">
+          <component :is="Component" :key="route.meta.usePathAsKey ? route.fullPath : undefined" />
+        </keep-alive>
+      </router-view>
     </div>
 
     <!-- 全局确认对话框 -->
@@ -24,8 +28,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import {onMounted, onUnmounted, ref} from 'vue'
+import ConfirmDialog from '@/components/widgets/common/ConfirmDialog.vue'
+
+// 需要缓存的视图组件名称
+const keepAliveComponents = ['GalleryView', 'AlbumsView']
 
 // 应用根组件
 const meteorCanvas = ref<HTMLCanvasElement | null>(null)

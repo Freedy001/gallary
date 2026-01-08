@@ -145,13 +145,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import { useDialogStore } from '@/stores/dialog'
-import type { DialogType, Notification } from '@/types/dialog'
+import {computed, watch} from 'vue'
+import {useDialogStore} from '@/stores/dialog.ts'
+import type {DialogType, Notification} from '@/types/dialog.ts'
 import {
+  CheckCircleIcon,
   ExclamationTriangleIcon,
   InformationCircleIcon,
-  CheckCircleIcon,
   XCircleIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline'

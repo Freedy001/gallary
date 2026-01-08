@@ -62,29 +62,12 @@ func newOpenAIClient(provider *model.ModelConfig, modelItem *model.ModelItem, ht
 	}
 }
 
-// TestConnection 测试连接
-func (c *OpenAIClient) TestConnection(ctx context.Context, model_name string) error {
-	url := c.config.Endpoint + "/v1/models"
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return err
-	}
-
-	if c.config.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("连接失败: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("服务返回错误状态: %d", resp.StatusCode)
-	}
-
-	return nil
+// TestConnection 测试连接（使用模型名测试）
+func (c *OpenAIClient) TestConnection(ctx context.Context, _ string) error {
+	_, err := c.ChatCompletion(ctx, []ChatMessage{
+		{Role: "user", Content: "hi"},
+	})
+	return err
 }
 
 // GetConfig 获取模型配置
@@ -92,13 +75,23 @@ func (c *OpenAIClient) GetConfig() *model.ModelConfig {
 	return c.config
 }
 
-// ChatCompletion 执行 Chat Completion 请求
+// ChatCompletion 执行 Chat Completion 请求（支持纯文本或多模态）
 func (c *OpenAIClient) ChatCompletion(ctx context.Context, messages []ChatMessage) (string, error) {
+	if len(messages) == 0 {
+		return "", fmt.Errorf("未提供提示词信息")
+	}
+
+	for _, m := range messages {
+		_, isStr := m.Content.(string)
+		_, isContentPart := m.Content.([]ContentPart)
+		if !isStr && !isContentPart {
+			return "", fmt.Errorf("提示词内容格式错误")
+		}
+	}
+
 	reqBody := ChatCompletionRequest{
-		Model:       c.modelItem.ApiModelName,
-		Messages:    messages,
-		Temperature: 0, // 贪婪解码，保持输出稳定
-		MaxTokens:   128,
+		Model:    c.modelItem.ApiModelName,
+		Messages: messages,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
@@ -150,23 +143,7 @@ func CleanPromptResponse(response string) string {
 			response = response[:idx]
 		}
 	}
-
 	response = strings.TrimSpace(response)
 	response = strings.Trim(response, "\"'")
-
-	// 移除常见前缀
-	prefixes := []string{"Output:", "Optimized:", "Result:", "English:"}
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(response, prefix) {
-			response = strings.TrimPrefix(response, prefix)
-			response = strings.TrimSpace(response)
-		}
-	}
-
-	// 只取第一行
-	if idx := strings.Index(response, "\n"); idx != -1 {
-		response = response[:idx]
-	}
-
 	return strings.TrimSpace(response)
 }

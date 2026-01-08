@@ -84,3 +84,16 @@ export interface SmartAlbumTaskVO {
   created_at: string
   updated_at: string
 }
+
+export interface SmartAlbumProgressVO {
+  task_id: number
+  status: SmartAlbumTaskStatus
+  progress: number
+  message: string
+  error?: string
+  album_ids?: number[]
+  cluster_count?: number
+  noise_count?: number
+  noise_image_ids?: number[]
+  total_images?: number
+}

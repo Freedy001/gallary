@@ -6,7 +6,7 @@
         @migration-completed="handleMigrationCompleted"
     />
 
-    <div class="border-b border-white/5 p-5 bg-white/[0.02]">
+    <div class="border-b border-white/5 p-5 bg-white/2">
       <h2 class="text-lg font-medium text-white">存储配置</h2>
       <p class="mt-1 text-sm text-gray-500">选择并配置图片存储方式</p>
     </div>
@@ -52,7 +52,7 @@
               'p-4 rounded-xl border text-center transition-all duration-300 relative',
               editingType === type.value
                 ? 'border-primary-500 bg-primary-500/10 text-primary-400'
-                : 'border-white/10 bg-white/[0.02] text-gray-400 hover:border-white/20 hover:bg-white/5'
+                : 'border-white/10 bg-white/2 text-gray-400 hover:border-white/20 hover:bg-white/5'
             ]"
           >
             <!-- 默认标识 -->
@@ -102,32 +102,28 @@
       <div v-if="editingType === 'minio'" class="p-4 text-center text-gray-500">
         MinIO 配置暂未实现
       </div>
-
-      <div class="pt-4">
-        <button
-            @click="handleSave"
-            :disabled="saving"
-            class="px-6 py-2.5 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 ring-1 ring-primary-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {{ saving ? '保存中...' : '保存存储配置' }}
-        </button>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
-import { settingsApi, type StorageConfigPO, type AliyunPanStorageConfig } from '@/api/settings'
-import type { StorageId } from '@/api/storage'
-import { parseStorageId } from '@/api/storage'
-import { useDialogStore } from '@/stores/dialog'
+import {computed, onMounted, reactive, ref, watch} from 'vue'
+import {type AliyunPanStorageConfig, settingsApi, type StorageConfigPO} from '@/api/settings'
+import type {StorageId} from '@/api/storage'
+import {parseStorageId} from '@/api/storage'
+import {useDialogStore} from '@/stores/dialog'
 import LocalStorageConfig from './storage/LocalStorageConfig.vue'
 import AliyunPanConfig from './storage/AliyunPanConfig.vue'
 import MigrationProgress from './MigrationProgress.vue'
-import BaseSelect from '@/components/common/BaseSelect.vue'
+import BaseSelect from '@/components/widgets/common/BaseSelect.vue'
 
 const dialogStore = useDialogStore()
+
+// 定义 emits
+const emit = defineEmits<{
+  change: [hasChanges: boolean]
+  saving: [isSaving: boolean]
+}>()
 
 const storageTypes = [
   { value: 'local', label: '本地存储', desc: '文件系统' },
@@ -164,6 +160,31 @@ const form = reactive<StorageConfigPO>({
   },
   aliyunpan_user: [],
 })
+
+// 原始配置，用于对比是否有变化
+const originalForm = reactive<StorageConfigPO>({
+  storageId: 'local',
+  localConfig: {
+    id: 'local',
+    base_path: '',
+  },
+  aliyunpanConfig: [],
+  aliyunpanGlobal: {
+    download_chunk_size: 512,
+    download_concurrency: 8,
+  },
+  aliyunpan_user: [],
+})
+
+// 监听表单变化
+watch(
+  () => form,
+  () => {
+    const hasChanges = JSON.stringify(form) !== JSON.stringify(originalForm)
+    emit('change', hasChanges)
+  },
+  { deep: true }
+)
 
 // 判断是否是默认存储
 function isDefaultStorage(type: string): boolean {
@@ -213,6 +234,9 @@ async function loadSettings() {
       aliyunpanGlobal: data.aliyunpanGlobal || { download_chunk_size: 512, download_concurrency: 8 },
       aliyunpan_user: data.aliyunpan_user || [],
     })
+
+    // 保存原始数据
+    Object.assign(originalForm, JSON.parse(JSON.stringify(form)))
 
     // 初始化时，编辑类型默认为当前默认存储类型
     const { driver } = parseStorageId(form.storageId)
@@ -293,6 +317,7 @@ async function handleSetDefault(id: StorageId) {
 
 async function handleSave() {
   saving.value = true
+  emit('saving', true)
   try {
     // 根据当前编辑的类型保存配置
     if (editingType.value === 'local' && form.localConfig) {
@@ -324,6 +349,10 @@ async function handleSave() {
         type: 'success'
       })
     }
+    
+    // 更新原始数据
+    Object.assign(originalForm, JSON.parse(JSON.stringify(form)))
+    emit('change', false)
   } catch (error: any) {
     if (error.response?.status === 423) {
       dialogStore.alert({
@@ -340,8 +369,25 @@ async function handleSave() {
     }
   } finally {
     saving.value = false
+    emit('saving', false)
   }
 }
+
+// 暴露 save 方法
+function save() {
+  return handleSave()
+}
+
+// 还原配置方法
+function restore() {
+  Object.assign(form, JSON.parse(JSON.stringify(originalForm)))
+  emit('change', false)
+}
+
+defineExpose({
+  save,
+  restore
+})
 
 onMounted(() => {
   loadSettings()

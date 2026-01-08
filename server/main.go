@@ -69,7 +69,7 @@ func main() {
 		handler.NewAuthHandler(),
 		handler.NewImageHandler(imageService),
 		handler.NewShareHandler(shareService),
-		handler.NewAlbumHandler(albumService),
+		handler.NewAlbumHandler(albumService, aiService),
 		handler.NewSettingHandler(settingService),
 		handler.NewStorageHandler(settingService.GetStorageManager(), settingService),
 		handler.NewMigrationHandler(migrationService),
@@ -189,6 +189,13 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 
 	// 美学评分处理器
 	service.RegisterProcessor(ai_processors.NewAestheticScoringProcessor(
+		imageRepo,
+		storageManager,
+	))
+
+	// 相册命名处理器
+	service.RegisterProcessor(ai_processors.NewAlbumNamingProcessor(
+		albumRepo,
 		imageRepo,
 		storageManager,
 	))

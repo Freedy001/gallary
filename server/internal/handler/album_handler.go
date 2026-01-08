@@ -14,11 +14,15 @@ import (
 // AlbumHandler 相册处理器
 type AlbumHandler struct {
 	albumService service.AlbumService
+	aiService    service.AIService
 }
 
 // NewAlbumHandler 创建相册处理器实例
-func NewAlbumHandler(service service.AlbumService) *AlbumHandler {
-	return &AlbumHandler{albumService: service}
+func NewAlbumHandler(albumService service.AlbumService, aiService service.AIService) *AlbumHandler {
+	return &AlbumHandler{
+		albumService: albumService,
+		aiService:    aiService,
+	}
 }
 
 // Create 创建相册
@@ -120,26 +124,34 @@ func (h *AlbumHandler) Update(c *gin.Context) {
 	utils.SuccessWithMessage(c, "更新成功", album)
 }
 
-// Delete 删除相册
+// BatchDelete 批量删除相册
 //
-//	@Summary		删除相册
-//	@Description	根据ID删除相册
+//	@Summary		批量删除相册
+//	@Description	批量删除多个相册
 //	@Tags			相册管理
+//	@Accept			json
 //	@Produce		json
-//	@Param			id	path		int				true	"相册ID"
-//	@Success		200	{object}	utils.Response	"删除成功"
-//	@Failure		400	{object}	utils.Response	"无效的相册ID"
-//	@Failure		500	{object}	utils.Response	"删除失败"
-//	@Router			/api/albums/{id} [delete]
-func (h *AlbumHandler) Delete(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "无效的相册ID")
+//	@Param			request	body		object{ids=[]int64}	true	"相册ID列表"
+//	@Success		200		{object}	utils.Response		"删除成功"
+//	@Failure		400		{object}	utils.Response		"无效的参数"
+//	@Failure		500		{object}	utils.Response		"删除失败"
+//	@Router			/api/albums/batch-delete [post]
+func (h *AlbumHandler) BatchDelete(c *gin.Context) {
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数")
 		return
 	}
 
-	if err := h.albumService.Delete(c.Request.Context(), id); err != nil {
-		logger.Error("删除相册失败", zap.Error(err))
+	if len(req.IDs) == 0 {
+		utils.BadRequest(c, "请选择要删除的相册")
+		return
+	}
+
+	if err := h.albumService.BatchDelete(c.Request.Context(), req.IDs); err != nil {
+		logger.Error("批量删除相册失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
 		return
 	}
@@ -147,32 +159,76 @@ func (h *AlbumHandler) Delete(c *gin.Context) {
 	utils.SuccessWithMessage(c, "删除成功", nil)
 }
 
-// Copy 复制相册
+// BatchCopy 批量复制相册
 //
-//	@Summary		复制相册
-//	@Description	复制相册（包括相册内的所有图片关联）
+//	@Summary		批量复制相册
+//	@Description	批量复制多个相册（包括相册内的所有图片关联）
 //	@Tags			相册管理
+//	@Accept			json
 //	@Produce		json
-//	@Param			id	path		int									true	"相册ID"
-//	@Success		200	{object}	utils.Response{data=model.AlbumVO}	"复制成功"
-//	@Failure		400	{object}	utils.Response						"无效的相册ID"
-//	@Failure		500	{object}	utils.Response						"复制失败"
-//	@Router			/api/albums/{id}/copy [post]
-func (h *AlbumHandler) Copy(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "无效的相册ID")
+//	@Param			request	body		object{ids=[]int64}						true	"相册ID列表"
+//	@Success		200		{object}	utils.Response{data=[]model.AlbumVO}	"复制成功"
+//	@Failure		400		{object}	utils.Response							"无效的参数"
+//	@Failure		500		{object}	utils.Response							"复制失败"
+//	@Router			/api/albums/batch-copy [post]
+func (h *AlbumHandler) BatchCopy(c *gin.Context) {
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数")
 		return
 	}
 
-	album, err := h.albumService.Copy(c.Request.Context(), id)
+	if len(req.IDs) == 0 {
+		utils.BadRequest(c, "请选择要复制的相册")
+		return
+	}
+
+	albums, err := h.albumService.BatchCopy(c.Request.Context(), req.IDs)
 	if err != nil {
-		logger.Error("复制相册失败", zap.Error(err))
+		logger.Error("批量复制相册失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
 		return
 	}
 
-	utils.SuccessWithMessage(c, "复制成功", album)
+	utils.SuccessWithMessage(c, "复制成功", albums)
+}
+
+// AINaming AI 命名相册
+//
+//	@Summary		AI 命名相册
+//	@Description	将相册命名任务添加到 AI 处理队列，使用视觉模型异步生成相册名称
+//	@Tags			相册管理
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		object{ids=[]int64}						true	"相册ID列表"
+//	@Success		200		{object}	utils.Response{data=object{added=int}}	"任务已添加到队列"
+//	@Failure		400		{object}	utils.Response						"无效的参数"
+//	@Failure		500		{object}	utils.Response						"添加失败"
+//	@Router			/api/albums/ai-naming [post]
+func (h *AlbumHandler) AINaming(c *gin.Context) {
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数")
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		utils.BadRequest(c, "请选择要命名的相册")
+		return
+	}
+
+	added, err := h.aiService.QueueAlbumNaming(c.Request.Context(), req.IDs)
+	if err != nil {
+		logger.Error("AI 命名相册失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "命名任务已添加到队列", gin.H{"added": added})
 }
 
 // GetImages 获取相册内图片

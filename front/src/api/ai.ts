@@ -37,8 +37,8 @@ export const aiApi = {
     return http.get('/api/ai/embedding-models')
   },
 
-  // 获取支持 ChatCompletion 的模型列表
-  getChatCompletionModels(type: "DefaultPromptOptimizeModelId"): Promise<ApiResponse<boolean>> {
+  // 检测是否配置了指定的默认模型
+  configedDefaultModel(type: "DefaultPromptOptimizeModelId" | "DefaultNamingModelId"): Promise<ApiResponse<boolean>> {
     return http.get('/api/settings/configed-default-model/' + type)
   },
 
@@ -64,12 +64,12 @@ export const aiApi = {
 
   // 重试单张图片
   retryTaskImage(taskImageId: number): Promise<ApiResponse<null>> {
-    return http.post(`/api/ai/task-images/${taskImageId}/retry`)
+    return http.post(`/api/ai/task-items/${taskImageId}/retry`)
   },
 
   // 忽略单张图片
   ignoreTaskImage(taskImageId: number): Promise<ApiResponse<null>> {
-    return http.post(`/api/ai/task-images/${taskImageId}/ignore`)
+    return http.post(`/api/ai/task-items/${taskImageId}/ignore`)
   },
 
   // 提交智能相册任务（异步接口，进度通过 WebSocket 推送）

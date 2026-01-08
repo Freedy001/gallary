@@ -42,7 +42,7 @@
 <script setup lang="ts">
 import {computed} from 'vue'
 import {useUIStore} from '@/stores/ui'
-import LiquidGlassCard from "@/components/common/LiquidGlassCard.vue";
+import LiquidGlassCard from "@/components/widgets/common/LiquidGlassCard.vue";
 
 const uiStore = useUIStore()
 

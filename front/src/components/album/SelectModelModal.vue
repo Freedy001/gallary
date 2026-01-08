@@ -66,7 +66,7 @@
 
 <script lang="ts" setup>
 import {ref, watch} from 'vue'
-import Modal from '@/components/common/Modal.vue'
+import Modal from '@/components/widgets/common/Modal.vue'
 import {CheckIcon} from '@heroicons/vue/24/outline'
 import {aiApi} from '@/api/ai'
 import type {EmbeddingModelInfo} from '@/types/ai'

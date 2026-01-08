@@ -38,9 +38,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, shallowRef, watch, onUnmounted, onMounted } from 'vue'
+import {computed, onMounted, onUnmounted, ref, shallowRef, watch} from 'vue'
 import AMapLoader from '@amap/amap-jsapi-loader'
-import { useDebounceFn, onClickOutside } from '@vueuse/core'
+import {onClickOutside, useDebounceFn} from '@vueuse/core'
 
 const props = withDefaults(defineProps<{
   modelValue?: string // location name
