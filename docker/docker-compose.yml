@@ -13,7 +13,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-123456}
       POSTGRES_DB: ${DB_NAME:-devdb}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # PostgreSQL 18+ 需要挂载到 /var/lib/postgresql 而不是 /var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     ports:
       - "${DB_PORT:-5432}:5432"
     healthcheck:
