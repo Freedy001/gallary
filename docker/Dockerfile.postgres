@@ -1,6 +1,6 @@
 # PostgreSQL with pgvector and PostGIS extensions
 # 基于最新的 pgvector 镜像，使用阿里云镜像加速
-FROM registry.cn-hangzhou.aliyuncs.com/pgvector/pgvector:0.8.1-pg18-trixie
+FROM pgvector/pgvector:0.8.1-pg18-trixie
 
 # 配置阿里云 Debian 镜像源
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
