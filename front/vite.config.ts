@@ -16,6 +16,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:9099',
+        ws: true,
         changeOrigin: true
       },
       '/health': {

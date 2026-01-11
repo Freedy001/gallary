@@ -1,4 +1,4 @@
-import type { WSMessage, ConnectionState, WSEventHandlers, MessageType } from '@/types/websocket'
+import type {ConnectionState, MessageType, WSEventHandlers, WSMessage} from '@/types/websocket'
 
 class WebSocketService {
   private ws: WebSocket | null = null
@@ -35,7 +35,7 @@ class WebSocketService {
 
     // 构建 WebSocket URL
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = import.meta.env.VITE_API_BASE_URL?.replace(/^https?:\/\//, '') || window.location.host
+    const host = window.location.host
     const token = localStorage.getItem('auth_token') || ''
     this.url = `${protocol}//${host}/api/ws?token=${encodeURIComponent(token)}`
 

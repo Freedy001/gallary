@@ -10,10 +10,6 @@ RUN bun install --frozen-lockfile
 # 复制源代码
 COPY . .
 
-# 构建参数
-ARG VITE_API_BASE_URL=http://localhost:9099
-ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
-
 # 构建应用
 RUN bun run build
 
