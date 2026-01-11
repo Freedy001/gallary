@@ -89,19 +89,72 @@ function handleDragOver(e: DragEvent) {
   }
 }
 
-function handleDrop(e: DragEvent) {
+async function handleDrop(e: DragEvent) {
   isDragging.value = false
   dragCounter.value = 0
 
-  const files = e.dataTransfer?.files
-  if (!files || files.length === 0) return
+  const items = e.dataTransfer?.items
+  if (!items || items.length === 0) return
 
-  const fileToUpload = Array.from(files).filter(file => file.type.startsWith('image/'));
-  if (fileToUpload.length <= 0) return;
+  const files: File[] = []
 
-  uiStore.addUploadTask(fileToUpload)
+  // 处理所有拖拽项，支持文件和文件夹
+  await Promise.all(
+    Array.from(items).map(async (item) => {
+      if (item.kind === 'file') {
+        const entry = item.webkitGetAsEntry()
+        if (entry) {
+          const collectedFiles = await traverseFileTree(entry)
+          files.push(...collectedFiles)
+        }
+      }
+    })
+  )
+
+  // 过滤出图片文件
+  const imageFiles = files.filter(file => file.type.startsWith('image/'))
+  if (imageFiles.length <= 0) return
+
+  uiStore.addUploadTask(imageFiles)
   if (!uiStore.uploadDrawerOpen) {
     uiStore.openUploadDrawer()
   }
+}
+
+// 递归遍历文件树，支持文件夹
+function traverseFileTree(entry: FileSystemEntry): Promise<File[]> {
+  return new Promise((resolve) => {
+    if (entry.isFile) {
+      // 如果是文件，直接返回
+      (entry as FileSystemFileEntry).file((file) => {
+        resolve([file])
+      })
+    } else if (entry.isDirectory) {
+      // 如果是目录，递归读取
+      const dirReader = (entry as FileSystemDirectoryEntry).createReader()
+      const files: File[] = []
+
+      const readEntries = () => {
+        dirReader.readEntries(async (entries) => {
+          if (entries.length === 0) {
+            // 读取完毕
+            resolve(files)
+          } else {
+            // 递归处理每个入口
+            for (const childEntry of entries) {
+              const childFiles = await traverseFileTree(childEntry)
+              files.push(...childFiles)
+            }
+            // 继续读取（目录项可能分批返回）
+            readEntries()
+          }
+        })
+      }
+
+      readEntries()
+    } else {
+      resolve([])
+    }
+  })
 }
 </script>

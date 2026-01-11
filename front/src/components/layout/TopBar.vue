@@ -44,6 +44,7 @@
         type="file"
         multiple
         accept="image/*"
+        webkitdirectory
         class="hidden"
         @change="handleFileSelect"
       />
@@ -145,9 +146,14 @@ function handleFileSelect(event: Event) {
 
   if (!files || files.length === 0) return
 
-  emit('filesSelected', Array.from(files), props.uploadAlbumId)
+  // 过滤出图片文件（支持文件夹模式时可能包含非图片文件）
+  const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'))
 
-  // 清空 input，允许重复选择同一文件
+  if (imageFiles.length === 0) return
+
+  emit('filesSelected', imageFiles, props.uploadAlbumId)
+
+  // 清空 input，允许重复选择
   input.value = ''
 }
 
