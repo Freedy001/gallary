@@ -1,6 +1,6 @@
 # PostgreSQL with pgvector and PostGIS extensions
 # 基于最新的 pgvector 镜像
-FROM pgvector/pgvector:pg16
+FROM pgvector/pgvector:0.8.1-pg18-trixie
 
 # 安装 PostGIS 扩展
 RUN apt-get update && \
