@@ -45,6 +45,7 @@ services:
       - AI_GRPC_HOST=ai-model
       - AI_GRPC_PORT=50051
     volumes:
+      - ./config.yaml:/app/config.yaml:ro
       - storage_data:/app/storage
       - logs_data:/app/logs
     ports:

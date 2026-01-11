@@ -4,13 +4,13 @@ server:
   port: 9099
   mode: "release"
 
-# 数据库配置 - 使用环境变量
+# 数据库配置 - 通过环境变量覆盖
 database:
-  host: "${DB_HOST:localhost}"
-  port: ${DB_PORT:5432}
-  username: "${DB_USER:root}"
-  password: "${DB_PASSWORD:123456}"
-  database: "${DB_NAME:devdb}"
+  host: "postgres"
+  port: 5432
+  username: "root"
+  password: "123456"
+  database: "devdb"
   sslmode: "disable"
   timezone: "Asia/Shanghai"
   max_idle_conns: 10
@@ -33,7 +33,7 @@ image:
 
 # JWT配置
 jwt:
-  secret: "${JWT_SECRET:your-secret-key-please-change-this-in-production}"
+  secret: "your-secret-key-please-change-this-in-production"
   expire_hours: 168
 
 # 日志配置
@@ -73,8 +73,3 @@ share:
 # 回收站配置
 trash:
   auto_delete_days: 30
-
-# AI 服务配置
-ai:
-  grpc_host: "${AI_GRPC_HOST:localhost}"
-  grpc_port: ${AI_GRPC_PORT:50051}

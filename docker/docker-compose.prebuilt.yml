@@ -8,5 +8,6 @@ services:
       dockerfile: Dockerfile.server.prebuilt
     volumes:
       - ./bin/server:/app/server:ro
+      - ./config.yaml:/app/config.yaml:ro
       - storage_data:/app/storage
       - logs_data:/app/logs
