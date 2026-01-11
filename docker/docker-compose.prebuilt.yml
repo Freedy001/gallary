@@ -1,0 +1,12 @@
+# docker-compose 覆盖文件 - 使用预编译的 server 二进制文件
+# 此文件与 docker-compose.yml 配合使用
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server.prebuilt
+    volumes:
+      - ./bin/server:/app/server:ro
+      - storage_data:/app/storage
+      - logs_data:/app/logs
