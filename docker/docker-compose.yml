@@ -58,6 +58,9 @@ services:
     build:
       context: ../front
       dockerfile: ../docker/Dockerfile.frontend
+      args:
+        - VITE_AMAP_KEY=${VITE_AMAP_KEY}
+        - VITE_AMAP_SECURITY_KEY=${VITE_AMAP_SECURITY_KEY}
     container_name: gallery-frontend
     restart: unless-stopped
     depends_on:

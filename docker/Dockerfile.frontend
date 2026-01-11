@@ -10,6 +10,14 @@ RUN bun install --frozen-lockfile
 # 复制源代码
 COPY . .
 
+# 构建参数 - 高德地图 Key
+ARG VITE_AMAP_KEY
+ARG VITE_AMAP_SECURITY_KEY
+
+# 设置环境变量用于构建
+ENV VITE_AMAP_KEY=${VITE_AMAP_KEY}
+ENV VITE_AMAP_SECURITY_KEY=${VITE_AMAP_SECURITY_KEY}
+
 # 构建应用
 RUN bun run build
 

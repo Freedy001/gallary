@@ -152,15 +152,6 @@ export const useUIStore = defineStore('ui', () => {
     // 没有待处理任务时直接返回
     if (pendingTasks.length === 0) return
 
-    // 异步生成缩略图，只为没有缩略图的任务生成
-    tasks.forEach(task => {
-      if (!task.imageUrl) {
-        createThumbnail(task.file).then(imageUrl => {
-          if (imageUrl) updateUploadTask(task.id, {imageUrl})
-        }).catch(console.error)
-      }
-    })
-
     // 计算批次数量（向上取整）
     const turn = Math.ceil(pendingTasks.length / 5)
 
@@ -176,10 +167,15 @@ export const useUIStore = defineStore('ui', () => {
   async function doUploadFile(tasks: UploadTask[]): Promise<boolean[]> {
     return Promise.all(tasks.map(async task => {
       try {
-        // 生成预览图 (使用缩略图以节省内存)
-        updateUploadTask(task.id, {
-          status: 'uploading',
-        })
+        try {
+          // 异步生成缩略图，只为没有缩略图的任务生成
+          // 生成预览图 (使用缩略图以节省内存)
+          const imageUrl = await createThumbnail(task.file);
+          if (imageUrl) updateUploadTask(task.id, {imageUrl, status: 'uploading'})
+        } catch (e) {
+          console.log(e)
+          updateUploadTask(task.id, {status: 'uploading'})
+        }
 
         // 直接在上传时传递 albumId，后端原子操作处理
         const response = await imageApi.upload(task.file, task.albumId, (progress) => {
@@ -216,7 +212,7 @@ export const useUIStore = defineStore('ui', () => {
     if (index !== -1) {
       const task = uploadTasks.value[index] as UploadTask
       Object.assign(task, updates)
-      
+
       // 如果更新后状态变为失败，将该任务移动到数组第一个位置
       if (updates.status === 'error') {
         uploadTasks.value.splice(index, 1)

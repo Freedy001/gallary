@@ -5,7 +5,7 @@
  * @param maxHeight 最大高度
  * @returns Promise<string> 缩略图 URL (Blob URL)
  */
-export async function createThumbnail(file: File, maxWidth = 200, maxHeight = 200): Promise<string> {
+export async function createThumbnail(file: File, maxWidth = 100, maxHeight = 100): Promise<string> {
   return new Promise((resolve, reject) => {
     // 如果不是图片，返回空
     if (!file.type.startsWith('image/')) {
