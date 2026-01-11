@@ -6,6 +6,8 @@
 #   ./start.sh --with-ai          # 启动所有服务 (包含 GPU AI 模型)
 #   ./start.sh --with-ai-cpu      # 启动所有服务 (包含 CPU AI 模型)
 #   ./start.sh --prebuilt <path>  # 使用预编译的 server 二进制文件
+#   ./start.sh --update           # 重新构建并更新服务
+#   ./start.sh --update --git     # 从 Git 拉取最新代码后更新
 #   ./start.sh --stop             # 停止所有服务
 #   ./start.sh --logs             # 查看日志
 
@@ -19,6 +21,8 @@ USE_PREBUILT=false
 PREBUILT_PATH=""
 COMPOSE_FILE="docker-compose.yml"
 PROFILES=""
+DO_UPDATE=false
+DO_GIT_PULL=false
 
 # 检查 .env 文件
 if [ ! -f ".env" ]; then
@@ -46,6 +50,14 @@ while [[ $# -gt 0 ]]; do
             PROFILES="--profile with-ai-cpu"
             shift
             ;;
+        --update)
+            DO_UPDATE=true
+            shift
+            ;;
+        --git)
+            DO_GIT_PULL=true
+            shift
+            ;;
         --stop)
             echo "🛑 停止所有服务..."
             docker compose --profile with-ai --profile with-ai-cpu down
@@ -64,6 +76,8 @@ while [[ $# -gt 0 ]]; do
             echo "  ./start.sh --with-ai            启动所有服务 (包含 GPU AI 模型)"
             echo "  ./start.sh --with-ai-cpu        启动所有服务 (包含 CPU AI 模型)"
             echo "  ./start.sh --prebuilt <path>    使用预编译的 server 二进制文件"
+            echo "  ./start.sh --update             重新构建并更新服务"
+            echo "  ./start.sh --update --git       从 Git 拉取最新代码后更新"
             echo "  ./start.sh --stop               停止所有服务"
             echo "  ./start.sh --logs               查看日志"
             echo "  ./start.sh --help               显示帮助"
@@ -75,6 +89,12 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "  # 同时使用预编译文件和 CPU AI 模型"
             echo "  ./start.sh --prebuilt ./bin/server --with-ai-cpu"
+            echo ""
+            echo "  # 从 Git 拉取最新代码并更新服务"
+            echo "  ./start.sh --update --git"
+            echo ""
+            echo "  # 更新并使用预编译文件"
+            echo "  ./start.sh --update --prebuilt ./bin/server"
             exit 0
             ;;
         *)
@@ -84,6 +104,39 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Git 拉取最新代码
+if [ "$DO_GIT_PULL" = true ]; then
+    echo "📥 从 Git 拉取最新代码..."
+    cd ..
+
+    # 检查是否有未提交的更改
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "⚠️  检测到未提交的本地更改"
+        read -p "是否继续拉取? (可能会产生冲突) [y/N]: " confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            echo "❌ 已取消"
+            exit 1
+        fi
+    fi
+
+    git pull
+    echo "✅ 代码已更新"
+    cd docker
+fi
+
+# 处理更新
+if [ "$DO_UPDATE" = true ]; then
+    echo "🔄 更新服务..."
+
+    # 停止现有服务
+    echo "🛑 停止现有服务..."
+    docker compose --profile with-ai --profile with-ai-cpu down 2>/dev/null || true
+
+    # 清理旧镜像
+    echo "🧹 清理旧镜像..."
+    docker compose --profile with-ai --profile with-ai-cpu build --no-cache 2>/dev/null || true
+fi
 
 # 处理预编译二进制文件
 if [ "$USE_PREBUILT" = true ]; then
@@ -117,7 +170,11 @@ else
     echo "🚀 启动基础服务 (数据库 + 后端 + 前端)..."
 fi
 
-docker compose -f $COMPOSE_FILE $PROFILES up -d --build
+if [ "$DO_UPDATE" = true ]; then
+    docker compose -f $COMPOSE_FILE $PROFILES up -d --build --force-recreate
+else
+    docker compose -f $COMPOSE_FILE $PROFILES up -d --build
+fi
 
 echo ""
 echo "⏳ 等待服务启动..."
@@ -141,3 +198,4 @@ fi
 echo ""
 echo "📝 查看日志: ./start.sh --logs"
 echo "🛑 停止服务: ./start.sh --stop"
+echo "🔄 更新服务: ./start.sh --update"

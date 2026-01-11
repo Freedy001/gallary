@@ -42,9 +42,6 @@ export const useUIStore = defineStore('ui', () => {
   //setting tab
   const settingActiveTab = ref('security')
 
-  // 上传完成回调
-  const onUploadCompleteCallback = ref<(() => void) | null>(null)
-
   // Computed
   const gridColumns = computed(() => {
     const desktopColumns = {
@@ -166,20 +163,13 @@ export const useUIStore = defineStore('ui', () => {
 
     // 计算批次数量（向上取整）
     const turn = Math.ceil(pendingTasks.length / 5)
-    let hasSuccess = false
 
     for (let i = 0; i < turn; i++) {
       const tasksToStart = pendingTasks.slice(
         i * 5,
         (i + 1) * 5
       )
-      const results = await doUploadFile(tasksToStart)
-      if (results.some(r => r)) hasSuccess = true
-    }
-
-    // 只在有成功上传时触发回调
-    if (hasSuccess && onUploadCompleteCallback.value) {
-      onUploadCompleteCallback.value()
+      await doUploadFile(tasksToStart)
     }
   }
 
@@ -222,9 +212,16 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   function updateUploadTask(id: string, updates: Partial<UploadTask>) {
-    const task = uploadTasks.value.find(t => t.id === id)
-    if (task) {
+    const index = uploadTasks.value.findIndex(t => t.id === id)
+    if (index !== -1) {
+      const task = uploadTasks.value[index] as UploadTask
       Object.assign(task, updates)
+      
+      // 如果更新后状态变为失败，将该任务移动到数组第一个位置
+      if (updates.status === 'error') {
+        uploadTasks.value.splice(index, 1)
+        uploadTasks.value.unshift(task)
+      }
     }
   }
 
@@ -254,9 +251,6 @@ export const useUIStore = defineStore('ui', () => {
     timeLineState.value = date
   }
 
-  function setOnUploadComplete(callback: (() => void) | null) {
-    onUploadCompleteCallback.value = callback
-  }
 
   return {
     // State
@@ -293,6 +287,5 @@ export const useUIStore = defineStore('ui', () => {
     setSelectionMode: setSelectionMode,
     setImageSortBy: setImageSortBy,
     setTimeLineState: setTimeLineState,
-    setOnUploadComplete: setOnUploadComplete,
   }
 })
