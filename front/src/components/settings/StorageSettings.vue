@@ -115,7 +115,7 @@ import {useDialogStore} from '@/stores/dialog'
 import LocalStorageConfig from './storage/LocalStorageConfig.vue'
 import AliyunPanConfig from './storage/AliyunPanConfig.vue'
 import MigrationProgress from './MigrationProgress.vue'
-import BaseSelect from '@/components/widgets/common/BaseSelect.vue'
+import BaseSelect from '@/components/common/BaseSelect.vue'
 
 const dialogStore = useDialogStore()
 

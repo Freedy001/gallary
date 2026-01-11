@@ -263,8 +263,8 @@
 
 <script setup lang="ts">
 import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
-import LiquidGlassCard from '@/components/widgets/common/LiquidGlassCard.vue'
-import CachedImage from '@/components/widgets/common/CachedImage.vue'
+import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
+import CachedImage from '@/components/common/CachedImage.vue'
 import {
   ArrowDownTrayIcon,
   ChevronDownIcon,

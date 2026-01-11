@@ -48,8 +48,19 @@
         @change="handleFileSelect"
       />
 
-      <!-- 分隔线（密度滑块可见时显示） -->
-      <div v-if="showDensitySlider" class="h-8 w-px bg-white/10" />
+      <!-- 分隔线（密度滑块或排序选择器可见时显示） -->
+      <div v-if="showDensitySlider || showSortSelector" class="h-8 w-px bg-white/10" />
+
+      <!-- 排序选择器（可选） -->
+      <div v-if="showSortSelector" class="w-30">
+        <BaseSelect
+          :model-value="sortBy"
+          :options="sortOptions"
+          button-class="!py-2.5 !text-xm"
+          placeholder="排序方式"
+          @update:model-value="emit('sortChange', $event as SortBy)"
+        />
+      </div>
 
       <!-- 视图密度滑块（可选） -->
       <div v-if="showDensitySlider" class="flex items-center gap-3 group">
@@ -72,7 +83,9 @@
 
 <script setup lang="ts">
 import {computed, ref} from 'vue'
-import {Square3Stack3DIcon, Squares2X2Icon,} from '@heroicons/vue/24/outline'
+import {Square3Stack3DIcon, Squares2X2Icon} from '@heroicons/vue/24/outline'
+import BaseSelect, {type SelectOption} from '@/components/common/BaseSelect.vue'
+import type {SortBy} from '@/stores/ui'
 
 const props = withDefaults(defineProps<{
   // 选择模式
@@ -85,6 +98,9 @@ const props = withDefaults(defineProps<{
   // 上传功能
   showUpload?: boolean
   uploadAlbumId?: number
+  // 排序选择器
+  showSortSelector?: boolean
+  sortBy?: SortBy
 }>(), {
   isSelectionMode: false,
   selectedCount: 0,
@@ -92,6 +108,8 @@ const props = withDefaults(defineProps<{
   showDensitySlider: true,
   gridDensity: 5,
   showUpload: false,
+  showSortSelector: false,
+  sortBy: 'taken_at',
 })
 
 const emit = defineEmits<{
@@ -100,6 +118,7 @@ const emit = defineEmits<{
   exitSelection: []
   densityChange: [value: number]
   filesSelected: [files: File[], albumId?: number]
+  sortChange: [value: SortBy]
 }>()
 
 const fileInputRef = ref<HTMLInputElement>()
@@ -108,10 +127,17 @@ const isAllSelected = computed(() => {
   return props.totalCount > 0 && props.selectedCount === props.totalCount
 })
 
+const sortOptions: SelectOption[] = [
+  { label: '拍摄时间', value: 'taken_at' },
+  { label: '美学评分', value: 'ai_score' }
+]
+
 function handleDensityChange(event: Event) {
   const value = parseInt((event.target as HTMLInputElement).value)
   emit('densityChange', value)
 }
+
+
 
 function handleFileSelect(event: Event) {
   const input = event.target as HTMLInputElement

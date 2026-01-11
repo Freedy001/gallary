@@ -52,7 +52,7 @@
 <script setup lang="ts">
 import {computed} from 'vue'
 import {XMarkIcon} from '@heroicons/vue/24/outline'
-import LiquidGlassCard from '@/components/widgets/common/LiquidGlassCard.vue'
+import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
 
 interface Props {
   modelValue: boolean

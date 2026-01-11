@@ -86,7 +86,6 @@ type HDBSCANParams struct {
 	MinSamples              *int
 	ClusterSelectionEpsilon float32
 	ClusterSelectionMethod  string
-	Metric                  string
 }
 
 // UMAPParams UMAP 降维参数

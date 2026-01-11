@@ -14,6 +14,7 @@ type ImageEmbeddingRepository interface {
 	// 基础操作
 	Save(ctx context.Context, embedding *model.ImageEmbedding) error
 	FindByImageAndModel(ctx context.Context, imageID int64, modelID string) (*model.ImageEmbedding, error)
+	DeleteByImageIDs(ctx context.Context, imageIDs []int64) error
 
 	// 向量搜索
 	VectorSearchWithinIDs(ctx context.Context, modelName string, embedding []float32, candidateIDs []int64, limit int) ([]EmbeddingWithDistance, error)
@@ -141,4 +142,14 @@ func (r *imageEmbeddingRepository) GetAllEmbeddingsByModel(ctx context.Context, 
 		Find(&embeddings).Error
 
 	return embeddings, err
+}
+
+// DeleteByImageIDs 根据图片ID批量删除向量嵌入
+func (r *imageEmbeddingRepository) DeleteByImageIDs(ctx context.Context, imageIDs []int64) error {
+	if len(imageIDs) == 0 {
+		return nil
+	}
+	return database.GetDB(ctx).WithContext(ctx).
+		Where("image_id IN ?", imageIDs).
+		Delete(&model.ImageEmbedding{}).Error
 }

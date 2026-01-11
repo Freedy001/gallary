@@ -17,6 +17,7 @@ import (
 type AlbumRepository interface {
 	Create(ctx context.Context, album *model.Tag) error
 	FindByID(ctx context.Context, id int64) (*model.Tag, error)
+	FindByIDs(ctx context.Context, ids []int64) ([]*model.Tag, error)
 	List(ctx context.Context, page, pageSize int, isSmart *bool) ([]*model.Tag, int64, error)
 	Update(ctx context.Context, album *model.Tag) error
 	Delete(ctx context.Context, id int64) error
@@ -24,7 +25,8 @@ type AlbumRepository interface {
 	// 图片关联
 	AddImages(ctx context.Context, albumID int64, imageIDs []int64) error
 	RemoveImages(ctx context.Context, albumID int64, imageIDs []int64) error
-	GetImages(ctx context.Context, albumID int64, page, pageSize int) ([]*model.Image, int64, error)
+	RemoveImagesFromAllAlbums(ctx context.Context, imageIDs []int64) error
+	GetImages(ctx context.Context, albumID int64, page, pageSize int, sortBy string) ([]*model.Image, int64, error)
 	GetImageCount(ctx context.Context, albumID int64) (int64, error)
 	GetImageCounts(ctx context.Context, albumIDs []int64) (map[int64]int64, error)
 	CopyImages(ctx context.Context, srcAlbumID, dstAlbumID int64) error
@@ -33,6 +35,7 @@ type AlbumRepository interface {
 	GetCoverImage(ctx context.Context, coverImageID int64) (*model.Image, error)
 	GetFirstImages(ctx context.Context, albumIDs []int64) (map[int64]*model.Image, error)
 	FindBestCoverByAverageVector(ctx context.Context, albumID int64, modelName string) (int64, error)
+	Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64) error
 }
 
 type albumRepository struct{}
@@ -63,6 +66,24 @@ func (r *albumRepository) FindByID(ctx context.Context, id int64) (*model.Tag, e
 	}
 
 	return &album, nil
+}
+
+// FindByIDs 根据ID列表批量查找相册
+func (r *albumRepository) FindByIDs(ctx context.Context, ids []int64) ([]*model.Tag, error) {
+	if len(ids) == 0 {
+		return []*model.Tag{}, nil
+	}
+
+	var albums []*model.Tag
+	err := database.GetDB(ctx).WithContext(ctx).
+		Where("id IN ? AND type = ?", ids, model.TagTypeAlbum).
+		Find(&albums).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return albums, nil
 }
 
 // List 分页获取相册列表
@@ -155,6 +176,16 @@ func (r *albumRepository) RemoveImages(ctx context.Context, albumID int64, image
 		Delete(&model.ImageTag{}).Error
 }
 
+// RemoveImagesFromAllAlbums 从所有相册移除指定图片
+func (r *albumRepository) RemoveImagesFromAllAlbums(ctx context.Context, imageIDs []int64) error {
+	if len(imageIDs) == 0 {
+		return nil
+	}
+	return database.GetDB(ctx).WithContext(ctx).
+		Where("image_id IN ?", imageIDs).
+		Delete(&model.ImageTag{}).Error
+}
+
 // CopyImages 复制相册中的图片关联到新相册
 func (r *albumRepository) CopyImages(ctx context.Context, srcAlbumID, dstAlbumID int64) error {
 	// 复制源相册的所有图片关联到目标相册
@@ -168,7 +199,8 @@ func (r *albumRepository) CopyImages(ctx context.Context, srcAlbumID, dstAlbumID
 }
 
 // GetImages 分页获取相册内图片
-func (r *albumRepository) GetImages(ctx context.Context, albumID int64, page, pageSize int) ([]*model.Image, int64, error) {
+// sortBy: taken_at-按拍摄时间排序, ai_score-按美学评分排序
+func (r *albumRepository) GetImages(ctx context.Context, albumID int64, page, pageSize int, sortBy string) ([]*model.Image, int64, error) {
 	var images []*model.Image
 	var total int64
 
@@ -182,12 +214,23 @@ func (r *albumRepository) GetImages(ctx context.Context, albumID int64, page, pa
 		return nil, 0, countErr
 	}
 
+	// 根据排序方式构建排序语句
+	var orderClause string
+	switch sortBy {
+	case "ai_score":
+		// 按美学评分降序，NULL 排最后，相同评分按拍摄时间降序
+		orderClause = "images.ai_score DESC NULLS LAST, COALESCE(images.taken_at, images.created_at) DESC"
+	default:
+		// 默认按拍摄时间降序
+		orderClause = "image_tags.sort_order ASC, COALESCE(images.taken_at, images.created_at) DESC"
+	}
+
 	// 查询图片数据
 	err := database.GetDB(ctx).WithContext(ctx).
 		Table("images").
 		Joins("JOIN image_tags ON images.id = image_tags.image_id").
 		Where("image_tags.tag_id = ? AND images.deleted_at IS NULL", albumID).
-		Order("image_tags.sort_order ASC, images.taken_at DESC").
+		Order(orderClause).
 		Preload("Tags").
 		Limit(pageSize).
 		Offset(offset).
@@ -341,4 +384,54 @@ func (r *albumRepository) FindBestCoverByAverageVector(ctx context.Context, albu
 	}
 
 	return res.ImageID, nil
+}
+
+// Merge 合并相册：将源相册的图片移动到目标相册，并删除源相册
+func (r *albumRepository) Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64) error {
+	return database.GetDB(ctx).WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. 将源相册的所有图片关联复制到目标相册
+		// 使用 INSERT INTO ... SELECT ... ON CONFLICT DO NOTHING
+		// 注意：需要处理 sourceAlbumIDs 列表
+
+		for _, sourceID := range sourceAlbumIDs {
+			// 跳过目标相册本身
+			if sourceID == targetAlbumID {
+				continue
+			}
+
+			// 将源相册的图片复制到目标相册
+			// 为了保持图片顺序，我们获取目标相册当前的最大排序值
+			var maxSort int
+			tx.Model(&model.ImageTag{}).
+				Where("tag_id = ?", targetAlbumID).
+				Select("COALESCE(MAX(sort_order), 0)").
+				Scan(&maxSort)
+
+			// 插入新记录，注意 sort_order 的处理
+			// 这里简单起见，直接使用 SQL 批量插入，sort_order 累加
+			err := tx.Exec(`
+				INSERT INTO image_tags (image_id, tag_id, sort_order, created_at)
+				SELECT image_id, ?, ? + sort_order, NOW()
+				FROM image_tags
+				WHERE tag_id = ?
+				ON CONFLICT (image_id, tag_id) DO NOTHING
+			`, targetAlbumID, maxSort, sourceID).Error
+
+			if err != nil {
+				return err
+			}
+
+			// 2. 删除源相册的关联关系
+			if err := tx.Where("tag_id = ?", sourceID).Delete(&model.ImageTag{}).Error; err != nil {
+				return err
+			}
+
+			// 3. 删除源相册
+			if err := tx.Where("id = ? AND type = ?", sourceID, model.TagTypeAlbum).Delete(&model.Tag{}).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }

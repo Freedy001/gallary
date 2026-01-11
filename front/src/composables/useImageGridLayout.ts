@@ -2,12 +2,7 @@ import {computed, onMounted, onUnmounted, ref, type Ref, watch} from 'vue'
 import {useUIStore} from '@/stores/ui'
 import type {Image} from '@/types'
 
-export interface UseImageGridLayoutOptions {
-  images: Ref<(Image | null)[]>
-}
-
-export function useImageGridLayout(options: UseImageGridLayoutOptions) {
-  const {images} = options
+export function useImageGridLayout(images: Ref<(Image | null)[]>) {
   const uiStore = useUIStore()
 
   const currentColumnCount = ref(4)

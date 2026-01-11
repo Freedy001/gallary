@@ -45,7 +45,7 @@
 <script setup lang="ts">
 import {computed, reactive, ref, watch} from 'vue'
 import {useAlbumStore} from '@/stores/album'
-import Modal from '@/components/widgets/common/Modal.vue'
+import Modal from '@/components/common/Modal.vue'
 import type {Album} from '@/types'
 
 const props = defineProps<{

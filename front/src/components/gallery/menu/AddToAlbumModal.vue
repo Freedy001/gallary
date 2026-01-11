@@ -40,7 +40,10 @@
 
           <!-- 相册信息 -->
           <div class="flex-1 text-left min-w-0">
-            <div class="text-sm font-medium text-white truncate">{{ album.name }}</div>
+            <div class="flex items-center gap-2">
+              <div class="text-sm font-medium text-white truncate">{{ album.name }}</div>
+              <span v-if="album.is_smart" class="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/20 text-primary-300 flex-shrink-0">智能</span>
+            </div>
             <div class="text-xs text-gray-500">{{ album.image_count }} 张照片</div>
           </div>
 
@@ -108,7 +111,7 @@
 import {computed, ref, watch} from 'vue'
 import {albumApi} from '@/api/album.ts'
 import type {Album} from '@/types'
-import Modal from '@/components/widgets/common/Modal.vue'
+import Modal from '@/components/common/Modal.vue'
 import EditAlbumModal from '../../album/EditAlbumModal.vue'
 import {CheckIcon, PhotoIcon, PlusIcon, RectangleStackIcon} from '@heroicons/vue/24/outline'
 import {useDialogStore} from "@/stores/dialog.ts";
@@ -118,6 +121,7 @@ const dialogStore = useDialogStore();
 const props = defineProps<{
   imageIds: number[]
   excludeAlbumId?: number  // 排除的相册ID（当前相册）
+  includeSmartAlbum?: boolean  // 是否包含智能相册
 }>()
 
 const isOpen = defineModel<boolean>({ default: false })
@@ -143,9 +147,15 @@ const filteredAlbums = computed(() => {
 async function loadAlbums() {
   try {
     loading.value = true
-    // 只获取普通相册，排除智能相册
-    const { data } = await albumApi.getList({ page: 1, pageSize: 100, isSmart: false })
-    albums.value = data.list
+    // 根据 includeSmartAlbum 参数决定是否包含智能相册
+    if (props.includeSmartAlbum) {
+      const { data } = await albumApi.getList({ page: 1, pageSize: 100 })
+      albums.value = data.list
+    } else {
+      // 只获取普通相册，排除智能相册
+      const { data } = await albumApi.getList({ page: 1, pageSize: 100, isSmart: false })
+      albums.value = data.list
+    }
   } catch (err) {
     dialogStore.alert({ title: '错误', message: '加载相册列表失败', type: 'error' })
     console.error('加载相册列表失败', err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"gallary/server/internal/websocket"
 	"io"
 	"strings"
 
@@ -24,6 +25,7 @@ type AlbumNamingProcessor struct {
 	albumRepo      repository.AlbumRepository
 	imageRepo      repository.ImageRepository
 	storageManager *storage.StorageManager
+	notifier       websocket.Notifier
 }
 
 // NewAlbumNamingProcessor 创建相册命名处理器
@@ -31,11 +33,13 @@ func NewAlbumNamingProcessor(
 	albumRepo repository.AlbumRepository,
 	imageRepo repository.ImageRepository,
 	storageManager *storage.StorageManager,
+	notifier websocket.Notifier,
 ) *AlbumNamingProcessor {
 	return &AlbumNamingProcessor{
 		albumRepo:      albumRepo,
 		imageRepo:      imageRepo,
 		storageManager: storageManager,
+		notifier:       notifier,
 	}
 }
 
@@ -115,6 +119,7 @@ func (p *AlbumNamingProcessor) ProcessItem(ctx context.Context, itemID int64, cl
 	}
 
 	logger.Info("相册命名成功", zap.Int64("album_id", album.ID), zap.String("name", name))
+	p.notifier.NotifyAlbumsUpdated([]int64{itemID})
 	return nil
 }
 
@@ -153,7 +158,7 @@ func (p *AlbumNamingProcessor) selectRepresentativeImages(ctx context.Context, a
 
 	// 3. 获取相册中的更多图片以补充
 	if len(selectedImages) < maxImages {
-		images, _, err := p.albumRepo.GetImages(ctx, album.ID, 1, 10)
+		images, _, err := p.albumRepo.GetImages(ctx, album.ID, 1, 10, "taken_at")
 		if err != nil {
 			return selectedImages, nil // 返回已有的图片
 		}

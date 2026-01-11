@@ -22,6 +22,7 @@ export function useGenericBoxSelection<T>(options: GenericBoxSelectionOptions<T>
   const selectionStart = ref({ x: 0, y: 0 })
   const selectionCurrent = ref({ x: 0, y: 0 })
   let isDragOperation = false
+  let isDraggingElement = false  // 标记是否正在拖拽可拖拽元素
 
   const selectionBoxStyle = computed(() => {
     if (!isSelecting.value) return null
@@ -58,7 +59,15 @@ export function useGenericBoxSelection<T>(options: GenericBoxSelectionOptions<T>
   function handleMouseDown(e: MouseEvent) {
     if (e.button !== 0 || !options.containerRef.value) return
 
+    // 如果点击的是可拖拽元素，则不启动框选
+    const target = e.target as HTMLElement
+    if (target.closest('[draggable="true"]')) {
+      isDraggingElement = true
+      return
+    }
+
     isDragOperation = false
+    isDraggingElement = false
 
     const { x, y } = getPointInContainer(e)
     selectionStart.value = { x, y }
@@ -69,6 +78,9 @@ export function useGenericBoxSelection<T>(options: GenericBoxSelectionOptions<T>
   }
 
   function handleMouseMove(e: MouseEvent) {
+    // 如果正在拖拽元素，不处理框选
+    if (isDraggingElement) return
+
     if (!isSelecting.value) {
       const { x, y } = getPointInContainer(e)
       const dx = x - selectionStart.value.x
@@ -90,6 +102,9 @@ export function useGenericBoxSelection<T>(options: GenericBoxSelectionOptions<T>
   function handleMouseUp() {
     window.removeEventListener('mousemove', handleMouseMove)
     window.removeEventListener('mouseup', handleMouseUp)
+
+    // 重置拖拽元素标记
+    isDraggingElement = false
 
     if (isSelecting.value) {
       isSelecting.value = false

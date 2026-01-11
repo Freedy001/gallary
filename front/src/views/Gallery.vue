@@ -7,12 +7,14 @@
           :is-selection-mode="uiStore.isSelectionMode"
           :selected-count="selectedCount"
           :show-upload="true"
-          :total-count="totalCount"
+          :show-sort-selector="true"
+          :sort-by="uiStore.imageSortBy"
           @open-search="uiStore.openCommandPalette"
           @select-all="handleSelectAll"
           @exit-selection="exitSelectionMode"
           @density-change="uiStore.setGridDensity"
           @files-selected="handleFilesSelected"
+          @sort-change="handleSortChange"
       >
         <!-- 左侧：搜索模式或默认搜索按钮 -->
         <template #left>
@@ -101,8 +103,7 @@
       <!-- 图片网格 -->
       <ImageGrid
           ref="imageGridRef"
-          :fetcher="async (page, size) => (await imageApi.getList(page, size)).data"
-          @update:total="totalCount = $event"
+          :fetcher="async (page, size) => (await imageApi.getList(page, size, uiStore.imageSortBy)).data"
           @update:selected-count="selectedCount = $event"
       />
     </template>
@@ -116,10 +117,11 @@
 
 <script setup lang="ts">
 import {useSearchStore} from "@/stores/search.ts";
-import {computed, onMounted, onUnmounted, ref} from 'vue'
-import {useUIStore} from '@/stores/ui'
+import {computed, onUnmounted, ref, watch} from 'vue'
+import {type SortBy, useUIStore} from '@/stores/ui'
 import {useDialogStore} from '@/stores/dialog'
 import {useScrollPosition} from '@/composables/useScrollPosition'
+import {type DataSyncPayload, dataSyncService} from '@/services/dataSync'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import CommandPalette from '@/components/search/CommandPalette.vue'
 import ImageGrid from '@/components/gallery/ImageGrid.vue'
@@ -145,19 +147,30 @@ function gridComponent(): InstanceType<typeof ImageGrid> {
   return imageGridRef.value;
 }
 
-// 注册上传完成回调
-onMounted(() => {
-  uiStore.setOnUploadComplete(() => {
-    gridComponent().refresh()
-  })
-})
+async function dynamicAddImage(payload: DataSyncPayload) {
+  if (payload.ids && payload.ids.length > 0) {
+    try {
+      const {data: uploadedImages} = await imageApi.getByIds(payload.ids)
+      gridComponent().insertImages(uploadedImages)
+    } catch (e) {
+      console.error('[Gallery] 获取上传的图片失败', e)
+      // 降级为全量刷新
+      await gridComponent().refresh()
+    }
+  }
+}
+
+// 监听数据同步事件
+const unsubscribeRestored = dataSyncService.on('images:restored', dynamicAddImage)
+// 监听远程上传完成事件（其他客户端上传的图片）
+const unsubscribeUploaded = dataSyncService.on('images:uploaded', dynamicAddImage)
 
 onUnmounted(() => {
-  uiStore.setOnUploadComplete(null)
+  unsubscribeRestored()
+  unsubscribeUploaded()
 })
 
 // 本地状态
-const totalCount = ref(0)
 const selectedCount = ref(0)
 const isSearchMode = ref(false)
 const searchDescription = ref('')
@@ -175,6 +188,22 @@ function exitSearch() {
   searchDescription.value = ''
   gridComponent().refresh()
 }
+
+// 排序变更
+function handleSortChange(sortBy: SortBy) {
+  uiStore.setImageSortBy(sortBy)
+  // 如果不在搜索模式，刷新列表
+  if (!isSearchMode.value) {
+    gridComponent().refresh()
+  }
+}
+
+// 监听排序变化，自动刷新（当从其他地方修改时）
+watch(() => uiStore.imageSortBy, () => {
+  if (!isSearchMode.value) {
+    gridComponent().refresh()
+  }
+})
 
 // 选择模式
 function enterSelectionMode() {

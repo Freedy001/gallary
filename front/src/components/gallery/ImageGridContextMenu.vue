@@ -87,11 +87,12 @@ import {
   TrashIcon,
   XMarkIcon
 } from '@heroicons/vue/24/outline'
-import ContextMenu from '@/components/widgets/common/ContextMenu.vue'
-import ContextMenuItem from '@/components/widgets/common/ContextMenuItem.vue'
+import ContextMenu from '@/components/common/ContextMenu.vue'
+import ContextMenuItem from '@/components/common/ContextMenuItem.vue'
 import MetadataEditor from './menu/MetadataEditor.vue'
 import CreateShare from '@/components/gallery/menu/CreateShare.vue'
 import AddToAlbumModal from '@/components/gallery/menu/AddToAlbumModal.vue'
+import {dataSyncService} from "@/services/dataSync.ts";
 
 const props = defineProps<{
   mode: 'gallery' | 'trash'
@@ -246,6 +247,7 @@ async function handleRestore() {
     await imageApi.restoreImages(contextMenuTargetIds.value)
     props.onRemoveImages(contextMenuTargetIds.value)
     props.selectedImages.value.clear()
+    dataSyncService.emit('images:restored', { ids: contextMenuTargetIds.value, source: 'trash' })
   } catch (err) {
     console.error('恢复图片失败', err)
   }

@@ -1,7 +1,7 @@
 import http from './http'
 import type {ApiResponse} from '@/types'
 import type {AIConfig, AIQueueDetail, EmbeddingModelInfo, TestConnectionRequest,} from '@/types/ai'
-import type {GenerateSmartAlbumsRequest, SmartAlbumTaskVO} from "@/types/smart-album.ts";
+import type {GenerateSmartAlbumsRequest, SmartAlbumProgressVO} from "@/types/smart-album.ts";
 
 // 优化提示词请求
 export interface OptimizePromptRequest {
@@ -73,7 +73,7 @@ export const aiApi = {
   },
 
   // 提交智能相册任务（异步接口，进度通过 WebSocket 推送）
-  generateSmartAlbum(request: GenerateSmartAlbumsRequest): Promise<ApiResponse<SmartAlbumTaskVO>> {
+  generateSmartAlbum(request: GenerateSmartAlbumsRequest): Promise<ApiResponse<SmartAlbumProgressVO>> {
     return http.post('/api/ai/smart-albums-generate', request)
   }
 }

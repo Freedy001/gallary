@@ -120,18 +120,16 @@ class MultimodalEmbeddingResponse(_message.Message):
     def __init__(self, embeddings: _Optional[_Iterable[_Union[MultimodalEmbeddingItem, _Mapping]]] = ..., model: _Optional[str] = ..., input_tokens: _Optional[int] = ..., image_tokens: _Optional[int] = ...) -> None: ...
 
 class HDBSCANParams(_message.Message):
-    __slots__ = ("min_cluster_size", "min_samples", "cluster_selection_epsilon", "cluster_selection_method", "metric")
+    __slots__ = ("min_cluster_size", "min_samples", "cluster_selection_epsilon", "cluster_selection_method")
     MIN_CLUSTER_SIZE_FIELD_NUMBER: _ClassVar[int]
     MIN_SAMPLES_FIELD_NUMBER: _ClassVar[int]
     CLUSTER_SELECTION_EPSILON_FIELD_NUMBER: _ClassVar[int]
     CLUSTER_SELECTION_METHOD_FIELD_NUMBER: _ClassVar[int]
-    METRIC_FIELD_NUMBER: _ClassVar[int]
     min_cluster_size: int
     min_samples: int
     cluster_selection_epsilon: float
     cluster_selection_method: str
-    metric: str
-    def __init__(self, min_cluster_size: _Optional[int] = ..., min_samples: _Optional[int] = ..., cluster_selection_epsilon: _Optional[float] = ..., cluster_selection_method: _Optional[str] = ..., metric: _Optional[str] = ...) -> None: ...
+    def __init__(self, min_cluster_size: _Optional[int] = ..., min_samples: _Optional[int] = ..., cluster_selection_epsilon: _Optional[float] = ..., cluster_selection_method: _Optional[str] = ...) -> None: ...
 
 class UMAPParams(_message.Message):
     __slots__ = ("enabled", "n_components", "n_neighbors", "min_dist")

@@ -334,7 +334,6 @@ class AIServicer(ai_pb2_grpc.AIServiceServicer):
             min_samples=request.hdbscan_params.min_samples if request.hdbscan_params.HasField('min_samples') else None,
             cluster_selection_epsilon=request.hdbscan_params.cluster_selection_epsilon or 0.0,
             cluster_selection_method=request.hdbscan_params.cluster_selection_method or "eom",
-            metric=request.hdbscan_params.metric or "cosine",
         )
 
         umap_params = UMAPParams(

@@ -203,8 +203,8 @@
 
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue'
-import Modal from '@/components/widgets/common/Modal.vue'
-import LocationPicker from '@/components/widgets/common/LocationPicker.vue'
+import Modal from '@/components/common/Modal.vue'
+import LocationPicker from '@/components/common/LocationPicker.vue'
 import {XMarkIcon} from '@heroicons/vue/24/outline'
 import type {Image, MetadataUpdate, Tag, UpdateMetadataRequest} from '@/types'
 import {imageApi} from '@/api/image.ts'

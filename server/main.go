@@ -67,7 +67,7 @@ func main() {
 	r := router.SetupRouter(
 		cfg,
 		handler.NewAuthHandler(),
-		handler.NewImageHandler(imageService),
+		handler.NewImageHandler(imageService, notifier),
 		handler.NewShareHandler(shareService),
 		handler.NewAlbumHandler(albumService, aiService),
 		handler.NewSettingHandler(settingService),
@@ -198,6 +198,7 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 		albumRepo,
 		imageRepo,
 		storageManager,
+		notifier,
 	))
 
 	// 9.4 初始化 AIService
@@ -212,7 +213,7 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 		notifier,
 	)
 
-	imageService := service.NewImageService(imageRepo, albumRepo, storageManager, cfg, notifier, aiService)
+	imageService := service.NewImageService(imageRepo, albumRepo, embeddingRepo, storageManager, cfg, notifier, aiService)
 	shareService := service.NewShareService(shareRepo, storageManager)
 	albumService := service.NewAlbumService(albumRepo, storageManager)
 	smartAlbumService := service.NewSmartAlbumService(albumRepo, embeddingRepo, loadBalancer, notifier)

@@ -164,10 +164,11 @@ func (r *shareRepository) GetImagesPaginated(ctx context.Context, shareID int64,
 	}
 
 	// 分页获取图片
+	// 使用 COALESCE 将 taken_at 为 NULL 的图片用 created_at 代替
 	err := database.GetDB(ctx).WithContext(ctx).
 		Joins("JOIN share_images ON images.id = share_images.image_id").
 		Where("share_images.share_id = ?", shareID).
-		Order("share_images.sort_order ASC,images.taken_at DESC").
+		Order("share_images.sort_order ASC, COALESCE(images.taken_at, images.created_at) DESC").
 		Limit(pageSize).
 		Offset(offset).
 		Preload("Tags").

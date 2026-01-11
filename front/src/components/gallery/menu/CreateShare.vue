@@ -168,7 +168,7 @@
 
 <script setup lang="ts">
 import {reactive, ref} from 'vue'
-import Modal from '@/components/widgets/common/Modal.vue'
+import Modal from '@/components/common/Modal.vue'
 import {shareApi} from '@/api/share.ts'
 import {useDialogStore} from '@/stores/dialog'
 import {CheckCircleIcon, ClipboardDocumentIcon, EyeIcon, EyeSlashIcon, ShareIcon,} from '@heroicons/vue/24/outline'

@@ -5,31 +5,24 @@ Image Aesthetic & Embedding Service
 启动方式:
     python main.py                              # 默认 PyTorch 后端
     BACKEND=onnx python main.py                 # 使用 ONNX 后端
-    PORT=8080 python main.py                    # 自定义端口
     GRPC_PORT=50051 python main.py              # 自定义 gRPC 端口
-    uvicorn main:app --host 0.0.0.0 --port 8100
 """
 
 import os
-from contextlib import asynccontextmanager
+import signal
+import sys
 
 import torch
-import uvicorn
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.grpc import create_grpc_server
-from app.models import HealthResponse
-from app.routers import aesthetics_router, clustering_router, embeddings_router, multimodal_embedding_router
 from app.services import model_service, BackendType
 
 # gRPC 服务器实例
 grpc_server = None
 
 
-@asynccontextmanager
-async def lifespan(_):
-    """应用生命周期管理 - 启动时加载模型和 gRPC 服务"""
+def initialize_and_start():
+    """初始化模型并启动 gRPC 服务"""
     global grpc_server
 
     # 获取配置
@@ -50,6 +43,8 @@ async def lifespan(_):
     lora_weights_path = os.environ.get("LORA_WEIGHTS_PATH", None)
     onnx_model_path = os.environ.get("ONNX_MODEL_PATH", None)
 
+    print(f"Initializing model with backend: {backend_str}, device: {device}")
+    
     # 初始化模型
     model_service.initialize(
         device=device,
@@ -63,117 +58,40 @@ async def lifespan(_):
     grpc_port = int(os.environ.get("GRPC_PORT", 50051))
     grpc_server = create_grpc_server(port=grpc_port)
     grpc_server.start()
-    print(f"gRPC server started on port {grpc_port}")
+    print(f"✅ gRPC server started successfully on port {grpc_port}")
+    print(f"Model loaded on device: {device}")
 
-    yield
 
-    # 关闭时清理
+def shutdown_handler(_signum, _frame):
+    """处理关闭信号"""
+    global grpc_server
+    print("\n收到关闭信号，正在停止 gRPC 服务...")
     if grpc_server:
         grpc_server.stop(grace=5)
         print("gRPC server stopped")
-
-
-# 创建 FastAPI 应用
-app = FastAPI(
-    title="Image Aesthetic & Embedding Service",
-    description="""
-基于 SigLIP2 + 自训练 LoRA 的图片美学评分与向量嵌入微服务
-
-## 功能
-
-- **嵌入接口** (`/v1/embeddings`): 兼容 OpenAI Embeddings API，生成图片向量
-- **美学评分** (`/v1/aesthetics`): 评估图片美学质量，返回 1-10 分评分及概率分布
-- **多模态嵌入** (`/v1/multimodal-embedding`): 兼容阿里云 API，支持文本和图片
-
-## 模型
-
-- 基础模型: google/siglip2-so400m-patch16-512
-- 美学评分: 自训练 LoRA 模型，输出 10 类评分概率分布
-
-## 后端
-
-支持两种推理后端:
-- **PyTorch**: 完整功能，支持 GPU 加速
-- **ONNX**: 轻量化 CPU 推理，适合部署
-
-## 输入格式
-
-支持多种图片输入格式:
-- 本地文件路径: `/path/to/image.jpg`
-- HTTP URL: `https://example.com/image.jpg`
-- Base64: `data:image/jpeg;base64,/9j/4AAQ...` 或纯 Base64 字符串
-    """,
-    version="2.0.0",
-    lifespan=lifespan,
-)
-
-# CORS 中间件
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# 注册路由
-app.include_router(embeddings_router, prefix="/v1")
-app.include_router(aesthetics_router, prefix="/v1")
-app.include_router(multimodal_embedding_router, prefix="/v1")
-app.include_router(clustering_router, prefix="/v1")
-
-
-@app.get("/health", response_model=HealthResponse, tags=["health"])
-async def health_check() -> HealthResponse:
-    """健康检查"""
-    return HealthResponse(
-        status="ok",
-        model_loaded=model_service.is_loaded,
-        device=model_service.device or "not initialized",
-        backend=model_service.backend.backend_type if model_service.backend else "not initialized",
-    )
-
-
-@app.get("/", tags=["root"])
-async def root():
-    """根路径 - API 信息"""
-    grpc_port = int(os.environ.get("GRPC_PORT", 50051))
-    return {
-        "name": "Image Aesthetic & Embedding Service",
-        "version": "2.0.0",
-        "model": {
-            "base": "google/siglip2-so400m-patch16-512",
-            "aesthetic": "siglip2-aesthetic-lora",
-            "backend": model_service.backend.backend_type if model_service.backend else "not initialized",
-        },
-        "endpoints": {
-            "http": {
-                "embeddings": "/v1/embeddings",
-                "aesthetics": "/v1/aesthetics",
-                "multimodal_embedding": "/v1/multimodal-embedding",
-                "clustering_submit": "/v1/clustering/submit",
-                "clustering_status": "/v1/clustering/status/{task_id}",
-                "health": "/health",
-                "docs": "/docs",
-            },
-            "grpc": {
-                "port": grpc_port,
-                "service": "ai.AIService",
-                "methods": [
-                    "Health",
-                    "CreateEmbedding",
-                    "EvaluateAesthetic",
-                    "CreateMultimodalEmbedding",
-                    "ClusterStream",
-                ],
-            },
-        },
-    }
+    sys.exit(0)
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8100))
-    host = os.environ.get("HOST", "0.0.0.0")
+    # 注册信号处理
+    signal.signal(signal.SIGINT, shutdown_handler)
+    signal.signal(signal.SIGTERM, shutdown_handler)
 
-    print(f"Starting server on {host}:{port}")
-    uvicorn.run(app, host=host, port=port)
+    print("="*60)
+    print("Image Aesthetic & Embedding Service (gRPC Only)")
+    print("基于 SigLIP2 + 自训练 LoRA 的图片美学评分与向量嵌入服务")
+    print("="*60)
+    
+    # 初始化并启动服务
+    initialize_and_start()
+    
+    print("\n服务运行中，按 Ctrl+C 停止...\n")
+    
+    # 保持主线程运行
+    try:
+        signal.pause()
+    except AttributeError:
+        # Windows 不支持 signal.pause()
+        import time
+        while True:
+            time.sleep(1)

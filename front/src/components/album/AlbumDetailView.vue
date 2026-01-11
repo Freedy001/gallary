@@ -7,12 +7,14 @@
           :is-selection-mode="uiStore.isSelectionMode"
           :selected-count="selectedCount"
           :show-upload="true"
-          :total-count="totalCount"
           :upload-album-id="currentAlbumId"
+          :show-sort-selector="true"
+          :sort-by="uiStore.imageSortBy"
           @select-all="handleSelectAll"
           @exit-selection="exitSelectionMode"
           @density-change="uiStore.setGridDensity"
           @files-selected="handleFilesSelected"
+          @sort-change="handleSortChange"
       >
         <!-- 自定义左侧：面包屑导航 -->
         <template #left>
@@ -54,9 +56,8 @@
       <ImageGrid
           ref="imageGridRef"
           :album-id="currentAlbumId"
-          :fetcher=" async (page, size) => currentAlbumId ? (await albumApi.getImages(currentAlbumId, page, size)).data : emptyPage"
+          :fetcher=" async (page, size) => currentAlbumId ? (await albumApi.getImages(currentAlbumId, page, size, uiStore.imageSortBy)).data : emptyPage"
           mode="gallery"
-          @update:total="totalCount = $event"
           @update:selected-count="selectedCount = $event"
       />
     </template>
@@ -64,15 +65,15 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onUnmounted, ref} from 'vue'
-import {useUIStore} from '@/stores/ui'
+import {computed, onUnmounted, ref, watch} from 'vue'
+import {type SortBy, useUIStore} from '@/stores/ui'
 import {useAlbumStore} from '@/stores/album'
 import {albumApi} from '@/api/album'
 import {emptyPage} from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TopBar from '@/components/layout/TopBar.vue'
 import ImageGrid from '@/components/gallery/ImageGrid.vue'
-import Breadcrumb from '@/components/widgets/common/Breadcrumb.vue'
+import Breadcrumb from '@/components/common/Breadcrumb.vue'
 import {ArrowUpTrayIcon, MinusCircleIcon} from '@heroicons/vue/24/outline'
 
 const uiStore = useUIStore()
@@ -87,7 +88,6 @@ function gridComponent(): InstanceType<typeof ImageGrid> {
 }
 
 // 本地状态
-const totalCount = ref(0)
 const selectedCount = ref(0)
 
 const breadcrumbItems = computed(() => [
@@ -118,6 +118,17 @@ function handleSelectAll() {
   }
 }
 
+// 排序变更
+function handleSortChange(sortBy: SortBy) {
+  uiStore.setImageSortBy(sortBy)
+  gridComponent().refresh()
+}
+
+// 监听排序变化
+watch(() => uiStore.imageSortBy, () => {
+  gridComponent().refresh()
+})
+
 // 从相册移除
 async function handleRemoveFromAlbum() {
   const ids = gridComponent().selectedIds
@@ -136,7 +147,7 @@ async function handleRemoveFromAlbum() {
     }
 
     // 如果没有图片了，退出选择模式
-    if (totalCount.value === 0) {
+    if (gridComponent().images.length === 0) {
       exitSelectionMode()
     }
   } catch (err) {

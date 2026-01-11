@@ -41,7 +41,7 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue'
 import {PhotoIcon} from '@heroicons/vue/24/outline'
-import CachedImage from '@/components/widgets/common/CachedImage.vue'
+import CachedImage from '@/components/common/CachedImage.vue'
 import type {Image} from '@/types'
 
 interface Props {

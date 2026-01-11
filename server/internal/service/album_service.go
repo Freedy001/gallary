@@ -20,14 +20,16 @@ type AlbumService interface {
 	Update(ctx context.Context, id int64, req *UpdateAlbumRequest) (*model.AlbumVO, error)
 	BatchDelete(ctx context.Context, ids []int64) error
 	BatchCopy(ctx context.Context, ids []int64) ([]*model.AlbumVO, error)
+	BatchGet(ctx context.Context, ids []int64) ([]*model.AlbumVO, error)
 
 	// 图片管理
-	GetImages(ctx context.Context, albumID int64, page, pageSize int) ([]*model.ImageVO, int64, error)
+	GetImages(ctx context.Context, albumID int64, page, pageSize int, sortBy string) ([]*model.ImageVO, int64, error)
 	AddImages(ctx context.Context, albumID int64, imageIDs []int64) error
 	RemoveImages(ctx context.Context, albumID int64, imageIDs []int64) error
 	SetCover(ctx context.Context, albumID int64, imageID int64) error
 	RemoveCover(ctx context.Context, albumID int64) error
 	SetAverageCover(ctx context.Context, albumID int64, modelName string) error
+	Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64) error
 }
 
 // CreateAlbumRequest 创建相册请求
@@ -233,8 +235,60 @@ func (s *albumService) BatchCopy(ctx context.Context, ids []int64) ([]*model.Alb
 	return results, nil
 }
 
+// BatchGet 批量获取相册
+func (s *albumService) BatchGet(ctx context.Context, ids []int64) ([]*model.AlbumVO, error) {
+	if len(ids) == 0 {
+		return []*model.AlbumVO{}, nil
+	}
+
+	albums, err := s.repo.FindByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	// 批量获取图片数量
+	countMap, err := s.repo.GetImageCounts(ctx, ids)
+	if err != nil {
+		logger.Warn("批量获取图片数量失败", zap.Error(err))
+		countMap = make(map[int64]int64)
+	}
+
+	// 批量获取第一张图片作为默认封面
+	firstImagesMap, err := s.repo.GetFirstImages(ctx, ids)
+	if err != nil {
+		logger.Warn("批量获取默认封面失败", zap.Error(err))
+		firstImagesMap = make(map[int64]*model.Image)
+	}
+
+	vos := make([]*model.AlbumVO, 0, len(albums))
+	for _, album := range albums {
+		count := countMap[album.ID]
+
+		var coverImage *model.ImageVO
+
+		// 优先使用设置的封面
+		if album.Metadata != nil && album.Metadata.CoverImageID != nil {
+			img, err := s.repo.GetCoverImage(ctx, *album.Metadata.CoverImageID)
+			if err == nil && img != nil {
+				coverImage = s.storage.ToVO(img)
+			}
+		}
+
+		// 如果没有设置封面，使用第一张图片
+		if coverImage == nil {
+			if img, ok := firstImagesMap[album.ID]; ok {
+				coverImage = s.storage.ToVO(img)
+			}
+		}
+
+		vos = append(vos, album.ToAlbumVO(coverImage, count))
+	}
+
+	return vos, nil
+}
+
 // GetImages 获取相册内图片
-func (s *albumService) GetImages(ctx context.Context, albumID int64, page, pageSize int) ([]*model.ImageVO, int64, error) {
+func (s *albumService) GetImages(ctx context.Context, albumID int64, page, pageSize int, sortBy string) ([]*model.ImageVO, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -242,7 +296,7 @@ func (s *albumService) GetImages(ctx context.Context, albumID int64, page, pageS
 		pageSize = 20
 	}
 
-	images, total, err := s.repo.GetImages(ctx, albumID, page, pageSize)
+	images, total, err := s.repo.GetImages(ctx, albumID, page, pageSize, sortBy)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -309,6 +363,22 @@ func (s *albumService) SetAverageCover(ctx context.Context, albumID int64, model
 
 	// 设置封面
 	return s.SetCover(ctx, albumID, bestImageID)
+}
+
+// Merge 合并相册
+func (s *albumService) Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64) error {
+	// 验证目标相册存在
+	if _, err := s.repo.FindByID(ctx, targetAlbumID); err != nil {
+		return fmt.Errorf("目标相册不存在: %w", err)
+	}
+
+	// 执行合并
+	if err := s.repo.Merge(ctx, sourceAlbumIDs, targetAlbumID); err != nil {
+		return fmt.Errorf("合并相册失败: %w", err)
+	}
+
+	logger.Info("合并相册成功", zap.Int64s("source_ids", sourceAlbumIDs), zap.Int64("target_id", targetAlbumID))
+	return nil
 }
 
 // toVO 转换为 AlbumVO

@@ -332,9 +332,9 @@
 <script setup lang="ts">
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useUIStore} from '@/stores/ui'
-import LocationPicker from '@/components/widgets/common/LocationPicker.vue'
-import type {SelectOption} from '@/components/widgets/common/BaseSelect.vue'
-import BaseSelect from '@/components/widgets/common/BaseSelect.vue'
+import LocationPicker from '@/components/common/LocationPicker.vue'
+import type {SelectOption} from '@/components/common/BaseSelect.vue'
+import BaseSelect from '@/components/common/BaseSelect.vue'
 import {
   BoltIcon,
   CalendarIcon,
@@ -351,7 +351,7 @@ import type {EmbeddingModelInfo} from '@/types/ai'
 import {imageApi} from "@/api/image.ts"
 import {aiApi} from "@/api/ai.ts"
 import {useDialogStore} from "@/stores/dialog.ts";
-import Tooltip from "@/components/widgets/common/Tooltip.vue";
+import Tooltip from "@/components/common/Tooltip.vue";
 import {useSearchStore} from "@/stores/search.ts";
 
 const uiStore = useUIStore()

@@ -139,10 +139,11 @@ type HDBSCANParamsDTO struct {
 	MinSamples              *int    `json:"min_samples,omitempty"`
 	ClusterSelectionEpsilon float64 `json:"cluster_selection_epsilon"`
 	ClusterSelectionMethod  string  `json:"cluster_selection_method"`
-	Metric                  string  `json:"metric"`
-	UMAPEnabled             bool    `json:"umap_enabled"`
-	UMAPComponents          int     `json:"umap_n_components,omitempty"`
-	UMAPNeighbors           int     `json:"umap_n_neighbors,omitempty"`
+	// UMAP 降维参数
+	UMAPEnabled    bool    `json:"umap_enabled"`
+	UMAPComponents int     `json:"umap_n_components,omitempty"`
+	UMAPNeighbors  int     `json:"umap_n_neighbors,omitempty"`
+	UMAPMinDist    float64 `json:"umap_min_dist,omitempty"`
 }
 
 // SmartAlbumProgressVO 智能相册任务进度（WebSocket 推送）

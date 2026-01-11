@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import numpy as np
+import umap
 
 try:
     import hdbscan
@@ -21,7 +22,6 @@ class HDBSCANParams:
     min_samples: Optional[int] = None
     cluster_selection_epsilon: float = 0.0
     cluster_selection_method: str = "eom"
-    metric: str = "cosine"
 
 
 @dataclass
@@ -109,19 +109,15 @@ class ClusteringService:
         umap_actually_used = False
         if umap_params.enabled and len(embeddings_arr) > umap_params.n_components:
             report("clustering", 30, "UMAP 降维中")
-            try:
-                import umap
-                reducer = umap.UMAP(
-                    n_components=min(umap_params.n_components, embeddings_arr.shape[1]),
-                    n_neighbors=min(umap_params.n_neighbors, len(embeddings_arr) - 1),
-                    min_dist=umap_params.min_dist,
-                    metric="cosine",
-                    random_state=42
-                )
-                embeddings_arr = reducer.fit_transform(embeddings_arr)
-                umap_actually_used = True
-            except ImportError:
-                pass
+            reducer = umap.UMAP(
+                n_components=min(umap_params.n_components, embeddings_arr.shape[1]),
+                n_neighbors=min(umap_params.n_neighbors, len(embeddings_arr) - 1),
+                min_dist=umap_params.min_dist,
+                metric="cosine",
+                random_state=42
+            )
+            embeddings_arr = reducer.fit_transform(embeddings_arr)
+            umap_actually_used = True
 
         # HDBSCAN 聚类
         report("clustering", 60, "HDBSCAN 聚类中")
@@ -133,14 +129,13 @@ class ClusteringService:
         if min_samples is not None:
             min_samples = min(min_samples, len(embeddings_arr) - 1)
 
-        metric = "euclidean" if umap_actually_used else hdbscan_params.metric
-
+        # 使用 euclidean 距离（对于已归一化的向量，欧氏距离等价于余弦距离）
         clusterer = hdbscan.HDBSCAN(
             min_cluster_size=min_cluster_size,
             min_samples=min_samples,
             cluster_selection_epsilon=hdbscan_params.cluster_selection_epsilon,
             cluster_selection_method=hdbscan_params.cluster_selection_method,
-            metric=metric
+            metric="euclidean"
         )
 
         labels = clusterer.fit_predict(embeddings_arr)
@@ -181,7 +176,7 @@ class ClusteringService:
                 "min_samples": min_samples,
                 "cluster_selection_epsilon": hdbscan_params.cluster_selection_epsilon,
                 "cluster_selection_method": hdbscan_params.cluster_selection_method,
-                "metric": metric
+                "metric": "euclidean"
             },
             "umap": {
                 "enabled": umap_params.enabled,

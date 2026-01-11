@@ -90,10 +90,10 @@ func (s *smartAlbumService) SubmitSmartAlbumTask(ctx context.Context, req *Gener
 			MinClusterSize:          5,
 			ClusterSelectionEpsilon: 0.0,
 			ClusterSelectionMethod:  "eom",
-			Metric:                  "cosine",
 			UMAPEnabled:             false,
 			UMAPComponents:          50,
 			UMAPNeighbors:           15,
+			UMAPMinDist:             0.1,
 		}
 	}
 
@@ -280,6 +280,12 @@ func (s *smartAlbumService) buildClusterRequest(task *SmartAlbumTask, embeddings
 
 	params := task.Params.HDBSCANParams
 
+	// 设置 UMAP MinDist 默认值
+	umapMinDist := params.UMAPMinDist
+	if umapMinDist == 0 {
+		umapMinDist = 0.1
+	}
+
 	return &llms.ClusterStreamRequest{
 		Embeddings: embeddingVectors,
 		ImageIDs:   imageIDs,
@@ -289,13 +295,12 @@ func (s *smartAlbumService) buildClusterRequest(task *SmartAlbumTask, embeddings
 			MinSamples:              params.MinSamples,
 			ClusterSelectionEpsilon: float32(params.ClusterSelectionEpsilon),
 			ClusterSelectionMethod:  params.ClusterSelectionMethod,
-			Metric:                  params.Metric,
 		},
 		UMAPParams: &llms.UMAPParams{
 			Enabled:     params.UMAPEnabled,
 			NComponents: params.UMAPComponents,
 			NNeighbors:  params.UMAPNeighbors,
-			MinDist:     0.1, // 默认值
+			MinDist:     float32(umapMinDist),
 		},
 	}
 }
@@ -321,17 +326,13 @@ func (s *smartAlbumService) createAlbumsFromClusters(ctx context.Context, result
 
 		// 创建相册 (使用 model.Tag，因为 AlbumRepository 使用 Tag)
 		albumName := fmt.Sprintf("智能相册 #%d", startNumber+i)
-		var coverImageID *int64
-		if len(cluster.ImageIDs) > 0 {
-			coverImageID = &cluster.ImageIDs[0]
-		}
 
 		album := &model.Tag{
 			Name: albumName,
 			Type: model.TagTypeAlbum,
 			Metadata: &model.AlbumMetadata{
-				IsSmartAlbum: true,
-				CoverImageID: coverImageID,
+				IsSmartAlbum:          true,
+				HDBSCANAvgProbability: cluster.AvgProbability,
 			},
 		}
 

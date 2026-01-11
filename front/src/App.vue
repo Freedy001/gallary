@@ -29,7 +29,7 @@
 
 <script setup lang="ts">
 import {onMounted, onUnmounted, ref} from 'vue'
-import ConfirmDialog from '@/components/widgets/common/ConfirmDialog.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 
 // 需要缓存的视图组件名称
 const keepAliveComponents = ['GalleryView', 'AlbumsView']

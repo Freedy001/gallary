@@ -103,6 +103,8 @@ func SetupRouter(
 			albums.POST("", albumHandler.Create)
 			albums.POST("/batch-delete", albumHandler.BatchDelete)
 			albums.POST("/batch-copy", albumHandler.BatchCopy)
+			albums.POST("/batch-merge", albumHandler.BatchMerge)
+			albums.POST("/batch-get", albumHandler.BatchGet)
 			albums.POST("/ai-naming", albumHandler.AINaming)
 			albums.PUT("/:id", albumHandler.Update)
 			albums.GET("/:id/images", albumHandler.GetImages)

@@ -277,9 +277,9 @@ import {
   PhotoIcon,
   SparklesIcon
 } from '@heroicons/vue/24/outline'
-import ContextMenu from '@/components/widgets/common/ContextMenu.vue'
-import ContextMenuItem from '@/components/widgets/common/ContextMenuItem.vue'
-import SelectionBox from '@/components/widgets/common/SelectionBox.vue'
+import ContextMenu from '@/components/common/ContextMenu.vue'
+import ContextMenuItem from '@/components/common/ContextMenuItem.vue'
+import SelectionBox from '@/components/common/SelectionBox.vue'
 import type {Image, Pageable, SharePublicInfo} from '@/types'
 import {useGenericBoxSelection} from '@/composables/useGenericBoxSelection'
 

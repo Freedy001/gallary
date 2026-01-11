@@ -1,8 +1,18 @@
-import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import { wsService } from '@/services/websocket'
-import type { AIQueueStatus } from '@/types/ai'
-import type { StorageStats } from '@/api/storage'
+import {defineStore} from 'pinia'
+import {ref} from 'vue'
+import {wsService} from '@/services/websocket'
+import {dataSyncService} from '@/services/dataSync'
+import type {AIQueueStatus} from '@/types/ai'
+import type {StorageStats} from '@/api/storage'
+
+// WebSocket 数据同步事件载荷类型
+interface AlbumsSyncPayload {
+  albumIds: number[]
+}
+
+interface ImagesSyncPayload {
+  ids: number[]
+}
 
 export const useNotificationStore = defineStore('notification', () => {
   // ================== State ==================
@@ -47,6 +57,15 @@ export const useNotificationStore = defineStore('notification', () => {
   // 订阅图片总数更新
   wsService.subscribe<number>('image_count', (count) => {
     imageCount.value = count
+  })
+
+  wsService.subscribe<AlbumsSyncPayload>('albums_updated', (data) => {
+    dataSyncService.emit('albums:updated', { albumIds: data.albumIds, source: 'websocket' })
+  })
+
+  // 订阅图片上传完成事件
+  wsService.subscribe<ImagesSyncPayload>('images_uploaded', (data) => {
+    dataSyncService.emit('images:uploaded', { ids: data.ids, source: 'websocket' })
   })
 
   // ================== Actions ==================

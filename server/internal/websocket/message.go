@@ -12,6 +12,10 @@ const (
 	MsgTypeImageCount         MessageType = "image_count"          // 图片总数更新
 	MsgTypeSmartAlbumProgress MessageType = "smart_album_progress" // 智能相册任务进度
 
+	// 数据同步事件
+	MsgTypeAlbumsUpdated  MessageType = "albums_updated"  // 相册更新（AI命名完成等）
+	MsgTypeImagesUploaded MessageType = "images_uploaded" // 图片上传完成
+
 	// 客户端请求消息类型
 	MsgTypePing MessageType = "ping" // 心跳 ping
 	MsgTypePong MessageType = "pong" // 心跳 pong

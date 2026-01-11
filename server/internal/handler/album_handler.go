@@ -195,6 +195,78 @@ func (h *AlbumHandler) BatchCopy(c *gin.Context) {
 	utils.SuccessWithMessage(c, "复制成功", albums)
 }
 
+// BatchMerge 批量合并相册
+//
+//	@Summary		批量合并相册
+//	@Description	将多个相册合并到目标相册，源相册的图片会移动到目标相册，源相册会被删除
+//	@Tags			相册管理
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		object{source_ids=[]int64,target_id=int64}	true	"合并请求"
+//	@Success		200		{object}	utils.Response								"合并成功"
+//	@Failure		400		{object}	utils.Response								"无效的参数"
+//	@Failure		500		{object}	utils.Response								"合并失败"
+//	@Router			/api/albums/batch-merge [post]
+func (h *AlbumHandler) BatchMerge(c *gin.Context) {
+	var req struct {
+		SourceIDs []int64 `json:"source_ids" binding:"required"`
+		TargetID  int64   `json:"target_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数")
+		return
+	}
+
+	if len(req.SourceIDs) == 0 {
+		utils.BadRequest(c, "请选择要合并的相册")
+		return
+	}
+
+	if err := h.albumService.Merge(c.Request.Context(), req.SourceIDs, req.TargetID); err != nil {
+		logger.Error("合并相册失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "合并成功", nil)
+}
+
+// BatchGet 批量获取相册
+//
+//	@Summary		批量获取相册
+//	@Description	根据ID列表批量获取相册信息
+//	@Tags			相册管理
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		object{ids=[]int64}						true	"相册ID列表"
+//	@Success		200		{object}	utils.Response{data=[]model.AlbumVO}	"获取成功"
+//	@Failure		400		{object}	utils.Response							"无效的参数"
+//	@Failure		500		{object}	utils.Response							"获取失败"
+//	@Router			/api/albums/batch-get [post]
+func (h *AlbumHandler) BatchGet(c *gin.Context) {
+	var req struct {
+		IDs []int64 `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的参数")
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		utils.Success(c, []any{})
+		return
+	}
+
+	albums, err := h.albumService.BatchGet(c.Request.Context(), req.IDs)
+	if err != nil {
+		logger.Error("批量获取相册失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.Success(c, albums)
+}
+
 // AINaming AI 命名相册
 //
 //	@Summary		AI 命名相册
@@ -240,6 +312,7 @@ func (h *AlbumHandler) AINaming(c *gin.Context) {
 //	@Param			id			path		int															true	"相册ID"
 //	@Param			page		query		int															false	"页码"	default(1)
 //	@Param			page_size	query		int															false	"每页数量"	default(20)
+//	@Param			sort_by		query		string														false	"排序方式：taken_at（拍摄时间）或 ai_score（美学评分）"	default(taken_at)
 //	@Success		200			{object}	utils.Response{data=utils.PageData{list=model.ImageVO}}	"图片列表"
 //	@Failure		400			{object}	utils.Response												"无效的相册ID"
 //	@Failure		500			{object}	utils.Response												"获取失败"
@@ -253,8 +326,9 @@ func (h *AlbumHandler) GetImages(c *gin.Context) {
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	sortBy := c.DefaultQuery("sort_by", "taken_at")
 
-	images, total, err := h.albumService.GetImages(c.Request.Context(), id, page, pageSize)
+	images, total, err := h.albumService.GetImages(c.Request.Context(), id, page, pageSize, sortBy)
 	if err != nil {
 		logger.Error("获取相册图片失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())

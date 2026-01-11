@@ -91,6 +91,36 @@ export const useAlbumStore = defineStore('album', () => {
     ])
   }
 
+  // 根据 ID 列表局部更新相册（用于 AI 命名等场景）
+  async function updateLocalAlbums(ids: number[]) {
+    if (ids.length === 0) return
+
+    try {
+      const { data: updatedAlbums } = await albumApi.getByIds(ids)
+
+      updatedAlbums.forEach(album => {
+        // 在普通相册分区中查找并更新
+        const normalIndex = normalSection.value.albums.findIndex(a => a?.id === album.id)
+        if (normalIndex !== -1) {
+          normalSection.value.albums[normalIndex] = album
+        }
+
+        // 在智能相册分区中查找并更新
+        const smartIndex = smartSection.value.albums.findIndex(a => a?.id === album.id)
+        if (smartIndex !== -1) {
+          smartSection.value.albums[smartIndex] = album
+        }
+
+        // 更新当前相册（如果正在查看）
+        if (currentAlbum.value?.id === album.id) {
+          currentAlbum.value = album
+        }
+      })
+    } catch (e) {
+      console.error('[AlbumStore] 局部更新相册失败', e)
+    }
+  }
+
   // 向后兼容的 fetchAlbums（内部调用 refreshAlbums）
   async function fetchAlbums(page = 1, pageSize = 20) {
     if (page === 1) {
@@ -193,6 +223,7 @@ export const useAlbumStore = defineStore('album', () => {
     // Actions
     fetchSection: fetchSection,
     refreshAlbums: refreshAlbums,
+    updateLocalAlbums: updateLocalAlbums,
     fetchAlbums: fetchAlbums,
     createAlbum: createAlbum,
     updateAlbum: updateAlbum,

@@ -1,5 +1,4 @@
 import type {Image} from './image'
-import type {SmartAlbumConfig} from './smart-album'
 
 // 相册类型
 export interface Album {
@@ -11,7 +10,7 @@ export interface Album {
   image_count: number
   sort_order: number
   is_smart_album: boolean
-  smart_album_config?: SmartAlbumConfig
+  hdbscan_avg_probability?: number
   created_at: string
   updated_at: string
 }

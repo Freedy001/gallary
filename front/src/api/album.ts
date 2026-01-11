@@ -20,6 +20,11 @@ export const albumApi = {
     })
   },
 
+  // 根据 ID 批量获取相册
+  getByIds(ids: number[]) {
+    return http.post<Album[]>('/api/albums/batch-get', { ids })
+  },
+
 
   // 创建相册
   create(data: CreateAlbumRequest) {
@@ -42,9 +47,9 @@ export const albumApi = {
   },
 
   // 获取相册内图片
-  getImages(id: number, page: number = 1, pageSize: number = 20) {
+  getImages(id: number, page: number = 1, pageSize: number = 20, sortBy = 'taken_at') {
     return http.get<Pageable<Image>>(`/api/albums/${id}/images`, {
-      params: { page, page_size: pageSize }
+      params: { page, page_size: pageSize, sort_by: sortBy }
     })
   },
 
@@ -78,5 +83,10 @@ export const albumApi = {
   // AI 命名相册（添加到队列）
   aiNaming(ids: number[]) {
     return http.post<{ added: number }>('/api/albums/ai-naming', { ids })
+  },
+
+  // 合并相册
+  merge(sourceIds: number[], targetId: number) {
+    return http.post('/api/albums/batch-merge', { source_ids: sourceIds, target_id: targetId })
   },
 }

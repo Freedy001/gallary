@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"gallary/server/internal/repository"
 	"gallary/server/internal/websocket"
+	"gallary/server/pkg/database"
 	"io"
 	"math"
 	"mime/multipart"
@@ -57,7 +58,7 @@ type ImageService interface {
 	Upload(ctx context.Context, file *multipart.FileHeader, albumID *int64) (*model.ImageVO, error)
 	GetByID(ctx context.Context, id int64) (*model.ImageVO, error)
 	GetByIDs(ctx context.Context, ids []int64) ([]*model.ImageVO, error)
-	List(ctx context.Context, page, pageSize int) ([]*model.ImageVO, int64, error)
+	List(ctx context.Context, page, pageSize int, sortBy string) ([]*model.ImageVO, int64, error)
 	Delete(ctx context.Context, id int64) error
 	DeleteBatch(ctx context.Context, ids []int64) error
 	Search(ctx context.Context, params *model.SearchParams) ([]*model.ImageVO, int64, error)
@@ -82,23 +83,25 @@ type ImageService interface {
 }
 
 type imageService struct {
-	repo      repository.ImageRepository
-	albumRepo repository.AlbumRepository
-	storage   *storage.StorageManager
-	cfg       *config.Config
-	notifier  websocket.Notifier
-	aiService AIService
+	repo          repository.ImageRepository
+	albumRepo     repository.AlbumRepository
+	embeddingRepo repository.ImageEmbeddingRepository
+	storage       *storage.StorageManager
+	cfg           *config.Config
+	notifier      websocket.Notifier
+	aiService     AIService
 }
 
 // NewImageService 创建图片服务实例
-func NewImageService(repo repository.ImageRepository, albumRepo repository.AlbumRepository, storage *storage.StorageManager, cfg *config.Config, notifier websocket.Notifier, aiService AIService) ImageService {
+func NewImageService(repo repository.ImageRepository, albumRepo repository.AlbumRepository, embeddingRepo repository.ImageEmbeddingRepository, storage *storage.StorageManager, cfg *config.Config, notifier websocket.Notifier, aiService AIService) ImageService {
 	return &imageService{
-		repo:      repo,
-		albumRepo: albumRepo,
-		storage:   storage,
-		cfg:       cfg,
-		notifier:  notifier,
-		aiService: aiService,
+		repo:          repo,
+		albumRepo:     albumRepo,
+		embeddingRepo: embeddingRepo,
+		storage:       storage,
+		cfg:           cfg,
+		notifier:      notifier,
+		aiService:     aiService,
 	}
 }
 
@@ -365,14 +368,14 @@ func (s *imageService) GetByIDs(ctx context.Context, ids []int64) ([]*model.Imag
 }
 
 // List 获取图片列表
-func (s *imageService) List(ctx context.Context, page, pageSize int) ([]*model.ImageVO, int64, error) {
+func (s *imageService) List(ctx context.Context, page, pageSize int, sortBy string) ([]*model.ImageVO, int64, error) {
 	if page < 1 {
 		page = 1
 	}
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 20
 	}
-	images, total, err := s.repo.List(ctx, page, pageSize)
+	images, total, err := s.repo.List(ctx, page, pageSize, sortBy)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -932,9 +935,8 @@ func (s *imageService) PermanentlyDelete(ctx context.Context, ids []int64) error
 		return fmt.Errorf("获取图片信息失败: %w", err)
 	}
 
-	// 按存储类型分组原图路径
+	// 收集文件路径信息（事务外获取，事务内删除数据库记录）
 	pathsByType := make(map[model.StorageId][]string)
-	// 缩略图路径（始终是本地存储）
 	var thumbnailPaths []string
 
 	for _, image := range images {
@@ -944,19 +946,37 @@ func (s *imageService) PermanentlyDelete(ctx context.Context, ids []int64) error
 		}
 	}
 
-	// 批量删除各存储类型的原图
+	// 使用事务删除数据库记录
+	err = database.Transaction0(ctx, func(txCtx context.Context) error {
+		// 1. 删除关联的向量嵌入数据
+		if err := s.embeddingRepo.DeleteByImageIDs(txCtx, ids); err != nil {
+			return fmt.Errorf("删除向量嵌入数据失败: %w", err)
+		}
+
+		// 2. 删除相册关联数据
+		if err := s.albumRepo.RemoveImagesFromAllAlbums(txCtx, ids); err != nil {
+			return fmt.Errorf("删除相册关联数据失败: %w", err)
+		}
+
+		// 3. 从数据库物理删除图片记录
+		if err := s.repo.HardDeleteBatch(txCtx, ids); err != nil {
+			return fmt.Errorf("物理删除数据库记录失败: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// 事务成功后删除物理文件（文件删除失败不影响数据一致性）
 	for storageType, paths := range pathsByType {
 		s.doDeleteBatch(ctx, storageType, paths)
 	}
 
-	// 批量删除缩略图（本地存储）
 	if len(thumbnailPaths) > 0 {
 		s.doDeleteBatch(ctx, model.StorageTypeLocal, thumbnailPaths)
-	}
-
-	// 从数据库物理删除记录
-	if err := s.repo.HardDeleteBatch(ctx, ids); err != nil {
-		return fmt.Errorf("物理删除数据库记录失败: %w", err)
 	}
 
 	logger.Info("彻底删除图片完成",

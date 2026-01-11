@@ -101,7 +101,6 @@ message HDBSCANParams {
   optional int32 min_samples = 2;
   float cluster_selection_epsilon = 3;
   string cluster_selection_method = 4;
-  string metric = 5;
 }
 
 // UMAP 降维参数

@@ -2,7 +2,7 @@
   <!-- 展开状态 -->
   <div
     v-if="!collapsed"
-    class="group cursor-pointer -mx-2 px-2 py-2 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors"
+    class="group cursor-pointer -mx-2 px-3 py-3 rounded-xl bg-black/20 border border-white/5 hover:bg-white/5 transition-all duration-300"
     @click="handleClick"
   >
     <!-- 进行中 -->
@@ -31,7 +31,7 @@
 
     <!-- 已完成 -->
     <template v-else-if="smartAlbumStore.result">
-      <div class="flex items-center justify-between text-xs text-green-400 mb-1.5">
+      <div class="flex items-center justify-between text-xs text-primary-400 mb-1.5">
         <div class="flex items-center gap-1.5 font-mono tracking-wider">
           <CheckCircleIcon class="h-3.5 w-3.5" />
           <span>生成完成</span>
@@ -67,8 +67,7 @@
     <div class="relative">
       <SparklesIcon
         :class="{
-          'text-primary-400': smartAlbumStore.taskInProgress,
-          'text-green-400': smartAlbumStore.result,
+          'text-primary-400': smartAlbumStore.taskInProgress || smartAlbumStore.result,
           'text-red-400': smartAlbumStore.errorMessage
         }"
         class="h-4 w-4"
@@ -79,7 +78,7 @@
       ></span>
       <span
         v-else-if="smartAlbumStore.result"
-        class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-green-500 border border-gray-900"
+        class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary-500 border border-gray-900"
       ></span>
       <span
         v-else-if="smartAlbumStore.errorMessage"
@@ -87,8 +86,7 @@
       ></span>
     </div>
     <span :class="{
-        'text-primary-400': smartAlbumStore.taskInProgress,
-        'text-green-400': smartAlbumStore.result,
+        'text-primary-400': smartAlbumStore.taskInProgress || smartAlbumStore.result,
         'text-red-400': smartAlbumStore.errorMessage
       }"
       class="text-[10px] font-bold"

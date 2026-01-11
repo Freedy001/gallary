@@ -199,7 +199,7 @@ import {storageApi} from '@/api/storage'
 import type {AliyunPanGlobalConfig, AliyunPanStorageConfig, AliyunPanUserInfo} from '@/api/settings'
 import {useDialogStore} from '@/stores/dialog'
 import {UserIcon, XMarkIcon} from '@heroicons/vue/24/outline'
-import BaseSelect from '@/components/widgets/common/BaseSelect.vue'
+import BaseSelect from '@/components/common/BaseSelect.vue'
 
 const props = defineProps<{
   accounts: AliyunPanStorageConfig[]

@@ -1,0 +1,13 @@
+# PostgreSQL with pgvector and PostGIS extensions
+# 基于最新的 pgvector 镜像
+FROM pgvector/pgvector:pg16
+
+# 安装 PostGIS 扩展
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        postgresql-16-postgis-3 \
+        postgresql-16-postgis-3-scripts \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制初始化脚本
+COPY init-extensions.sql /docker-entrypoint-initdb.d/

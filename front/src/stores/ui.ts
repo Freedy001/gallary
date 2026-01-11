@@ -6,6 +6,8 @@ import {useAlbumStore} from "@/stores/album.ts";
 
 const albumStore = useAlbumStore()
 
+export type SortBy = 'taken_at' | 'ai_score'
+
 export interface UploadTask {
   id: string
   file: File
@@ -31,6 +33,9 @@ export const useUIStore = defineStore('ui', () => {
 
   // Selection mode state
   const isSelectionMode = ref(false)
+
+  // Sort state
+  const imageSortBy = ref<SortBy>((localStorage.getItem('imageSortBy') as SortBy) || 'taken_at')
 
   // Timeline state
   const timeLineState = ref<{ date: string, location: string | null } | null>(null)
@@ -240,6 +245,11 @@ export const useUIStore = defineStore('ui', () => {
     isSelectionMode.value = mode
   }
 
+  function setImageSortBy(sortBy: SortBy) {
+    imageSortBy.value = sortBy
+    localStorage.setItem('imageSortBy', sortBy)
+  }
+
   function setTimeLineState(date: { date: string, location: string | null } | null) {
     timeLineState.value = date
   }
@@ -250,37 +260,39 @@ export const useUIStore = defineStore('ui', () => {
 
   return {
     // State
-    gridDensity,
-    sidebarCollapsed,
-    commandPaletteOpen,
-    uploadDrawerOpen,
-    uploadTasks,
-    isSelectionMode,
-    timeLineState,
-    settingActiveTab,
+    gridDensity: gridDensity,
+    sidebarCollapsed: sidebarCollapsed,
+    commandPaletteOpen: commandPaletteOpen,
+    uploadDrawerOpen: uploadDrawerOpen,
+    uploadTasks: uploadTasks,
+    isSelectionMode: isSelectionMode,
+    imageSortBy: imageSortBy,
+    timeLineState: timeLineState,
+    settingActiveTab: settingActiveTab,
 
     // Computed
-    gridColumns,
-    imagePageSize,
-    uploadingCount,
-    completedCount,
-    failedCount,
-    totalProgress,
+    gridColumns: gridColumns,
+    imagePageSize: imagePageSize,
+    uploadingCount: uploadingCount,
+    completedCount: completedCount,
+    failedCount: failedCount,
+    totalProgress: totalProgress,
 
     // Actions
-    setGridDensity,
-    toggleSidebar,
-    openCommandPalette,
-    closeCommandPalette,
-    toggleCommandPalette,
-    openUploadDrawer,
-    closeUploadDrawer,
-    addUploadTask,
-    retryUploadTask,
-    removeUploadTask,
-    clearCompletedTasks,
-    setSelectionMode,
-    setTimeLineState,
-    setOnUploadComplete,
+    setGridDensity: setGridDensity,
+    toggleSidebar: toggleSidebar,
+    openCommandPalette: openCommandPalette,
+    closeCommandPalette: closeCommandPalette,
+    toggleCommandPalette: toggleCommandPalette,
+    openUploadDrawer: openUploadDrawer,
+    closeUploadDrawer: closeUploadDrawer,
+    addUploadTask: addUploadTask,
+    retryUploadTask: retryUploadTask,
+    removeUploadTask: removeUploadTask,
+    clearCompletedTasks: clearCompletedTasks,
+    setSelectionMode: setSelectionMode,
+    setImageSortBy: setImageSortBy,
+    setTimeLineState: setTimeLineState,
+    setOnUploadComplete: setOnUploadComplete,
   }
 })

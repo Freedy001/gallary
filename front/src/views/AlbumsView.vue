@@ -6,7 +6,6 @@
           :is-selection-mode="albumStore.hasSelection"
           :selected-count="albumStore.selectedCount"
           :show-density-slider="true"
-          :total-count="albumStore.total"
           @select-all="handleSelectAll"
           @exit-selection="albumStore.clearSelection()"
           @density-change="uiStore.setGridDensity"
@@ -101,7 +100,13 @@
                   :ref="(el) => setItemRef('normal', index, el as HTMLElement)"
                   :data-index="index"
                   :data-section="'normal'"
-                  class="group cursor-pointer"
+                  class="group cursor-pointer rounded-2xl"
+                  draggable="true"
+                  @dragend="handleDragEnd"
+                  @dragleave="handleDragLeave"
+                  @dragover="handleDragOver"
+                  @dragstart="album && handleDragStart($event, album)"
+                  @drop="album && handleDrop($event, album)"
                   @click="album && handleAlbumClick($event, album)"
                   @contextmenu.prevent="album && handleContextMenu($event, album)"
               >
@@ -134,7 +139,13 @@
                   :ref="(el) => setItemRef('smart', index, el as HTMLElement)"
                   :data-index="index"
                   :data-section="'smart'"
-                  class="group cursor-pointer"
+                  class="group cursor-pointer rounded-2xl"
+                  draggable="true"
+                  @dragend="handleDragEnd"
+                  @dragleave="handleDragLeave"
+                  @dragover="handleDragOver"
+                  @dragstart="album && handleDragStart($event, album)"
+                  @drop="album && handleDrop($event, album)"
                   @click="album && handleAlbumClick($event, album)"
                   @contextmenu.prevent="album && handleContextMenu($event, album)"
               >
@@ -220,6 +231,7 @@ import {useDialogStore} from '@/stores/dialog'
 import {useUIStore} from '@/stores/ui'
 import {useGenericBoxSelection} from '@/composables/useGenericBoxSelection'
 import {useScrollPosition} from '@/composables/useScrollPosition'
+import {dataSyncService} from '@/services/dataSync'
 import {albumApi} from '@/api/album'
 import {aiApi} from '@/api/ai'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -229,9 +241,9 @@ import GenerateSmartAlbumModal from '@/components/album/GenerateSmartAlbumModal.
 import SelectModelModal from '@/components/album/SelectModelModal.vue'
 import AlbumCard from '@/components/album/AlbumCard.vue'
 import AlbumCardSkeleton from '@/components/album/AlbumCardSkeleton.vue'
-import SelectionBox from '@/components/widgets/common/SelectionBox.vue'
-import ContextMenu from '@/components/widgets/common/ContextMenu.vue'
-import ContextMenuItem from '@/components/widgets/common/ContextMenuItem.vue'
+import SelectionBox from '@/components/common/SelectionBox.vue'
+import ContextMenu from '@/components/common/ContextMenu.vue'
+import ContextMenuItem from '@/components/common/ContextMenuItem.vue'
 import {
   DocumentDuplicateIcon,
   PencilIcon,
@@ -555,7 +567,7 @@ async function handleModelSelected(modelName: string) {
       type: 'success'
     })
     // 刷新相册列表
-    await albumStore.fetchAlbums()
+    await albumStore.updateLocalAlbums([album.id])
   } catch (err: any) {
     console.error('设置平均封面失败', err)
     const errorMsg = err.response?.data?.message || '设置平均封面失败'
@@ -563,11 +575,151 @@ async function handleModelSelected(modelName: string) {
   }
 }
 
+// 拖拽相关逻辑
+function handleDragStart(event: DragEvent, album: Album) {
+  if (!event.dataTransfer) return
+
+  // 如果已有选中项且当前拖拽的项不在选中项中，则清除选中并选中当前项
+  // 如果已有选中项且当前拖拽的项在选中项中，则拖拽所有选中项
+  const selectedIds = new Set(albumStore.selectedAlbums)
+  if (!selectedIds.has(album.id)) {
+    albumStore.clearSelection()
+    selectedIds.clear()
+    selectedIds.add(album.id)
+  }
+
+  // 如果没有选中项（虽然上面已经处理了，但为了健壮性），则拖拽当前项
+  if (selectedIds.size === 0) {
+    selectedIds.add(album.id)
+  }
+
+  const ids = Array.from(selectedIds)
+
+  // 判断源相册类型（智能相册可以随意合并，普通相册只能合并到普通相册）
+  const isSmartSource = album.is_smart_album
+
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('application/json', JSON.stringify({
+    sourceAlbumIds: ids,
+    isSmartSource: isSmartSource
+  }))
+
+  // 设置拖拽时的样式
+  if (event.target instanceof HTMLElement) {
+    event.target.classList.add('opacity-50')
+  }
+}
+
+function handleDragOver(event: DragEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+
+  // 添加高亮样式
+  const target = (event.currentTarget as HTMLElement)
+  target.classList.add('ring-2', 'ring-primary-500', 'ring-offset-2', 'ring-offset-black')
+}
+
+function handleDragLeave(event: DragEvent) {
+  // 移除高亮样式
+  const target = (event.currentTarget as HTMLElement)
+  target.classList.remove('ring-2', 'ring-primary-500', 'ring-offset-2', 'ring-offset-black')
+}
+
+function handleDragEnd(event: DragEvent) {
+  // 清理拖拽源的样式
+  if (event.target instanceof HTMLElement) {
+    event.target.classList.remove('opacity-50')
+  }
+  // 清理所有可能残留的高亮样式
+  document.querySelectorAll('.ring-offset-black').forEach(el => {
+    el.classList.remove('ring-2', 'ring-primary-500', 'ring-offset-2', 'ring-offset-black')
+  })
+}
+
+async function handleDrop(event: DragEvent, targetAlbum: Album) {
+  event.preventDefault()
+  event.stopPropagation()
+
+  // 移除拖拽源的样式
+  const dragSource = document.querySelector('.opacity-50')
+  if (dragSource) {
+    dragSource.classList.remove('opacity-50')
+  }
+
+  // 移除高亮样式
+  const target = (event.currentTarget as HTMLElement)
+  target.classList.remove('ring-2', 'ring-primary-500', 'ring-offset-2', 'ring-offset-black')
+
+  if (!event.dataTransfer) return
+
+  try {
+    const jsonData = event.dataTransfer.getData('application/json')
+    if (!jsonData) return
+
+    const data = JSON.parse(jsonData)
+    const sourceAlbumIds: number[] = data.sourceAlbumIds
+    const isSmartSource: boolean = data.isSmartSource
+
+    // 普通相册只能合并到普通相册，智能相册可以随意合并
+    if (!isSmartSource && targetAlbum.is_smart_album) {
+      dialogStore.alert({
+        title: '无法合并',
+        message: '普通相册只能合并到普通相册',
+        type: 'warning'
+      })
+      return
+    }
+
+    // 过滤掉目标相册本身
+    const validSourceIds = sourceAlbumIds.filter(id => id !== targetAlbum.id)
+
+    if (validSourceIds.length === 0) return
+
+    const confirmed = await dialogStore.confirm({
+      title: '合并相册',
+      message: `确定要将 ${validSourceIds.length} 个相册合并到 "${targetAlbum.name}" 吗？源相册将被删除，图片将移动到目标相册。`,
+      type: 'warning',
+      confirmText: '合并'
+    })
+
+    if (!confirmed) return
+
+    await albumApi.merge(validSourceIds, targetAlbum.id)
+
+    dialogStore.notify({
+      title: '合并成功',
+      message: `已成功合并相册`,
+      type: 'success'
+    })
+
+    // 刷新列表并清除选中
+    albumStore.clearSelection()
+    await albumStore.fetchAlbums()
+
+  } catch (err: any) {
+    console.error('合并相册失败', err)
+    const errorMsg = err.response?.data?.message || '合并相册失败'
+    dialogStore.alert({title: '错误', message: errorMsg, type: 'error'})
+  }
+}
+
+// 监听相册更新事件（AI 命名完成等）
+const unsubscribeAlbumsUpdated = dataSyncService.on('albums:updated', (payload) => {
+  if (payload.albumIds && payload.albumIds.length > 0) {
+    // 局部更新相册数据
+    albumStore.updateLocalAlbums(payload.albumIds)
+  }
+})
+
 // 清理选中状态当离开页面
 onUnmounted(() => {
   albumStore.clearSelection()
   observer.value?.disconnect()
   observer.value = null
+  unsubscribeAlbumsUpdated()
 })
 
 onMounted(() => {

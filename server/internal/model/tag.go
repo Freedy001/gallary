@@ -31,22 +31,21 @@ type HDBSCANParams struct {
 
 // SmartAlbumConfig 智能相册配置
 type SmartAlbumConfig struct {
-	ModelName      string         `json:"model_name"`               // 使用的嵌入模型
-	Algorithm      string         `json:"algorithm"`                // 算法名称 (hdbscan)
-	ClusterID      int            `json:"cluster_id"`               // 原始聚类 ID
-	GeneratedAt    time.Time      `json:"generated_at"`             // 生成时间
-	HDBSCANParams  *HDBSCANParams `json:"hdbscan_params,omitempty"` // HDBSCAN 参数
-	ImageCount     int            `json:"image_count"`              // 生成时的图片数量
-	AvgProbability float64        `json:"avg_probability"`          // 聚类平均概率 (0-1)
+	ModelName     string         `json:"model_name"`               // 使用的嵌入模型
+	Algorithm     string         `json:"algorithm"`                // 算法名称 (hdbscan)
+	ClusterID     int            `json:"cluster_id"`               // 原始聚类 ID
+	GeneratedAt   time.Time      `json:"generated_at"`             // 生成时间
+	HDBSCANParams *HDBSCANParams `json:"hdbscan_params,omitempty"` // HDBSCAN 参数
+	ImageCount    int            `json:"image_count"`              // 生成时的图片数量
 }
 
 // AlbumMetadata 相册元数据
 type AlbumMetadata struct {
-	CoverImageID     *int64            `json:"cover_image_id,omitempty"`     // 封面图片ID
-	Description      *string           `json:"description,omitempty"`        // 相册描述
-	SortOrder        int               `json:"sort_order"`                   // 排序顺序
-	IsSmartAlbum     bool              `json:"is_smart_album,omitempty"`     // 是否智能相册
-	SmartAlbumConfig *SmartAlbumConfig `json:"smart_album_config,omitempty"` // 智能相册配置
+	CoverImageID          *int64  `json:"cover_image_id,omitempty"` // 封面图片ID
+	Description           *string `json:"description,omitempty"`    // 相册描述
+	SortOrder             int     `json:"sort_order"`               // 排序顺序
+	IsSmartAlbum          bool    `json:"is_smart_album,omitempty"` // 是否智能相册
+	HDBSCANAvgProbability float32 `json:"hdbscan_avg_probability"`  // 聚类平均概率 (0-1)
 }
 
 // Scan 实现 sql.Scanner 接口

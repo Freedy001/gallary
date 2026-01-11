@@ -22,9 +22,9 @@ export const imageApi = {
   },
 
   // 获取图片列表
-  getList(page = 1, pageSize = 20): Promise<ApiResponse<Pageable<Image>>> {
+  getList(page = 1, pageSize = 20, sortBy = 'taken_at'): Promise<ApiResponse<Pageable<Image>>> {
     return http.get(`/api/images`, {
-      params: {page, page_size: pageSize}
+      params: {page, page_size: pageSize, sort_by: sortBy}
     })
   },
 

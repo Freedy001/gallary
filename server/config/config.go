@@ -91,6 +91,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	// 设置默认值
 	setDefaults()
 
+	// 绑定环境变量
+	bindEnvVariables()
+
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
@@ -102,6 +105,19 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	GlobalConfig = &config
 	return &config, nil
+}
+
+// bindEnvVariables 绑定环境变量到配置项
+func bindEnvVariables() {
+	// 数据库配置
+	_ = viper.BindEnv("database.host", "DB_HOST")
+	_ = viper.BindEnv("database.port", "DB_PORT")
+	_ = viper.BindEnv("database.username", "DB_USER")
+	_ = viper.BindEnv("database.password", "DB_PASSWORD")
+	_ = viper.BindEnv("database.database", "DB_NAME")
+
+	// JWT 配置
+	_ = viper.BindEnv("jwt.secret", "JWT_SECRET")
 }
 
 // setDefaults 设置默认配置

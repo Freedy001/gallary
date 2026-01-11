@@ -758,7 +758,6 @@ type HDBSCANParams struct {
 	MinSamples              *int32                 `protobuf:"varint,2,opt,name=min_samples,json=minSamples,proto3,oneof" json:"min_samples,omitempty"`
 	ClusterSelectionEpsilon float32                `protobuf:"fixed32,3,opt,name=cluster_selection_epsilon,json=clusterSelectionEpsilon,proto3" json:"cluster_selection_epsilon,omitempty"`
 	ClusterSelectionMethod  string                 `protobuf:"bytes,4,opt,name=cluster_selection_method,json=clusterSelectionMethod,proto3" json:"cluster_selection_method,omitempty"`
-	Metric                  string                 `protobuf:"bytes,5,opt,name=metric,proto3" json:"metric,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -817,13 +816,6 @@ func (x *HDBSCANParams) GetClusterSelectionEpsilon() float32 {
 func (x *HDBSCANParams) GetClusterSelectionMethod() string {
 	if x != nil {
 		return x.ClusterSelectionMethod
-	}
-	return ""
-}
-
-func (x *HDBSCANParams) GetMetric() string {
-	if x != nil {
-		return x.Metric
 	}
 	return ""
 }
@@ -1285,14 +1277,13 @@ const file_ai_proto_rawDesc = "" +
 	"embeddings\x12\x14\n" +
 	"\x05model\x18\x02 \x01(\tR\x05model\x12!\n" +
 	"\finput_tokens\x18\x03 \x01(\x05R\vinputTokens\x12!\n" +
-	"\fimage_tokens\x18\x04 \x01(\x05R\vimageTokens\"\xfd\x01\n" +
+	"\fimage_tokens\x18\x04 \x01(\x05R\vimageTokens\"\xe5\x01\n" +
 	"\rHDBSCANParams\x12(\n" +
 	"\x10min_cluster_size\x18\x01 \x01(\x05R\x0eminClusterSize\x12$\n" +
 	"\vmin_samples\x18\x02 \x01(\x05H\x00R\n" +
 	"minSamples\x88\x01\x01\x12:\n" +
 	"\x19cluster_selection_epsilon\x18\x03 \x01(\x02R\x17clusterSelectionEpsilon\x128\n" +
-	"\x18cluster_selection_method\x18\x04 \x01(\tR\x16clusterSelectionMethod\x12\x16\n" +
-	"\x06metric\x18\x05 \x01(\tR\x06metricB\x0e\n" +
+	"\x18cluster_selection_method\x18\x04 \x01(\tR\x16clusterSelectionMethodB\x0e\n" +
 	"\f_min_samples\"\x85\x01\n" +
 	"\n" +
 	"UMAPParams\x12\x18\n" +

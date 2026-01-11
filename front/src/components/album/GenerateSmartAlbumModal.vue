@@ -52,7 +52,7 @@
               <p class="text-[10px] text-gray-500 mt-0.5">每个相册最少包含的图片数</p>
             </div>
             <div>
-              <label class="block text-xs text-gray-400 mb-1">最小样本数</label>
+              <label class="block text-xs text-gray-400 mb-1">抗噪能力</label>
               <div class="relative">
                 <input
                     v-model.number="form.hdbscan_params.min_samples"
@@ -63,26 +63,31 @@
                     type="number"
                 />
               </div>
-              <p class="text-[10px] text-gray-500 mt-0.5">核心点判定标准</p>
+              <p class="text-[10px] text-gray-500 mt-0.5">越小保留更多图片，越大聚类更纯净</p>
             </div>
             <div>
+              <label class="block text-xs text-gray-400 mb-1">聚类选择方法</label>
               <BaseSelect
                   v-model="form.hdbscan_params.cluster_selection_method"
                   :disabled="smartAlbumStore.taskInProgress"
                   :options="clusterSelectionMethodOptions"
                   button-class="!py-2 !text-sm"
-                  label="聚类选择方法"
               />
               <p class="text-[10px] text-gray-500 mt-0.5">EOM 更稳定，Leaf 产生更多小聚类</p>
             </div>
             <div>
-              <BaseSelect
-                  v-model="form.hdbscan_params.metric"
-                  :disabled="smartAlbumStore.taskInProgress"
-                  :options="metricOptions"
-                  button-class="!py-2 !text-sm"
-                  label="距离度量"
-              />
+              <label class="block text-xs text-gray-400 mb-1">聚类合并阈值</label>
+              <div class="relative">
+                <input
+                    v-model.number="form.hdbscan_params.cluster_selection_epsilon"
+                    :disabled="smartAlbumStore.taskInProgress"
+                    class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none disabled:opacity-50 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    min="0"
+                    step="0.1"
+                    type="number"
+                />
+              </div>
+              <p class="text-[10px] text-gray-500 mt-0.5">合并相近的小聚类，0 表示不合并</p>
             </div>
           </div>
 
@@ -114,6 +119,39 @@
                 />
               </button>
             </div>
+
+            <!-- UMAP 参数（仅在启用时显示） -->
+            <div v-show="form.hdbscan_params.umap_enabled" class="mt-4 grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">邻居数量</label>
+                <div class="relative">
+                  <input
+                      v-model.number="form.hdbscan_params.umap_n_neighbors"
+                      :disabled="smartAlbumStore.taskInProgress"
+                      class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none disabled:opacity-50 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      max="200"
+                      min="2"
+                      type="number"
+                  />
+                </div>
+                <p class="text-[10px] text-gray-500 mt-0.5">小值关注细节，大值关注语义</p>
+              </div>
+              <div>
+                <label class="block text-xs text-gray-400 mb-1">最小距离</label>
+                <div class="relative">
+                  <input
+                      v-model.number="form.hdbscan_params.umap_min_dist"
+                      :disabled="smartAlbumStore.taskInProgress"
+                      class="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-white text-sm focus:border-primary-500 outline-none disabled:opacity-50 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      max="1"
+                      min="0"
+                      step="0.05"
+                      type="number"
+                  />
+                </div>
+                <p class="text-[10px] text-gray-500 mt-0.5">值越小聚类越紧凑</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -142,12 +180,12 @@
 <script lang="ts" setup>
 import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {ChevronDownIcon} from '@heroicons/vue/24/outline'
-import Modal from '@/components/widgets/common/Modal.vue'
-import type {SelectOption} from '@/components/widgets/common/BaseSelect.vue'
-import BaseSelect from '@/components/widgets/common/BaseSelect.vue'
+import Modal from '@/components/common/Modal.vue'
+import type {SelectOption} from '@/components/common/BaseSelect.vue'
+import BaseSelect from '@/components/common/BaseSelect.vue'
 import {aiApi} from '@/api/ai'
 import type {EmbeddingModelInfo} from '@/types/ai'
-import type {GenerateSmartAlbumsRequest, SmartAlbumProgressVO} from '@/types/smart-album'
+import type {GenerateSmartAlbumsRequest} from '@/types/smart-album'
 import {DEFAULT_HDBSCAN_PARAMS} from '@/types/smart-album'
 import {useDialogStore} from '@/stores/dialog'
 import {useSmartAlbumStore} from '@/stores/smartAlbum'
@@ -176,11 +214,6 @@ const algorithmOptions: SelectOption[] = [
 const clusterSelectionMethodOptions: SelectOption[] = [
   {label: 'EOM（推荐）', value: 'eom'},
   {label: 'Leaf', value: 'leaf'}
-]
-
-const metricOptions: SelectOption[] = [
-  {label: '余弦相似度（推荐）', value: 'cosine'},
-  {label: '欧氏距离', value: 'euclidean'}
 ]
 
 const form = reactive<GenerateSmartAlbumsRequest>({
@@ -229,8 +262,7 @@ async function handleSubmit() {
     smartAlbumStore.resetState()
 
     const res = await aiApi.generateSmartAlbum(form)
-    const taskVO = res.data as unknown as SmartAlbumProgressVO
-    smartAlbumStore.setTaskId(taskVO.task_id)
+    smartAlbumStore.setTaskId(res.data.task_id)
 
     dialogStore.notify({
       title: '任务已提交',

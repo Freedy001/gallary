@@ -1,0 +1,80 @@
+# Docker 环境服务器配置
+server:
+  host: "0.0.0.0"
+  port: 9099
+  mode: "release"
+
+# 数据库配置 - 使用环境变量
+database:
+  host: "${DB_HOST:localhost}"
+  port: ${DB_PORT:5432}
+  username: "${DB_USER:root}"
+  password: "${DB_PASSWORD:123456}"
+  database: "${DB_NAME:devdb}"
+  sslmode: "disable"
+  timezone: "Asia/Shanghai"
+  max_idle_conns: 10
+  max_open_conns: 100
+  log_level: "info"
+
+# 图片处理配置
+image:
+  allowed_types:
+    - "image/jpeg"
+    - "image/jpg"
+    - "image/png"
+    - "image/gif"
+    - "image/webp"
+    - "image/heic"
+  max_size: 52428800
+  thumbnail:
+    width: 500
+    height: 500
+
+# JWT配置
+jwt:
+  secret: "${JWT_SECRET:your-secret-key-please-change-this-in-production}"
+  expire_hours: 168
+
+# 日志配置
+logger:
+  level: "info"
+  format: "json"
+  output: "/app/logs/app.log"
+  max_size: 100
+  max_backups: 5
+  max_age: 30
+  compress: true
+
+# CORS配置
+cors:
+  allow_origins:
+    - "*"
+  allow_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  allow_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Authorization"
+  expose_headers:
+    - "Content-Length"
+  allow_credentials: true
+  max_age: 43200
+
+# 分享配置
+share:
+  default_expire_hours: 168
+  code_length: 8
+
+# 回收站配置
+trash:
+  auto_delete_days: 30
+
+# AI 服务配置
+ai:
+  grpc_host: "${AI_GRPC_HOST:localhost}"
+  grpc_port: ${AI_GRPC_PORT:50051}

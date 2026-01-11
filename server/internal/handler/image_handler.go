@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"gallary/server/internal/model"
+	"gallary/server/internal/websocket"
 	"gallary/server/pkg/database"
 	"io"
 	"strconv"
@@ -21,12 +22,13 @@ import (
 
 // ImageHandler 图片处理器
 type ImageHandler struct {
-	service service.ImageService
+	service  service.ImageService
+	notifier websocket.Notifier
 }
 
 // NewImageHandler 创建图片处理器实例
-func NewImageHandler(service service.ImageService) *ImageHandler {
-	return &ImageHandler{service: service}
+func NewImageHandler(service service.ImageService, notifier websocket.Notifier) *ImageHandler {
+	return &ImageHandler{service: service, notifier: notifier}
 }
 
 // Upload 上传图片
@@ -67,6 +69,9 @@ func (h *ImageHandler) Upload(c *gin.Context) {
 		return
 	}
 
+	// 通知客户端有新图片上传
+	h.notifier.NotifyImagesUploaded([]int64{image.ID})
+
 	utils.SuccessWithMessage(c, "上传成功", image)
 }
 
@@ -78,14 +83,16 @@ func (h *ImageHandler) Upload(c *gin.Context) {
 //	@Produce		json
 //	@Param			page		query		int														false	"页码"	default(1)
 //	@Param			page_size	query		int														false	"每页数量"	default(20)
+//	@Param			sort_by		query		string													false	"排序方式：taken_at（拍摄时间）或 ai_score（美学评分）"	default(taken_at)
 //	@Success		200			{object}	utils.Response{data=utils.PageData{list=[]model.Image}}	"图片列表"
 //	@Failure		500			{object}	utils.Response											"获取失败"
 //	@Router			/api/images [get]
 func (h *ImageHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	sortBy := c.DefaultQuery("sort_by", "taken_at")
 
-	images, total, err := h.service.List(c.Request.Context(), page, pageSize)
+	images, total, err := h.service.List(c.Request.Context(), page, pageSize, sortBy)
 	if err != nil {
 		logger.Error("获取图片列表失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())

@@ -82,7 +82,7 @@ import type {ComponentPublicInstance} from 'vue'
 import {onMounted, onUnmounted, ref, watch} from 'vue'
 import {useUIStore} from '@/stores/ui'
 import type {Image} from '@/types'
-import SelectionBox from '@/components/widgets/common/SelectionBox.vue'
+import SelectionBox from '@/components/common/SelectionBox.vue'
 import ImageViewer from '@/components/gallery/ImageViewer.vue'
 import ImageGridEmpty from '@/components/gallery/ImageGridEmpty.vue'
 import ImageGridItem from '@/components/gallery/ImageGridItem.vue'
@@ -103,7 +103,6 @@ const props = withDefaults(defineProps<{
 
 // Emits
 const emit = defineEmits<{
-  (e: 'update:total', total: number): void
   (e: 'update:selectedCount', count: number): void
   (e: 'update:loading', loading: boolean): void
 }>()
@@ -117,9 +116,7 @@ const imageList = useImageList({
   pageSize: uiStore.imagePageSize
 })
 
-const layout = useImageGridLayout({
-  images: imageList.images
-})
+const layout = useImageGridLayout(imageList.images)
 
 useTimelineScroll({
   images: imageList.images
@@ -133,7 +130,6 @@ function handleContextMenu(e: MouseEvent, image: Image | null, index: number) {
 }
 
 // 同步状态到父组件
-watch(imageList.total, (val) => emit('update:total', val))
 watch(imageList.selectedCount, (val) => emit('update:selectedCount', val))
 watch(imageList.loading, (val) => emit('update:loading', val))
 
@@ -202,6 +198,7 @@ defineExpose({
   refresh: imageList.refresh,
   selectAll: imageList.selectAll,
   clearSelection: imageList.clearSelection,
+  insertImages: imageList.insertImages,
   deleteBatch: async () => {
     const idsToDelete = Array.from(imageList.selectedImages.value)
     if (idsToDelete.length === 0) return

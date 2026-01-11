@@ -19,7 +19,7 @@ type ImageRepository interface {
 	Create(ctx context.Context, image *model.Image) error
 	FindByID(ctx context.Context, id int64) (*model.Image, error)
 	FindByHash(ctx context.Context, hash string) (*model.Image, error)
-	List(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error)
+	List(ctx context.Context, page, pageSize int, sortBy string) ([]*model.Image, int64, error)
 	Count(ctx context.Context) (int64, error)
 	Update(ctx context.Context, image *model.Image) error
 	Delete(ctx context.Context, id int64) error
@@ -132,7 +132,8 @@ func (r *imageRepository) FindByHash(ctx context.Context, hash string) (*model.I
 }
 
 // List 分页获取图片列表
-func (r *imageRepository) List(ctx context.Context, page, pageSize int) ([]*model.Image, int64, error) {
+// sortBy: taken_at-按拍摄时间排序, ai_score-按美学评分排序
+func (r *imageRepository) List(ctx context.Context, page, pageSize int, sortBy string) ([]*model.Image, int64, error) {
 	var images []*model.Image
 	var total int64
 
@@ -144,10 +145,21 @@ func (r *imageRepository) List(ctx context.Context, page, pageSize int) ([]*mode
 		return nil, 0, err
 	}
 
+	// 根据排序方式构建排序语句
+	var orderClause string
+	switch sortBy {
+	case "ai_score":
+		// 按美学评分降序，NULL 排最后，相同评分按拍摄时间降序
+		orderClause = "ai_score DESC NULLS LAST, COALESCE(taken_at, created_at) DESC"
+	default:
+		// 默认按拍摄时间降序
+		orderClause = "COALESCE(taken_at, created_at) DESC"
+	}
+
 	// 查询数据
 	err := database.GetDB(ctx).WithContext(ctx).
 		Preload("Tags", "type != ?", model.TagTypeAlbum).
-		Order("taken_at DESC, created_at DESC").
+		Order(orderClause).
 		Limit(pageSize).
 		Offset(offset).
 		Find(&images).Error
@@ -600,7 +612,8 @@ func (r *imageRepository) GetClusterImages(ctx context.Context, minLat, maxLat, 
 
 	// 分页查询
 	offset := (page - 1) * pageSize
-	if err := db.Offset(offset).Limit(pageSize).Order("taken_at DESC").Find(&images).Error; err != nil {
+	// 使用 COALESCE 将 taken_at 为 NULL 的图片用 created_at 代替
+	if err := db.Offset(offset).Limit(pageSize).Order("COALESCE(taken_at, created_at) DESC").Find(&images).Error; err != nil {
 		return nil, 0, err
 	}
 

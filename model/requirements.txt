@@ -11,13 +11,8 @@ httpx>=0.25.0
 # LoRA 推理
 peft>=0.7.0
 
-# ONNX Runtime (可选，用于 ONNX 后端)
+# ONNX Runtime (可选,用于 ONNX 后端)
 onnxruntime>=1.16.0
-
-# FastAPI 服务
-fastapi>=0.104.0
-uvicorn>=0.24.0
-python-multipart>=0.0.6
 
 # Qwen3 提示词优化
 accelerate>=0.26.0
@@ -33,3 +28,6 @@ umap-learn>=0.5.4
 # gRPC
 grpcio>=1.60.0
 grpcio-tools>=1.60.0
+
+# 日志
+loguru>=0.7.0

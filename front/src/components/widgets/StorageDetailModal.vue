@@ -84,7 +84,7 @@ import {useNotificationStore} from '@/stores/notification.ts'
 import type {ProviderStats} from '@/api/storage.ts'
 import {getStorageDriverName} from '@/api/storage.ts'
 import {onClickOutside} from '@vueuse/core'
-import LiquidGlassCard from '@/components/widgets/common/LiquidGlassCard.vue'
+import LiquidGlassCard from '@/components/common/LiquidGlassCard.vue'
 
 // ... (keep existing props, emits, and logic) ...
 const props = defineProps<{

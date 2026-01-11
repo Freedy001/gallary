@@ -319,9 +319,9 @@ import {PlusIcon, TrashIcon, XMarkIcon} from '@heroicons/vue/24/outline'
 import {useDialogStore} from '@/stores/dialog'
 import type {AIConfig, ModelConfig, ModelItem} from '@/types/ai'
 import {createModelId} from '@/types/ai'
-import type {SelectOption} from '@/components/widgets/common/BaseSelect.vue'
-import BaseSelect from '@/components/widgets/common/BaseSelect.vue'
-import Modal from '@/components/widgets/common/Modal.vue'
+import type {SelectOption} from '@/components/common/BaseSelect.vue'
+import BaseSelect from '@/components/common/BaseSelect.vue'
+import Modal from '@/components/common/Modal.vue'
 import {aiApi} from "@/api/ai.ts"
 
 const dialogStore = useDialogStore()

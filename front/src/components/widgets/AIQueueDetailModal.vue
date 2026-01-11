@@ -152,7 +152,7 @@ import {
 import {useAIStore} from '@/stores/ai.ts'
 import type {AIQueueInfo, AITaskItemInfo} from '@/types/ai.ts'
 import {getQueueDisplayName} from '@/types/ai.ts'
-import Modal from '@/components/widgets/common/Modal.vue'
+import Modal from '@/components/common/Modal.vue'
 import {useDialogStore} from "@/stores/dialog.ts";
 
 const props = defineProps<{

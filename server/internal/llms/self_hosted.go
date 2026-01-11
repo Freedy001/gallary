@@ -225,7 +225,6 @@ func convertHDBSCANParamsToProto(params *HDBSCANParams) *pb.HDBSCANParams {
 		MinClusterSize:          int32(params.MinClusterSize),
 		ClusterSelectionEpsilon: params.ClusterSelectionEpsilon,
 		ClusterSelectionMethod:  params.ClusterSelectionMethod,
-		Metric:                  params.Metric,
 	}
 	if params.MinSamples != nil {
 		minSamples := int32(*params.MinSamples)
