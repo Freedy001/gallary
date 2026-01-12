@@ -9,7 +9,7 @@ import type {
   Tag,
   UpdateMetadataRequest,
 } from '@/types'
-import type {ExifData} from '@/utils/exif'
+import type {ExifData} from '@/utils/exif.ts'
 
 // 上传凭证类型
 export interface UploadCredential {

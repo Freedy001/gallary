@@ -178,10 +178,10 @@ export const useUIStore = defineStore('ui', () => {
         task.file,
         task.albumId,
         {
-          onThumbnail: (url) => {
+          onThumbnail: (url: string) => {
             task.imageUrl = url
           },
-          onUpload: (progress) => {
+          onUpload: (progress: number) => {
             task.progress = progress
           }
         }
