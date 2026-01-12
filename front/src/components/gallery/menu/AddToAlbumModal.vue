@@ -42,7 +42,7 @@
           <div class="flex-1 text-left min-w-0">
             <div class="flex items-center gap-2">
               <div class="text-sm font-medium text-white truncate">{{ album.name }}</div>
-              <span v-if="album.is_smart" class="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/20 text-primary-300 flex-shrink-0">智能</span>
+              <span v-if="album.is_smart_album" class="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/20 text-primary-300 flex-shrink-0">智能</span>
             </div>
             <div class="text-xs text-gray-500">{{ album.image_count }} 张照片</div>
           </div>

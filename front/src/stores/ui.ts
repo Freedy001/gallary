@@ -4,8 +4,6 @@ import {createThumbnail} from "@/utils/image.ts";
 import {imageApi} from "@/api/image.ts";
 import {useAlbumStore} from "@/stores/album.ts";
 
-const albumStore = useAlbumStore()
-
 export type SortBy = 'taken_at' | 'ai_score'
 
 export interface UploadTask {
@@ -132,92 +130,90 @@ export const useUIStore = defineStore('ui', () => {
       status: 'pending',
       albumId,
     }))
-    processUploadQueue().then()
+    processUploadQueue()
   }
 
   function retryUploadTask(id: string) {
-    updateUploadTask(id, {
-      status: 'pending',
-      progress: 0,
-      error: undefined,
-    })
-    processUploadQueue().then()
-  }
-
-  // 处理上传队列
-  async function processUploadQueue() {
-    const tasks = uploadTasks.value
-    const pendingTasks = tasks.filter(t => t.status === 'pending')
-
-    // 没有待处理任务时直接返回
-    if (pendingTasks.length === 0) return
-
-    // 计算批次数量（向上取整）
-    const turn = Math.ceil(pendingTasks.length / 5)
-
-    for (let i = 0; i < turn; i++) {
-      const tasksToStart = pendingTasks.slice(
-        i * 5,
-        (i + 1) * 5
-      )
-      await doUploadFile(tasksToStart)
-    }
-  }
-
-  async function doUploadFile(tasks: UploadTask[]): Promise<boolean[]> {
-    return Promise.all(tasks.map(async task => {
-      try {
-        try {
-          // 异步生成缩略图，只为没有缩略图的任务生成
-          // 生成预览图 (使用缩略图以节省内存)
-          const imageUrl = await createThumbnail(task.file);
-          if (imageUrl) updateUploadTask(task.id, {imageUrl, status: 'uploading'})
-        } catch (e) {
-          console.log(e)
-          updateUploadTask(task.id, {status: 'uploading'})
-        }
-
-        // 直接在上传时传递 albumId，后端原子操作处理
-        const response = await imageApi.upload(task.file, task.albumId, (progress) => {
-          updateUploadTask(task.id, {progress})
-        });
-
-        const uploadedImageId = response.data.id
-
-        // 如果指定了相册ID，更新当前相册的图片数量
-        if (task.albumId && albumStore.currentAlbum?.id === task.albumId) {
-          albumStore.currentAlbum.image_count += 1
-        }
-
-        // 上传成功
-        updateUploadTask(task.id, {
-          status: 'success',
-          progress: 100,
-          uploadedImageId,
-        })
-        return true
-      } catch (error) {
-        // 上传失败
-        updateUploadTask(task.id, {
-          status: 'error',
-          error: error instanceof Error ? error.message : '上传失败',
-        })
-        return false
-      }
-    }))
-  }
-
-  function updateUploadTask(id: string, updates: Partial<UploadTask>) {
     const index = uploadTasks.value.findIndex(t => t.id === id)
     if (index !== -1) {
       const task = uploadTasks.value[index] as UploadTask
-      Object.assign(task, updates)
+      task.status = 'pending'
+      task.progress = 0
+      task.error = undefined
+    }
+    processUploadQueue()
+  }
 
-      // 如果更新后状态变为失败，将该任务移动到数组第一个位置
-      if (updates.status === 'error') {
-        uploadTasks.value.splice(index, 1)
-        uploadTasks.value.unshift(task)
+  // 并发控制
+  const MAX_CONCURRENT = 5
+  const activeUploads = ref(0)
+
+  // 处理上传队列 - 递归调度方式
+  function processUploadQueue() {
+    // 只要当前并发数没满，就一直尝试从队列拿任务
+    while (activeUploads.value < MAX_CONCURRENT) {
+      // 寻找待处理任务
+      const task = uploadTasks.value.find(t => t.status === 'pending')
+
+      // 如果没有任务，直接结束本次调度
+      if (!task) break
+
+      // 【关键】立即标记状态，防止被重复获取
+      task.status = 'uploading'
+      activeUploads.value++
+
+      // 执行上传
+      doUploadFile(task)
+        .finally(() => {
+          activeUploads.value--
+          // 【关键】一个任务结束了，腾出了位置，尝试触发下一次调度
+          processUploadQueue()
+        })
+    }
+  }
+
+  async function doUploadFile(task: UploadTask): Promise<void> {
+    try {
+      // 异步生成缩略图
+      try {
+        const imageUrl = await createThumbnail(task.file);
+        if (imageUrl) task.imageUrl = imageUrl
+      } catch (e) {
+        console.log('生成缩略图失败:', e)
       }
+
+      // 直接在上传时传递 albumId，后端原子操作处理
+      const response = await imageApi.upload(task.file, task.albumId, (progress) => {
+        task.progress = progress
+      });
+
+      const uploadedImageId = response.data.id
+
+      // 如果指定了相册ID，更新当前相册的图片数量
+      const albumStore = useAlbumStore()
+      if (task.albumId && albumStore.currentAlbum?.id === task.albumId) {
+        albumStore.currentAlbum.image_count += 1
+      }
+
+      // 上传成功
+      task.status = 'success'
+      task.progress = 100
+      task.uploadedImageId = uploadedImageId
+    } catch (error) {
+      // 上传失败 - 确保状态改变，防止死循环
+      task.status = 'error'
+      task.error = error instanceof Error ? error.message : '上传失败'
+      // 将失败任务移动到队列顶部
+      moveFailedTaskToTop(task.id)
+    }
+  }
+
+  function moveFailedTaskToTop(id: string) {
+    const index = uploadTasks.value.findIndex(t => t.id === id)
+    if (index !== -1) {
+      const task = uploadTasks.value[index] as UploadTask
+      uploadTasks.value.splice(index, 1)
+      uploadTasks.value.unshift(task)
     }
   }
 

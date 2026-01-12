@@ -128,6 +128,7 @@ func SetupRouter(
 
 			// 存储配置 CRUD
 			settings.POST("/storage", settingHandler.AddStorage)                                 // 添加存储配置
+			settings.POST("/storage/s3/test", settingHandler.TestS3Connection)                   // 测试 S3 连接
 			settings.PUT("/storage/default", settingHandler.SetDefaultStorage)                   // 设置默认存储（必须在 :storageId 之前）
 			settings.PUT("/storage/alyunpan/global", settingHandler.UpdateAliyunpanGlobalConfig) // 更新全局配置（必须在 :storageId 之前）
 			settings.PUT("/storage/:storageId", settingHandler.UpdateStorage)                    // 修改存储配置

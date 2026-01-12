@@ -61,16 +61,19 @@
 <script setup lang="ts">
 import {ref} from 'vue'
 import {useUIStore} from '@/stores/ui'
+import {useDialogStore} from '@/stores/dialog'
 import {ArrowUpTrayIcon} from '@heroicons/vue/24/outline'
 import Sidebar from './Sidebar.vue'
 
 const uiStore = useUIStore()
+const dialogStore = useDialogStore()
 const isDragging = ref(false)
 const dragCounter = ref(0)
 
 function handleDragEnter(e: DragEvent) {
   dragCounter.value++
-  if (e.dataTransfer?.types.includes('Files')) {
+  // 支持文件和目录的拖拽检测
+  if (e.dataTransfer?.types.includes('Files') || e.dataTransfer?.items.length) {
     isDragging.value = true
   }
 }
@@ -94,26 +97,63 @@ async function handleDrop(e: DragEvent) {
   dragCounter.value = 0
 
   const items = e.dataTransfer?.items
-  if (!items || items.length === 0) return
+  const dataFiles = e.dataTransfer?.files
+
+  if ((!items || items.length === 0) && (!dataFiles || dataFiles.length === 0)) return
 
   const files: File[] = []
 
-  // 处理所有拖拽项，支持文件和文件夹
-  await Promise.all(
-    Array.from(items).map(async (item) => {
-      if (item.kind === 'file') {
-        const entry = item.webkitGetAsEntry()
-        if (entry) {
-          const collectedFiles = await traverseFileTree(entry)
-          files.push(...collectedFiles)
+  // 优先使用 webkitGetAsEntry 处理（支持文件夹）
+  if (items && items.length > 0) {
+    const hasEntry = items[0]?.webkitGetAsEntry
+    
+    if (hasEntry) {
+      // 支持 webkitGetAsEntry，可处理文件夹
+      await Promise.all(
+        Array.from(items).map(async (item) => {
+          if (item.kind === 'file') {
+            const entry = item.webkitGetAsEntry()
+            if (entry) {
+              const collectedFiles = await traverseFileTree(entry)
+              files.push(...collectedFiles)
+            } else {
+              // entry 为 null，回退到 getAsFile
+              const file = item.getAsFile()
+              if (file) files.push(file)
+            }
+          }
+        })
+      )
+    } else {
+      // 不支持 webkitGetAsEntry，直接获取文件
+      Array.from(items).forEach((item) => {
+        if (item.kind === 'file') {
+          const file = item.getAsFile()
+          if (file) files.push(file)
         }
-      }
-    })
-  )
+      })
+    }
+  }
+
+  // 如果 items 方式没有获取到文件，尝试从 files 获取
+  if (files.length === 0 && dataFiles && dataFiles.length > 0) {
+    files.push(...Array.from(dataFiles))
+  }
 
   // 过滤出图片文件
   const imageFiles = files.filter(file => file.type.startsWith('image/'))
-  if (imageFiles.length <= 0) return
+  
+  // 提示用户不支持的文件格式
+  if (imageFiles.length === 0 && files.length > 0) {
+    dialogStore.alert({
+      title: '不支持的文件格式',
+      message: '仅支持上传图片文件（JPG、PNG、GIF、WebP 等）',
+      type: 'warning'
+    })
+    return
+  }
+  
+  if (imageFiles.length === 0) return
 
   uiStore.addUploadTask(imageFiles)
   if (!uiStore.uploadDrawerOpen) {

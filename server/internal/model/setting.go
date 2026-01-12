@@ -95,6 +95,8 @@ func (t StorageId) DriverName() string {
 		return "本地存储"
 	case "aliyunpan":
 		return "阿里云盘"
+	case "s3":
+		return "S3 存储"
 	default:
 		return ""
 	}
@@ -102,6 +104,10 @@ func (t StorageId) DriverName() string {
 
 func AliyunpanStorageId(accountId string) StorageId {
 	return StorageId("aliyunpan:" + accountId)
+}
+
+func S3StorageId(name string) StorageId {
+	return StorageId("s3:" + name)
 }
 
 type StorageItem interface {
@@ -112,11 +118,12 @@ type StorageItem interface {
 
 // StorageConfigPO 存储配置 DTO
 type StorageConfigPO struct {
-	DefaultId StorageId `json:"storageId"`
+	DefaultId *StorageId `json:"storageId"`
 
 	LocalConfig     *LocalStorageConfig       `json:"localConfig,omitempty"`
 	AliyunpanConfig []*AliyunPanStorageConfig `json:"aliyunpanConfig,omitempty"`
 	AliyunpanGlobal *AliyunPanGlobalConfig    `json:"aliyunpanGlobal,omitempty"` // 阿里云盘全局配置
+	S3Config        []*S3StorageConfig        `json:"s3Config,omitempty"`        // S3 兼容存储配置
 }
 
 func (a StorageConfigPO) Category() string {
@@ -133,6 +140,12 @@ func (a StorageConfigPO) GetStorageConfigById(id StorageId) StorageItem {
 	}
 
 	for _, config := range a.AliyunpanConfig {
+		if config.StorageId() == id {
+			return config
+		}
+	}
+
+	for _, config := range a.S3Config {
 		if config.StorageId() == id {
 			return config
 		}
@@ -183,6 +196,36 @@ func (l *AliyunPanStorageConfig) ToSettings() []*Setting {
 	return StorageConfigPO{AliyunpanConfig: []*AliyunPanStorageConfig{l}}.ToSettings()
 }
 
+// S3StorageConfig S3 兼容存储配置（单个账号）
+// 支持 AWS S3、MinIO、阿里云 OSS、腾讯云 COS、七牛等 S3 兼容服务
+type S3StorageConfig struct {
+	Id              StorageId `json:"id"`
+	Name            string    `json:"name"`              // 账号显示名称
+	Provider        string    `json:"provider"`          // 服务商: aws/minio/aliyun-oss/qiniu/tencent-cos/other
+	Endpoint        string    `json:"endpoint"`          // S3 端点 (必填，如 s3.amazonaws.com 或 oss-cn-hangzhou.aliyuncs.com)
+	Region          string    `json:"region"`            // 区域 (如 us-east-1, cn-hangzhou)
+	Bucket          string    `json:"bucket"`            // 桶名称
+	AccessKeyId     string    `json:"access_key_id"`     // Access Key ID
+	SecretAccessKey string    `json:"secret_access_key"` // Secret Access Key
+	BasePath        string    `json:"base_path"`         // 存储基础路径前缀 (可选)
+	UseSSL          bool      `json:"use_ssl"`           // 是否使用 HTTPS (默认 true)
+	ForcePathStyle  bool      `json:"force_path_style"`  // 使用路径风格 URL (MinIO 等需要)
+	UrlPrefix       string    `json:"url_prefix"`        // 自定义访问 URL 前缀 (CDN 加速等)
+	ProxyURL        string    `json:"proxy_url"`         // HTTP 代理地址 (可选，如 http://127.0.0.1:8080)
+}
+
+func (s *S3StorageConfig) Path() string {
+	return s.BasePath
+}
+
+func (s *S3StorageConfig) StorageId() StorageId {
+	return s.Id
+}
+
+func (s *S3StorageConfig) ToSettings() []*Setting {
+	return StorageConfigPO{S3Config: []*S3StorageConfig{s}}.ToSettings()
+}
+
 func CreateStorageItemById(id StorageId) StorageItem {
 	if id == StorageTypeLocal {
 		return &LocalStorageConfig{Id: id}
@@ -190,6 +233,10 @@ func CreateStorageItemById(id StorageId) StorageItem {
 
 	if strings.HasPrefix(string(id), "aliyunpan") {
 		return &AliyunPanStorageConfig{Id: id}
+	}
+
+	if strings.HasPrefix(string(id), "s3") {
+		return &S3StorageConfig{Id: id}
 	}
 
 	return nil

@@ -93,10 +93,17 @@
         阿里云 OSS 配置暂未实现
       </div>
 
-      <!-- S3 配置 (占位) -->
-      <div v-if="editingType === 's3'" class="p-4 text-center text-gray-500">
-        AWS S3 配置暂未实现
-      </div>
+      <!-- S3 配置 (多账号) -->
+      <S3Config
+          v-if="editingType === 's3'"
+          :accounts="form.s3Config || []"
+          :default-storage-id="form.storageId"
+          @update:accounts="form.s3Config = $event"
+          @account-added="handleS3AccountAdded"
+          @account-updated="handleS3AccountUpdated"
+          @account-removed="handleS3AccountRemoved"
+          @set-default="handleSetDefault"
+      />
 
       <!-- MinIO 配置 (占位) -->
       <div v-if="editingType === 'minio'" class="p-4 text-center text-gray-500">
@@ -108,12 +115,13 @@
 
 <script setup lang="ts">
 import {computed, onMounted, reactive, ref, watch} from 'vue'
-import {type AliyunPanStorageConfig, settingsApi, type StorageConfigPO} from '@/api/settings'
+import {type AliyunPanStorageConfig, type S3StorageConfig, settingsApi, type StorageConfigPO} from '@/api/settings'
 import type {StorageId} from '@/api/storage'
 import {parseStorageId} from '@/api/storage'
 import {useDialogStore} from '@/stores/dialog'
 import LocalStorageConfig from './storage/LocalStorageConfig.vue'
 import AliyunPanConfig from './storage/AliyunPanConfig.vue'
+import S3Config from './storage/S3Config.vue'
 import MigrationProgress from './MigrationProgress.vue'
 import BaseSelect from '@/components/common/BaseSelect.vue'
 
@@ -128,9 +136,7 @@ const emit = defineEmits<{
 const storageTypes = [
   { value: 'local', label: '本地存储', desc: '文件系统' },
   { value: 'aliyunpan', label: '阿里云盘', desc: '网盘存储' },
-  // { value: 'oss', label: '阿里云 OSS', desc: '对象存储' },
-  // { value: 's3', label: 'AWS S3', desc: '云存储' },
-  // { value: 'minio', label: 'MinIO', desc: '自托管' },
+  { value: 's3', label: 'S3 存储', desc: 'AWS/MinIO/OSS' },
 ]
 
 const loading = ref(true)
@@ -159,6 +165,7 @@ const form = reactive<StorageConfigPO>({
     download_concurrency: 8,
   },
   aliyunpan_user: [],
+  s3Config: [],
 })
 
 // 原始配置，用于对比是否有变化
@@ -174,6 +181,7 @@ const originalForm = reactive<StorageConfigPO>({
     download_concurrency: 8,
   },
   aliyunpan_user: [],
+  s3Config: [],
 })
 
 // 监听表单变化
@@ -193,6 +201,9 @@ function isDefaultStorage(type: string): boolean {
   }
   if (type === 'aliyunpan') {
     return form.storageId.startsWith('aliyunpan:')
+  }
+  if (type === 's3') {
+    return form.storageId.startsWith('s3:')
   }
   return false
 }
@@ -218,6 +229,15 @@ const storageOptions = computed(() => {
     })
   }
 
+  if (form.s3Config && form.s3Config.length > 0) {
+    form.s3Config.forEach(account => {
+      options.push({
+        label: `S3 - ${account.name}`,
+        value: account.id
+      })
+    })
+  }
+
   return options
 })
 
@@ -233,6 +253,7 @@ async function loadSettings() {
       aliyunpanConfig: data.aliyunpanConfig || [],
       aliyunpanGlobal: data.aliyunpanGlobal || { download_chunk_size: 512, download_concurrency: 8 },
       aliyunpan_user: data.aliyunpan_user || [],
+      s3Config: data.s3Config || [],
     })
 
     // 保存原始数据
@@ -305,6 +326,64 @@ async function handleAccountRemoved(id: StorageId) {
     dialogStore.alert({
       title: '错误',
       message: error.message || '删除账号失败',
+      type: 'error'
+    })
+  }
+}
+
+// S3 账号处理
+async function handleS3AccountAdded(account: S3StorageConfig) {
+  try {
+    await settingsApi.addStorage({
+      type: 's3',
+      config: account,
+    })
+    await loadSettings()
+    dialogStore.alert({
+      title: '成功',
+      message: 'S3 存储账号添加成功',
+      type: 'success'
+    })
+  } catch (error: any) {
+    dialogStore.alert({
+      title: '错误',
+      message: error.message || '添加 S3 账号失败',
+      type: 'error'
+    })
+  }
+}
+
+async function handleS3AccountUpdated(account: S3StorageConfig) {
+  try {
+    await settingsApi.updateStorage(account.id, account)
+    await loadSettings()
+    dialogStore.alert({
+      title: '成功',
+      message: 'S3 存储账号更新成功',
+      type: 'success'
+    })
+  } catch (error: any) {
+    dialogStore.alert({
+      title: '错误',
+      message: error.message || '更新 S3 账号失败',
+      type: 'error'
+    })
+  }
+}
+
+async function handleS3AccountRemoved(id: StorageId) {
+  try {
+    await settingsApi.deleteStorage(id)
+    await loadSettings()
+    dialogStore.alert({
+      title: '成功',
+      message: 'S3 存储账号已删除',
+      type: 'success'
+    })
+  } catch (error: any) {
+    dialogStore.alert({
+      title: '错误',
+      message: error.message || '删除 S3 账号失败',
       type: 'error'
     })
   }

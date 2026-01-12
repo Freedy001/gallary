@@ -26,6 +26,10 @@ export default defineConfig({
       '/static': {
         target: 'http://localhost:9099',
         changeOrigin: true
+      },
+      '/resouse': {
+        target: 'http://localhost:9099',
+        changeOrigin: true
       }
     }
   }

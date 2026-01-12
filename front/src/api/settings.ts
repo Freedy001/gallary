@@ -1,5 +1,5 @@
 import http from './http'
-import type { StorageId } from './storage'
+import type {StorageId} from './storage'
 
 // 阿里云盘用户信息
 export interface AliyunPanUserInfo {
@@ -29,6 +29,36 @@ export interface AliyunPanGlobalConfig {
   download_concurrency: number   // 下载并发数
 }
 
+// S3 兼容存储服务商
+export type S3Provider = 'aws' | 'minio' | 'aliyun-oss' | 'qiniu' | 'tencent-cos' | 'other'
+
+// S3 兼容存储配置（单个账号）
+export interface S3StorageConfig {
+  id: StorageId
+  name: string                // 账号显示名称
+  provider: S3Provider        // 服务商类型
+  endpoint: string            // S3 端点 (如 s3.amazonaws.com)
+  region: string              // 区域 (如 us-east-1)
+  bucket: string              // 桶名称
+  access_key_id: string       // Access Key ID
+  secret_access_key: string   // Secret Access Key
+  base_path?: string          // 存储基础路径前缀
+  use_ssl?: boolean           // 是否使用 HTTPS (默认 true)
+  force_path_style?: boolean  // 使用路径风格 URL
+  url_prefix?: string         // 自定义访问 URL 前缀 (CDN)
+  proxy_url?: string          // HTTP 代理地址 (如 http://127.0.0.1:8080)
+}
+
+// 服务商预设配置
+export const S3_PROVIDER_PRESETS: Record<S3Provider, { name: string; endpoint: string; region: string; forcePathStyle: boolean }> = {
+  'aws': { name: 'AWS S3', endpoint: 's3.{region}.amazonaws.com', region: 'us-east-1', forcePathStyle: false },
+  'minio': { name: 'MinIO', endpoint: 'localhost:9000', region: 'us-east-1', forcePathStyle: true },
+  'aliyun-oss': { name: '阿里云 OSS', endpoint: 'oss-{region}.aliyuncs.com', region: 'cn-hangzhou', forcePathStyle: false },
+  'qiniu': { name: '七牛云', endpoint: 's3-{region}.qiniucs.com', region: 'cn-east-1', forcePathStyle: false },
+  'tencent-cos': { name: '腾讯云 COS', endpoint: 'cos.{region}.myqcloud.com', region: 'ap-guangzhou', forcePathStyle: false },
+  'other': { name: '其他', endpoint: '', region: '', forcePathStyle: false },
+}
+
 // 完整存储配置（后端返回格式）
 export interface StorageConfigPO {
   storageId: StorageId                        // 默认存储ID
@@ -36,6 +66,7 @@ export interface StorageConfigPO {
   aliyunpanConfig?: AliyunPanStorageConfig[]  // 阿里云盘账号配置数组
   aliyunpanGlobal?: AliyunPanGlobalConfig     // 阿里云盘全局配置
   aliyunpan_user?: AliyunPanUserInfo[]        // 用户信息（只读）
+  s3Config?: S3StorageConfig[]                // S3 兼容存储配置数组
 }
 
 // 清理配置类型
@@ -58,8 +89,8 @@ export interface StorageUpdateResult {
 
 // 添加存储请求
 export interface AddStorageRequest {
-  type: 'aliyunpan'  // 目前只支持添加阿里云盘
-  config: Omit<AliyunPanStorageConfig, 'id'> & { id: StorageId }
+  type: 'aliyunpan' | 's3'
+  config: (Omit<AliyunPanStorageConfig, 'id'> | Omit<S3StorageConfig, 'id'>) & { id: StorageId }
 }
 
 // 设置默认存储请求
@@ -149,6 +180,10 @@ export const settingsApi = {
   // 更新阿里云盘全局配置
   updateGlobalConfig: (config: AliyunPanGlobalConfig) =>
     http.put<{ message: string }>('/api/settings/storage/alyunpan/global', config),
+
+  // 测试 S3 连接
+  testS3Connection: (config: Omit<S3StorageConfig, 'id'> & { id?: StorageId }) =>
+    http.post<{ message: string; bucket: string; region: string }>('/api/settings/storage/s3/test', config),
 
   // 更新清理配置
   updateCleanup: (config: CleanupConfig) =>

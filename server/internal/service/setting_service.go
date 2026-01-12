@@ -294,13 +294,14 @@ func (s *settingService) InitializeDefaults(ctx context.Context) error {
 
 	logger.Info("初始化默认设置...")
 
+	local := model.StorageTypeLocal
 	settings := slices.Concat(
 		model.AuthPO{
 			Password:        "",
 			PasswordVersion: 0,
 		}.ToSettings(),
 		model.StorageConfigPO{
-			DefaultId: model.StorageTypeLocal,
+			DefaultId: &local,
 			LocalConfig: &model.LocalStorageConfig{
 				Id:       model.StorageTypeLocal,
 				BasePath: "./storage/images",
@@ -426,6 +427,10 @@ func (s *settingService) AddStorageConfig(ctx context.Context, storageItem model
 	switch item := storageItem.(type) {
 	case *model.AliyunPanStorageConfig:
 		storageConfig.AliyunpanConfig = append(storageConfig.AliyunpanConfig, item)
+		break
+	case *model.S3StorageConfig:
+		storageConfig.S3Config = append(storageConfig.S3Config, item)
+		break
 	default:
 		return nil, fmt.Errorf("不支持添加此类型的存储配置")
 	}
@@ -461,7 +466,7 @@ func (s *settingService) DeleteStorageConfig(ctx context.Context, storageId mode
 	}
 
 	// 3. 检查是否是默认存储
-	if storageConfig.DefaultId == storageId {
+	if storageConfig.DefaultId != nil && *storageConfig.DefaultId == storageId {
 		return fmt.Errorf("不能删除当前默认存储，请先切换到其他存储")
 	}
 
@@ -476,11 +481,21 @@ func (s *settingService) DeleteStorageConfig(ctx context.Context, storageId mode
 		newAliyunpanConfig = append(newAliyunpanConfig, cfg)
 	}
 
+	newS3Config := make([]*model.S3StorageConfig, 0)
+	for _, cfg := range storageConfig.S3Config {
+		if cfg.StorageId() == storageId {
+			found = true
+			continue
+		}
+		newS3Config = append(newS3Config, cfg)
+	}
+
 	if !found {
 		return fmt.Errorf("存储配置不存在: %s", storageId)
 	}
 
 	storageConfig.AliyunpanConfig = newAliyunpanConfig
+	storageConfig.S3Config = newS3Config
 
 	// 5. 保存配置
 	if err := s.repo.BatchUpsert(ctx, storageConfig.ToSettings()); err != nil {
@@ -511,7 +526,7 @@ func (s *settingService) SetDefaultStorage(ctx context.Context, storageId model.
 	}
 
 	// 3. 更新默认存储
-	storageConfig.DefaultId = storageId
+	storageConfig.DefaultId = &storageId
 
 	// 4. 保存配置
 	if err := s.repo.BatchUpsert(ctx, storageConfig.ToSettings()); err != nil {

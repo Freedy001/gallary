@@ -59,8 +59,17 @@ func (m *StorageManager) InitStorage(cfg *model.StorageConfigPO) error {
 		}
 	}
 
-	logger.Info(string("使用" + cfg.DefaultId + "存储"))
-	m.defaultId = cfg.DefaultId
+	for _, s3Config := range cfg.S3Config {
+		storage, initErr := NewS3Storage(s3Config)
+		if initErr != nil {
+			err = errors.Join(err, fmt.Errorf("初始化S3存储失败 [%s]: %w", s3Config.Name, initErr))
+		} else {
+			storages[s3Config.Id] = storage
+		}
+	}
+
+	logger.Info(string("使用" + *cfg.DefaultId + "存储"))
+	m.defaultId = *cfg.DefaultId
 	return err
 }
 
@@ -155,6 +164,22 @@ func (m *StorageManager) GetAliyunPanStorage() []*AliyunPanStorage {
 	return ret
 }
 
+// GetS3Storage 获取所有 S3 存储实例
+func (m *StorageManager) GetS3Storage() []*S3Storage {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var ret []*S3Storage
+
+	for _, val := range m.storages {
+		storage, ok := val.(*S3Storage)
+		if ok {
+			ret = append(ret, storage)
+		}
+	}
+	return ret
+}
+
 // GetMultiStorageStats 获取所有存储提供者的统计信息
 func (m *StorageManager) GetMultiStorageStats(ctx context.Context) *MultiStorageStats {
 	m.mu.RLock()
@@ -172,10 +197,15 @@ func (m *StorageManager) GetMultiStorageStats(ctx context.Context) *MultiStorage
 			IsActive: storageType == m.defaultId,
 		}
 
+		storageStats, err := storage.GetStats(ctx)
 		// 获取统计信息
-		if storageStats, err := storage.GetStats(ctx); err == nil && storageStats != nil {
+		if err == nil && storageStats != nil {
 			providerStats.UsedBytes = storageStats.UsedBytes
 			providerStats.TotalBytes = storageStats.TotalBytes
+		} else {
+			providerStats.UsedBytes = 0
+			providerStats.TotalBytes = 0
+			logger.Error("获取存储发生异常", zap.String("type", string(storageType)), zap.Error(err))
 		}
 
 		stats.Providers = append(stats.Providers, providerStats)

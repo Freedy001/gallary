@@ -196,7 +196,7 @@ func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHea
 		[]string{
 			"origin",
 			time.Now().Format("2006_01_02"),
-			fmt.Sprintf("%s.%s", fileHash, filepath.Ext(fileHeader.Filename)),
+			fmt.Sprintf("%s%s", fileHash, filepath.Ext(fileHeader.Filename)),
 		},
 		"/",
 	)
