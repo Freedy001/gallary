@@ -335,7 +335,7 @@ func (s *S3Storage) GetStats(ctx context.Context) (*StorageStats, error) {
 
 	return &StorageStats{
 		UsedBytes:  totalSize,
-		TotalBytes: 0, // S3 没有配额限制概念
+		TotalBytes: 0,
 	}, nil
 }
 
@@ -375,6 +375,33 @@ func (s *S3Storage) Move(ctx context.Context, oldPath, newPath string) error {
 // GetConfig 获取 S3 配置
 func (s *S3Storage) GetConfig() *model.S3StorageConfig {
 	return s.config
+}
+
+// GetPresignedUploadURL 生成 S3 预签名上传 URL
+func (s *S3Storage) GetPresignedUploadURL(ctx context.Context, filePath string, contentType string, expires time.Duration) (string, error) {
+	key := s.fullPath(filePath)
+
+	presignClient := s3.NewPresignClient(s.client)
+
+	input := &s3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(key),
+		ContentType: aws.String(contentType),
+	}
+
+	presignedURL, err := presignClient.PresignPutObject(ctx, input, func(opts *s3.PresignOptions) {
+		opts.Expires = expires
+	})
+	if err != nil {
+		return "", fmt.Errorf("生成 S3 预签名上传 URL 失败: %w", err)
+	}
+
+	return presignedURL.URL, nil
+}
+
+// SupportsPresignedUpload 是否支持预签名上传
+func (s *S3Storage) SupportsPresignedUpload() bool {
+	return true
 }
 
 // TestConnection 测试 S3 连接

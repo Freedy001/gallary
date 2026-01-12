@@ -1,21 +1,30 @@
 /**
- * 创建图片缩略图
+ * 缩略图生成结果
+ */
+export interface ThumbnailResult {
+  blob: Blob          // 缩略图 Blob
+  width: number       // 缩略图宽度
+  height: number      // 缩略图高度
+  url: string         // Blob URL（用于预览）
+}
+
+/**
+ * 创建图片缩略图（返回 Blob 用于上传）
  * @param file 原始文件
  * @param maxWidth 最大宽度
  * @param maxHeight 最大高度
- * @returns Promise<string> 缩略图 URL (Blob URL)
+ * @param quality 压缩质量 (0-1)
+ * @returns Promise<ThumbnailResult> 缩略图结果
  */
-export async function createThumbnail(file: File, maxWidth = 100, maxHeight = 100): Promise<string> {
+export async function createThumbnailBlob(
+  file: File,
+  maxWidth = 400,
+  maxHeight = 400,
+  quality = 0.85
+): Promise<ThumbnailResult> {
   return new Promise((resolve, reject) => {
-    // 如果不是图片，返回空
     if (!file.type.startsWith('image/')) {
-      resolve('')
-      return
-    }
-
-    // 如果图片本身很小，直接使用原图
-    if (file.size < 200 * 1024) { // 小于 200KB
-      resolve(URL.createObjectURL(file))
+      reject(new Error('不是图片文件'))
       return
     }
 
@@ -23,10 +32,10 @@ export async function createThumbnail(file: File, maxWidth = 100, maxHeight = 10
     const url = URL.createObjectURL(file)
 
     img.onload = () => {
-      URL.revokeObjectURL(url) // 释放原图 URL
+      URL.revokeObjectURL(url)
 
-      let width = img.width
-      let height = img.height
+      let width = img.naturalWidth
+      let height = img.naturalHeight
 
       // 计算缩放比例
       if (width > maxWidth || height > maxHeight) {
@@ -45,17 +54,21 @@ export async function createThumbnail(file: File, maxWidth = 100, maxHeight = 10
         return
       }
 
-      // 绘制图片
       ctx.drawImage(img, 0, 0, width, height)
 
-      // 导出为 Blob
+      // 导出为 JPEG（压缩效果更好）
       canvas.toBlob((blob) => {
         if (blob) {
-          resolve(URL.createObjectURL(blob))
+          resolve({
+            blob,
+            width,
+            height,
+            url: URL.createObjectURL(blob)
+          })
         } else {
           reject(new Error('无法生成缩略图'))
         }
-      }, file.type, 0.7) // 0.7 质量
+      }, 'image/jpeg', quality)
     }
 
     img.onerror = () => {

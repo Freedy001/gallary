@@ -114,6 +114,55 @@ class HttpClient {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(downloadUrl)
   }
+
+  // 二进制上传方法（统一处理 presigned 和 backend 两种模式）
+  async uploadBinary(
+    url: string,
+    data: Blob | File,
+    contentType: string,
+    options?: {
+      skipAuth?: boolean  // true: 预签名上传（不带认证头），false: 后端代理（带认证头）
+      onProgress?: (progress: number) => void
+    }
+  ): Promise<void> {
+    const {skipAuth = false, onProgress} = options || {}
+
+    if (skipAuth) {
+      // 预签名上传：使用原生 XHR，不带认证头
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('PUT', url, true)
+        xhr.setRequestHeader('Content-Type', contentType)
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && onProgress) {
+            onProgress(Math.round((event.loaded * 100) / event.total))
+          }
+        }
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve()
+          } else {
+            reject(new Error(`上传失败: ${xhr.status} ${xhr.statusText}`))
+          }
+        }
+
+        xhr.onerror = () => reject(new Error('网络错误'))
+        xhr.send(data)
+      })
+    } else {
+      // 后端代理：使用 axios，自动带认证头
+      await this.instance.put(url, data, {
+        headers: {'Content-Type': contentType},
+        onUploadProgress: (e) => {
+          if (e.total && onProgress) {
+            onProgress(Math.round((e.loaded * 100) / e.total))
+          }
+        }
+      })
+    }
+  }
 }
 
 export const http = new HttpClient()

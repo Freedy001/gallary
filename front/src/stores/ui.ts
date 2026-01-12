@@ -1,8 +1,7 @@
 import {defineStore} from 'pinia'
 import {computed, ref} from 'vue'
-import {createThumbnail} from "@/utils/image.ts";
-import {imageApi} from "@/api/image.ts";
 import {useAlbumStore} from "@/stores/album.ts";
+import {uploadService} from "@/services/uploadService.ts";
 
 export type SortBy = 'taken_at' | 'ai_score'
 
@@ -174,36 +173,41 @@ export const useUIStore = defineStore('ui', () => {
 
   async function doUploadFile(task: UploadTask): Promise<void> {
     try {
-      // 异步生成缩略图
-      try {
-        const imageUrl = await createThumbnail(task.file);
-        if (imageUrl) task.imageUrl = imageUrl
-      } catch (e) {
-        console.log('生成缩略图失败:', e)
+      // 使用 uploadService 执行完整上传流程
+      const result = await uploadService.upload(
+        task.file,
+        task.albumId,
+        {
+          onThumbnail: (url) => {
+            task.imageUrl = url
+          },
+          onUpload: (progress) => {
+            task.progress = progress
+          }
+        }
+      )
+
+      if (!result.success) {
+        // noinspection ExceptionCaughtLocallyJS
+        throw new Error(result.error || '上传失败')
       }
 
-      // 直接在上传时传递 albumId，后端原子操作处理
-      const response = await imageApi.upload(task.file, task.albumId, (progress) => {
-        task.progress = progress
-      });
-
-      const uploadedImageId = response.data.id
-
       // 如果指定了相册ID，更新当前相册的图片数量
-      const albumStore = useAlbumStore()
-      if (task.albumId && albumStore.currentAlbum?.id === task.albumId) {
-        albumStore.currentAlbum.image_count += 1
+      if (!result.isDuplicate) {
+        const albumStore = useAlbumStore()
+        if (task.albumId && albumStore.currentAlbum?.id === task.albumId) {
+          albumStore.currentAlbum.image_count += 1
+        }
       }
 
       // 上传成功
       task.status = 'success'
       task.progress = 100
-      task.uploadedImageId = uploadedImageId
+      task.uploadedImageId = result.imageId
     } catch (error) {
-      // 上传失败 - 确保状态改变，防止死循环
+      // 上传失败
       task.status = 'error'
       task.error = error instanceof Error ? error.message : '上传失败'
-      // 将失败任务移动到队列顶部
       moveFailedTaskToTop(task.id)
     }
   }

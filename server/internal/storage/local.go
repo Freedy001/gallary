@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type basePath string
@@ -154,4 +155,14 @@ func (s *basePath) Move(ctx context.Context, oldPath, newPath string) error {
 	}
 
 	return nil
+}
+
+// GetPresignedUploadURL 本地存储不支持预签名上传
+func (s *basePath) GetPresignedUploadURL(ctx context.Context, path string, contentType string, expires time.Duration) (string, error) {
+	return "", nil
+}
+
+// SupportsPresignedUpload 本地存储不支持预签名上传
+func (s *basePath) SupportsPresignedUpload() bool {
+	return false
 }

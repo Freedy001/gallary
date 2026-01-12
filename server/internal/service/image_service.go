@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"gallary/server/config"
@@ -21,6 +22,7 @@ import (
 	"gallary/server/internal/utils"
 	"gallary/server/pkg/logger"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -53,6 +55,64 @@ type MetadataUpdate struct {
 	ValueType string  `json:"value_type,omitempty"`
 }
 
+// PrepareUploadRequest 准备上传请求
+type PrepareUploadRequest struct {
+	FileHash     string           `json:"file_hash" binding:"required"`
+	FileSize     int64            `json:"file_size" binding:"required,min=1"`
+	Width        int              `json:"width" binding:"required,min=1"`
+	Height       int              `json:"height" binding:"required,min=1"`
+	MimeType     string           `json:"mime_type" binding:"required"`
+	OriginalName string           `json:"original_name" binding:"required"`
+	AlbumID      *int64           `json:"album_id,omitempty"`
+	ExifData     *ExifDataRequest `json:"exif_data,omitempty"`
+}
+
+// ExifDataRequest EXIF 数据请求
+type ExifDataRequest struct {
+	TakenAt      *string  `json:"taken_at,omitempty"`
+	Latitude     *float64 `json:"latitude,omitempty"`
+	Longitude    *float64 `json:"longitude,omitempty"`
+	CameraMake   *string  `json:"camera_make,omitempty"`
+	CameraModel  *string  `json:"camera_model,omitempty"`
+	Aperture     *string  `json:"aperture,omitempty"`
+	ShutterSpeed *string  `json:"shutter_speed,omitempty"`
+	ISO          *int     `json:"iso,omitempty"`
+	FocalLength  *string  `json:"focal_length,omitempty"`
+}
+
+// PrepareUploadResponse 准备上传响应
+type PrepareUploadResponse struct {
+	IsDuplicate   bool           `json:"is_duplicate"`
+	ExistingImage *model.ImageVO `json:"existing_image,omitempty"`
+	UploadToken   *UploadToken   `json:"upload_token,omitempty"`
+	UploadID      string         `json:"upload_id,omitempty"`
+	StoragePath   string         `json:"storage_path,omitempty"`
+	ThumbnailPath string         `json:"thumbnail_path,omitempty"`
+}
+
+// UploadToken 上传凭证
+type UploadToken struct {
+	Original  *storage.UploadCredential `json:"original"`
+	Thumbnail *storage.UploadCredential `json:"thumbnail,omitempty"`
+}
+
+// ConfirmUploadRequest 确认上传请求
+type ConfirmUploadRequest struct {
+	UploadID      string `json:"upload_id" binding:"required"`
+	StoragePath   string `json:"storage_path" binding:"required"`
+	ThumbnailPath string `json:"thumbnail_path,omitempty"`
+}
+
+// UploadInfo 上传信息缓存
+type UploadInfo struct {
+	Request         *PrepareUploadRequest
+	StoragePath     string
+	ThumbnailPath   string
+	ThumbnailWidth  int
+	ThumbnailHeight int
+	CreatedAt       time.Time
+}
+
 // ImageService 图片服务接口
 type ImageService interface {
 	Upload(ctx context.Context, file *multipart.FileHeader, albumID *int64) (*model.ImageVO, error)
@@ -80,6 +140,12 @@ type ImageService interface {
 	// 标签相关方法
 	SearchTags(ctx context.Context, keyword string, limit int) ([]*model.Tag, error)
 	GetPopularTags(ctx context.Context, limit int) ([]*model.Tag, error)
+
+	// 新上传流程相关方法
+	PrepareUpload(ctx context.Context, req *PrepareUploadRequest) (*PrepareUploadResponse, error)
+	ConfirmUpload(ctx context.Context, req *ConfirmUploadRequest) (*model.ImageVO, error)
+	HandleDirectUpload(ctx context.Context, uploadID string, reader io.Reader, contentType string) error
+	HandleThumbnailUpload(ctx context.Context, uploadID string, reader io.Reader) error
 }
 
 type imageService struct {
@@ -90,6 +156,7 @@ type imageService struct {
 	cfg           *config.Config
 	notifier      websocket.Notifier
 	aiService     AIService
+	uploadCache   sync.Map // map[string]*UploadInfo
 }
 
 // NewImageService 创建图片服务实例
@@ -1053,4 +1120,332 @@ func (s *imageService) SearchTags(ctx context.Context, keyword string, limit int
 // GetPopularTags 获取热门标签
 func (s *imageService) GetPopularTags(ctx context.Context, limit int) ([]*model.Tag, error) {
 	return s.repo.GetPopularTags(ctx, limit)
+}
+
+// ==================== 新上传流程相关方法 ====================
+
+// PrepareUpload 准备上传（检查去重，生成上传凭证）
+func (s *imageService) PrepareUpload(ctx context.Context, req *PrepareUploadRequest) (*PrepareUploadResponse, error) {
+	// 1. 验证文件类型
+	if !s.cfg.Image.IsAllowedType(req.MimeType) {
+		return nil, fmt.Errorf("不支持的文件类型: %s", req.MimeType)
+	}
+
+	// 2. 验证文件大小
+	if req.FileSize > s.cfg.Image.MaxSize {
+		return nil, fmt.Errorf("文件大小超过限制: %d bytes", s.cfg.Image.MaxSize)
+	}
+
+	// 3. 检查去重
+	existingImage, err := s.repo.FindByHash(ctx, req.FileHash)
+	if err != nil {
+		return nil, fmt.Errorf("检查文件hash失败: %w", err)
+	}
+
+	if existingImage != nil {
+		// 处理已删除的重复图片（恢复）
+		if existingImage.DeletedAt.Valid {
+			logger.Info("检测到已删除的重复图片，恢复记录",
+				zap.String("hash", req.FileHash),
+				zap.Int64("existing_id", existingImage.ID))
+
+			if err := s.repo.Restore(ctx, existingImage.ID); err != nil {
+				return nil, fmt.Errorf("恢复图片记录失败: %w", err)
+			}
+
+			// 如果指定了相册ID，添加到相册
+			if req.AlbumID != nil {
+				if err := s.albumRepo.AddImages(ctx, *req.AlbumID, []int64{existingImage.ID}); err != nil {
+					logger.Warn("添加图片到相册失败", zap.Error(err))
+				}
+			}
+
+			// 重新获取完整的记录信息
+			restored, err := s.repo.FindByID(ctx, existingImage.ID)
+			if err != nil {
+				return nil, err
+			}
+			return &PrepareUploadResponse{
+				IsDuplicate:   true,
+				ExistingImage: s.storage.ToVO(restored),
+			}, nil
+		}
+
+		// 已存在的图片，如果指定了相册ID，也添加到相册
+		if req.AlbumID != nil {
+			if err := s.albumRepo.AddImages(ctx, *req.AlbumID, []int64{existingImage.ID}); err != nil {
+				logger.Warn("添加图片到相册失败", zap.Error(err))
+			}
+		}
+
+		logger.Info("检测到重复图片，返回已存在的图片",
+			zap.String("hash", req.FileHash),
+			zap.Int64("existing_id", existingImage.ID))
+
+		return &PrepareUploadResponse{
+			IsDuplicate:   true,
+			ExistingImage: s.storage.ToVO(existingImage),
+		}, nil
+	}
+
+	// 4. 生成上传 ID 和存储路径
+	uploadID := uuid.New().String()
+	storagePath := s.generateStoragePath(req.FileHash, req.OriginalName)
+	thumbnailPath := s.generateThumbnailPath(req.FileHash)
+
+	// 5. 缓存上传信息（用于 confirm 时验证）
+	uploadInfo := &UploadInfo{
+		Request:       req,
+		StoragePath:   storagePath,
+		ThumbnailPath: thumbnailPath,
+		CreatedAt:     time.Now(),
+	}
+	s.cacheUploadInfo(uploadID, uploadInfo)
+
+	// 6. 生成原图上传凭证
+	originalCred, err := s.storage.GetUploadCredential(ctx, storagePath, req.MimeType)
+	if err != nil {
+		return nil, fmt.Errorf("获取上传凭证失败: %w", err)
+	}
+
+	// 如果是后端上传，添加 uploadID 到 URL
+	if originalCred.Type == "backend" {
+		originalCred.URL = fmt.Sprintf("/api/images/upload-direct/%s", uploadID)
+	}
+
+	// 7. 生成缩略图上传凭证（始终使用本地存储）
+	thumbnailCred, err := s.storage.GetThumbnailUploadCredential(ctx, thumbnailPath, "image/jpeg")
+	if err != nil {
+		return nil, fmt.Errorf("获取缩略图上传凭证失败: %w", err)
+	}
+	thumbnailCred.URL = fmt.Sprintf("/api/images/upload-thumbnail/%s", uploadID)
+
+	return &PrepareUploadResponse{
+		IsDuplicate: false,
+		UploadToken: &UploadToken{
+			Original:  originalCred,
+			Thumbnail: thumbnailCred,
+		},
+		UploadID:      uploadID,
+		StoragePath:   storagePath,
+		ThumbnailPath: thumbnailPath,
+	}, nil
+}
+
+// ConfirmUpload 确认上传完成
+func (s *imageService) ConfirmUpload(ctx context.Context, req *ConfirmUploadRequest) (*model.ImageVO, error) {
+	// 1. 获取缓存的上传信息
+	uploadInfo, ok := s.getUploadInfo(req.UploadID)
+	if !ok {
+		return nil, fmt.Errorf("无效的上传 ID 或已过期")
+	}
+	defer s.removeUploadInfo(req.UploadID)
+
+	prepareReq := uploadInfo.Request
+
+	// 2. 验证文件是否已上传
+	exists, err := s.storage.Exists(ctx, s.storage.DefaultType(), req.StoragePath)
+	if err != nil {
+		return nil, fmt.Errorf("验证文件失败: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("文件未找到或上传未完成")
+	}
+
+	// 3. 创建图片记录
+	image := &model.Image{
+		OriginalName:  prepareReq.OriginalName,
+		StoragePath:   req.StoragePath,
+		StorageId:     s.storage.DefaultType(),
+		FileSize:      prepareReq.FileSize,
+		FileHash:      prepareReq.FileHash,
+		MimeType:      prepareReq.MimeType,
+		Width:         prepareReq.Width,
+		Height:        prepareReq.Height,
+		ThumbnailPath: req.ThumbnailPath,
+	}
+
+	// 4. 设置 EXIF 数据
+	if prepareReq.ExifData != nil {
+		s.setExifData(image, prepareReq.ExifData)
+	}
+
+	// 5. 设置缩略图尺寸
+	if uploadInfo.ThumbnailWidth > 0 && uploadInfo.ThumbnailHeight > 0 {
+		image.ThumbnailWidth = &uploadInfo.ThumbnailWidth
+		image.ThumbnailHeight = &uploadInfo.ThumbnailHeight
+	}
+
+	// 6. 保存到数据库
+	if err := s.repo.Create(ctx, image); err != nil {
+		return nil, fmt.Errorf("保存图片记录失败: %w", err)
+	}
+
+	// 7. 自动添加设备标签
+	if err := s.autoAddDeviceTags(ctx, image); err != nil {
+		logger.Warn("自动添加设备标签失败", zap.Error(err), zap.Int64("image_id", image.ID))
+	}
+
+	// 8. 添加到相册
+	if prepareReq.AlbumID != nil {
+		if err := s.albumRepo.AddImages(ctx, *prepareReq.AlbumID, []int64{image.ID}); err != nil {
+			logger.Error("添加图片到相册失败", zap.Error(err), zap.Int64("image_id", image.ID))
+		}
+	}
+
+	logger.Info("图片上传确认成功",
+		zap.String("hash", image.FileHash),
+		zap.String("original_name", image.OriginalName))
+
+	// 9. 广播更新
+	s.notifyCount(ctx)
+
+	return s.storage.ToVO(image), nil
+}
+
+// HandleDirectUpload 处理直接上传（本地存储/阿里云盘代理）
+func (s *imageService) HandleDirectUpload(ctx context.Context, uploadID string, reader io.Reader, contentType string) error {
+	// 1. 获取缓存的上传信息
+	uploadInfo, ok := s.getUploadInfo(uploadID)
+	if !ok {
+		return fmt.Errorf("无效的上传 ID 或已过期")
+	}
+
+	// 2. 上传到存储
+	_, err := s.storage.UploadToDefaultStorage(ctx, reader, uploadInfo.StoragePath)
+	if err != nil {
+		return fmt.Errorf("上传文件失败: %w", err)
+	}
+
+	logger.Info("直接上传文件成功",
+		zap.String("upload_id", uploadID),
+		zap.String("path", uploadInfo.StoragePath))
+
+	return nil
+}
+
+// HandleThumbnailUpload 处理缩略图上传
+func (s *imageService) HandleThumbnailUpload(ctx context.Context, uploadID string, reader io.Reader) error {
+	// 1. 获取缓存的上传信息
+	uploadInfo, ok := s.getUploadInfo(uploadID)
+	if !ok {
+		return fmt.Errorf("无效的上传 ID 或已过期")
+	}
+
+	// 2. 保存缩略图到临时文件以获取尺寸
+	tempFile, err := os.CreateTemp("", "thumbnail-*.jpg")
+	if err != nil {
+		return fmt.Errorf("创建临时文件失败: %w", err)
+	}
+	defer os.Remove(tempFile.Name())
+	defer tempFile.Close()
+
+	// 复制数据到临时文件
+	if _, err := io.Copy(tempFile, reader); err != nil {
+		return fmt.Errorf("写入临时文件失败: %w", err)
+	}
+
+	// 3. 获取缩略图尺寸
+	width, height, err := utils.GetImageDimensions(tempFile.Name())
+	if err != nil {
+		logger.Warn("获取缩略图尺寸失败", zap.Error(err))
+	} else {
+		uploadInfo.ThumbnailWidth = width
+		uploadInfo.ThumbnailHeight = height
+	}
+
+	// 4. 上传到本地存储
+	localStorage := s.storage.GetLocalStorage()
+	if localStorage == nil {
+		return fmt.Errorf("本地存储未初始化")
+	}
+
+	tempFile.Seek(0, 0)
+	_, err = localStorage.Upload(ctx, tempFile, uploadInfo.ThumbnailPath)
+	if err != nil {
+		return fmt.Errorf("上传缩略图失败: %w", err)
+	}
+
+	logger.Info("缩略图上传成功",
+		zap.String("upload_id", uploadID),
+		zap.String("path", uploadInfo.ThumbnailPath),
+		zap.Int("width", width),
+		zap.Int("height", height))
+
+	return nil
+}
+
+// ==================== 辅助方法 ====================
+
+// generateStoragePath 生成存储路径
+func (s *imageService) generateStoragePath(hash, originalName string) string {
+	ext := filepath.Ext(originalName)
+	return strings.Join(
+		[]string{
+			"origin",
+			time.Now().Format("2006_01_02"),
+			fmt.Sprintf("%s%s", hash, ext),
+		},
+		"/",
+	)
+}
+
+// generateThumbnailPath 生成缩略图路径
+func (s *imageService) generateThumbnailPath(hash string) string {
+	return strings.Join(
+		[]string{
+			"thumbnails",
+			time.Now().Format("2006_01_02"),
+			fmt.Sprintf("%s_thumb.jpg", hash),
+		},
+		"/",
+	)
+}
+
+// setExifData 设置 EXIF 数据
+func (s *imageService) setExifData(image *model.Image, exifData *ExifDataRequest) {
+	if exifData.TakenAt != nil {
+		if t, err := time.Parse(time.RFC3339, *exifData.TakenAt); err == nil {
+			image.TakenAt = &t
+		}
+	}
+	if exifData.Latitude != nil && exifData.Longitude != nil {
+		image.SetLocation(exifData.Latitude, exifData.Longitude)
+	}
+	image.CameraMake = exifData.CameraMake
+	image.CameraModel = exifData.CameraModel
+	image.Aperture = exifData.Aperture
+	image.ShutterSpeed = exifData.ShutterSpeed
+	image.ISO = exifData.ISO
+	image.FocalLength = exifData.FocalLength
+}
+
+// cacheUploadInfo 缓存上传信息
+func (s *imageService) cacheUploadInfo(uploadID string, info *UploadInfo) {
+	s.uploadCache.Store(uploadID, info)
+	// 设置过期清理
+	go func() {
+		time.Sleep(30 * time.Minute)
+		s.uploadCache.Delete(uploadID)
+	}()
+}
+
+// getUploadInfo 获取上传信息
+func (s *imageService) getUploadInfo(uploadID string) (*UploadInfo, bool) {
+	val, ok := s.uploadCache.Load(uploadID)
+	if !ok {
+		return nil, false
+	}
+	info := val.(*UploadInfo)
+	// 检查是否过期
+	if time.Since(info.CreatedAt) > 30*time.Minute {
+		s.uploadCache.Delete(uploadID)
+		return nil, false
+	}
+	return info, true
+}
+
+// removeUploadInfo 移除上传信息
+func (s *imageService) removeUploadInfo(uploadID string) {
+	s.uploadCache.Delete(uploadID)
 }

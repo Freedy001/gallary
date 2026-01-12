@@ -7,6 +7,7 @@ import (
 	"gallary/server/internal/model"
 	"io"
 	"sync"
+	"time"
 
 	"gallary/server/pkg/logger"
 
@@ -251,4 +252,60 @@ func (m *StorageManager) ToVOList(images []*model.Image) []*model.ImageVO {
 	}
 
 	return result
+}
+
+// UploadCredential 上传凭证
+type UploadCredential struct {
+	Type      string            `json:"type"`                 // "presigned" | "backend"
+	URL       string            `json:"url"`                  // 上传 URL
+	Method    string            `json:"method"`               // "PUT" | "POST"
+	Headers   map[string]string `json:"headers,omitempty"`    // 需要携带的额外 headers
+	ExpiresAt *time.Time        `json:"expires_at,omitempty"` // 过期时间
+}
+
+// GetUploadCredential 获取上传凭证
+func (m *StorageManager) GetUploadCredential(ctx context.Context, path string, contentType string) (*UploadCredential, error) {
+	storage := m.getStorage(ctx)
+	if storage == nil {
+		return nil, fmt.Errorf("存储未初始化")
+	}
+
+	if storage.SupportsPresignedUpload() {
+		url, err := storage.GetPresignedUploadURL(ctx, path, contentType, 15*time.Minute)
+		if err != nil {
+			return nil, err
+		}
+		expiresAt := time.Now().Add(15 * time.Minute)
+		return &UploadCredential{
+			Type:      "presigned",
+			URL:       url,
+			Method:    "PUT",
+			Headers:   map[string]string{"Content-Type": contentType},
+			ExpiresAt: &expiresAt,
+		}, nil
+	}
+
+	// 不支持预签名，返回后端代理 URL
+	return &UploadCredential{
+		Type:   "backend",
+		Method: "PUT",
+	}, nil
+}
+
+// GetThumbnailUploadCredential 获取缩略图上传凭证（始终使用本地存储）
+func (m *StorageManager) GetThumbnailUploadCredential(ctx context.Context, path string, contentType string) (*UploadCredential, error) {
+	// 缩略图始终存储在本地，所以总是返回后端代理方式
+	return &UploadCredential{
+		Type:   "backend",
+		Method: "PUT",
+	}, nil
+}
+
+// Exists 检查文件是否存在
+func (m *StorageManager) Exists(ctx context.Context, storageId model.StorageId, path string) (bool, error) {
+	storage := m.storages[storageId]
+	if storage == nil {
+		return false, fmt.Errorf("%s存储未初始化", storageId)
+	}
+	return storage.Exists(ctx, path)
 }

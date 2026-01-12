@@ -4,6 +4,7 @@ import (
 	"context"
 	"gallary/server/internal/model"
 	"io"
+	"time"
 )
 
 // StorageStats 存储统计信息
@@ -93,4 +94,15 @@ type Storage interface {
 	// newPath: 目标文件路径（相对路径）
 	// 返回: 错误
 	Move(ctx context.Context, oldPath, newPath string) error
+
+	// GetPresignedUploadURL 获取预签名上传 URL
+	// path: 存储路径
+	// contentType: 文件 MIME 类型
+	// expires: 过期时间
+	// 返回: 预签名 URL, 错误
+	// 注意: 不支持预签名上传的存储返回 ("", nil)
+	GetPresignedUploadURL(ctx context.Context, path string, contentType string, expires time.Duration) (string, error)
+
+	// SupportsPresignedUpload 是否支持预签名上传
+	SupportsPresignedUpload() bool
 }

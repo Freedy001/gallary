@@ -960,3 +960,13 @@ func (s *AliyunPanStorage) Move(ctx context.Context, oldPath, newPath string) er
 
 	return nil
 }
+
+// GetPresignedUploadURL 阿里云盘不支持预签名上传
+func (s *AliyunPanStorage) GetPresignedUploadURL(ctx context.Context, path string, contentType string, expires time.Duration) (string, error) {
+	return "", nil
+}
+
+// SupportsPresignedUpload 阿里云盘不支持预签名上传
+func (s *AliyunPanStorage) SupportsPresignedUpload() bool {
+	return false
+}

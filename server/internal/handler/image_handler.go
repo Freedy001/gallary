@@ -729,3 +729,121 @@ func (h *ImageHandler) GetTags(c *gin.Context) {
 
 	utils.Success(c, tags)
 }
+
+// PrepareUpload 准备上传
+//
+//	@Summary		准备上传图片
+//	@Description	检查去重并获取上传凭证（支持 S3 预签名上传）
+//	@Tags			图片管理
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		service.PrepareUploadRequest	true	"准备上传请求"
+//	@Success		200		{object}	utils.Response{data=service.PrepareUploadResponse}	"准备成功"
+//	@Failure		400		{object}	utils.Response					"请求参数错误"
+//	@Failure		500		{object}	utils.Response					"服务器错误"
+//	@Router			/api/images/prepare-upload [post]
+func (h *ImageHandler) PrepareUpload(c *gin.Context) {
+	var req service.PrepareUploadRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的请求参数: "+err.Error())
+		return
+	}
+
+	resp, err := h.service.PrepareUpload(c.Request.Context(), &req)
+	if err != nil {
+		logger.Error("准备上传失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.Success(c, resp)
+}
+
+// ConfirmUpload 确认上传
+//
+//	@Summary		确认上传完成
+//	@Description	验证文件已上传并保存数据库记录
+//	@Tags			图片管理
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		service.ConfirmUploadRequest	true	"确认上传请求"
+//	@Success		200		{object}	utils.Response{data=model.ImageVO}	"确认成功"
+//	@Failure		400		{object}	utils.Response					"请求参数错误"
+//	@Failure		500		{object}	utils.Response					"服务器错误"
+//	@Router			/api/images/confirm-upload [post]
+func (h *ImageHandler) ConfirmUpload(c *gin.Context) {
+	var req service.ConfirmUploadRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "无效的请求参数: "+err.Error())
+		return
+	}
+
+	image, err := h.service.ConfirmUpload(c.Request.Context(), &req)
+	if err != nil {
+		logger.Error("确认上传失败", zap.Error(err))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	// 通知客户端有新图片上传
+	h.notifier.NotifyImagesUploaded([]int64{image.ID})
+
+	utils.SuccessWithMessage(c, "上传成功", image)
+}
+
+// UploadDirect 直接上传（本地存储/阿里云盘代理）
+//
+//	@Summary		直接上传文件
+//	@Description	用于本地存储或阿里云盘的后端代理上传
+//	@Tags			图片管理
+//	@Accept			application/octet-stream
+//	@Produce		json
+//	@Param			uploadId	path	string	true	"上传ID"
+//	@Success		200		{object}	utils.Response	"上传成功"
+//	@Failure		400		{object}	utils.Response	"请求参数错误"
+//	@Failure		500		{object}	utils.Response	"服务器错误"
+//	@Router			/api/images/upload-direct/{uploadId} [put]
+func (h *ImageHandler) UploadDirect(c *gin.Context) {
+	uploadID := c.Param("uploadId")
+	if uploadID == "" {
+		utils.BadRequest(c, "缺少上传 ID")
+		return
+	}
+
+	contentType := c.ContentType()
+	if err := h.service.HandleDirectUpload(c.Request.Context(), uploadID, c.Request.Body, contentType); err != nil {
+		logger.Error("直接上传失败", zap.Error(err), zap.String("upload_id", uploadID))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.Success(c, nil)
+}
+
+// UploadThumbnail 上传缩略图
+//
+//	@Summary		上传缩略图
+//	@Description	上传前端生成的缩略图
+//	@Tags			图片管理
+//	@Accept			application/octet-stream
+//	@Produce		json
+//	@Param			uploadId	path	string	true	"上传ID"
+//	@Success		200		{object}	utils.Response	"上传成功"
+//	@Failure		400		{object}	utils.Response	"请求参数错误"
+//	@Failure		500		{object}	utils.Response	"服务器错误"
+//	@Router			/api/images/upload-thumbnail/{uploadId} [put]
+func (h *ImageHandler) UploadThumbnail(c *gin.Context) {
+	uploadID := c.Param("uploadId")
+	if uploadID == "" {
+		utils.BadRequest(c, "缺少上传 ID")
+		return
+	}
+
+	if err := h.service.HandleThumbnailUpload(c.Request.Context(), uploadID, c.Request.Body); err != nil {
+		logger.Error("缩略图上传失败", zap.Error(err), zap.String("upload_id", uploadID))
+		utils.Error(c, 500, err.Error())
+		return
+	}
+
+	utils.Success(c, nil)
+}

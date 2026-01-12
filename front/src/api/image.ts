@@ -9,6 +9,53 @@ import type {
   Tag,
   UpdateMetadataRequest,
 } from '@/types'
+import type {ExifData} from '@/utils/exif'
+
+// 上传凭证类型
+export interface UploadCredential {
+  type: 'presigned' | 'backend'
+  url?: string
+  method: string
+  headers?: Record<string, string>
+  expires_at?: string
+}
+
+// 上传令牌（包含原图和缩略图的上传凭证）
+export interface UploadToken {
+  original: UploadCredential
+  thumbnail: UploadCredential
+}
+
+// 准备上传请求
+export interface PrepareUploadRequest {
+  file_hash: string
+  file_size: number
+  width: number
+  height: number
+  mime_type: string
+  original_name: string
+  album_id?: number
+  exif_data?: ExifData
+}
+
+// 准备上传响应
+export interface PrepareUploadResponse {
+  is_duplicate: boolean
+  existing_image?: Image
+  upload_token?: UploadToken
+  upload_id?: string
+  storage_path?: string
+  thumbnail_path?: string
+}
+
+// 确认上传请求
+export interface ConfirmUploadRequest {
+  upload_id: string
+  storage_path: string
+  thumbnail_path?: string
+  thumbnail_width?: number
+  thumbnail_height?: number
+}
 
 export const imageApi = {
   // 上传图片
@@ -166,5 +213,33 @@ export const imageApi = {
   // 彻底删除图片
   permanentlyDelete(ids: number[]): Promise<ApiResponse<null>> {
     return http.post('/api/images/trash/delete', {ids})
+  },
+
+  // === 新上传流程 API ===
+
+  // 准备上传（获取上传凭证）
+  prepareUpload(request: PrepareUploadRequest): Promise<ApiResponse<PrepareUploadResponse>> {
+    return http.post('/api/images/prepare-upload', request)
+  },
+
+  // 确认上传完成
+  confirmUpload(request: ConfirmUploadRequest): Promise<ApiResponse<Image>> {
+    return http.post('/api/images/confirm-upload', request)
+  },
+
+  // 通用上传方法：根据凭证类型自动选择上传方式
+  uploadWithCredential(
+    credential: UploadCredential,
+    data: Blob | File,
+    contentType: string,
+    onProgress?: (progress: number) => void
+  ): Promise<void> {
+    if (!credential.url) {
+      throw new Error('上传 URL 不能为空')
+    }
+    return http.uploadBinary(credential.url, data, contentType, {
+      skipAuth: credential.type === 'presigned',
+      onProgress
+    })
   },
 }

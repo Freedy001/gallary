@@ -62,6 +62,11 @@ func SetupRouter(
 		images.Use(middleware.AuthMiddleware(configCompose.AdminConfig))
 		{
 			images.POST("/upload", imageHandler.Upload)
+			// 新上传流程
+			images.POST("/prepare-upload", imageHandler.PrepareUpload)
+			images.POST("/confirm-upload", imageHandler.ConfirmUpload)
+			images.PUT("/upload-direct/:uploadId", imageHandler.UploadDirect)
+			images.PUT("/upload-thumbnail/:uploadId", imageHandler.UploadThumbnail)
 			images.POST("/batch-delete", imageHandler.BatchDelete)
 			images.POST("/batch-download", imageHandler.BatchDownload)
 			images.POST("/batch", imageHandler.GetByIDs)

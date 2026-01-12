@@ -111,8 +111,9 @@ const modalRef = ref<HTMLElement | null>(null)
 const selectedQueue = ref<AIQueueInfo | null>(null)
 
 // 点击外部关闭
-onClickOutside(modalRef, () => {
+onClickOutside(modalRef, (event) => {
   if (props.visible && !selectedQueue.value) { // 如果打开了详情弹窗，不关闭列表弹窗
+    event.stopPropagation()  // 阻止事件冒泡
     emit('close')
   }
 })

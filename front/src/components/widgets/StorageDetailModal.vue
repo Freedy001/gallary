@@ -100,8 +100,9 @@ const notificationStore = useNotificationStore()
 const modalRef = ref<HTMLElement | null>(null)
 
 // 点击外部关闭
-onClickOutside(modalRef, () => {
+onClickOutside(modalRef, (event) => {
   if (props.visible) {
+    event.stopPropagation()  // 阻止事件冒泡
     emit('close')
   }
 })
