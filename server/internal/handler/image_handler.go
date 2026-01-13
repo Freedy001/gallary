@@ -31,50 +31,6 @@ func NewImageHandler(service service.ImageService, notifier websocket.Notifier) 
 	return &ImageHandler{service: service, notifier: notifier}
 }
 
-// Upload 上传图片
-//
-//	@Summary		上传图片
-//	@Description	上传单个图片文件，支持去重，可选添加到相册
-//	@Tags			图片管理
-//	@Accept			multipart/form-data
-//	@Produce		json
-//	@Param			file		formData	file								true	"图片文件"
-//	@Param			album_id	formData	int									false	"相册ID（可选，上传后自动添加到该相册）"
-//	@Success		200			{object}	utils.Response{data=model.Image}	"上传成功"
-//	@Failure		400			{object}	utils.Response						"请选择要上传的文件"
-//	@Failure		500			{object}	utils.Response						"上传失败"
-//	@Router			/api/images/upload [post]
-func (h *ImageHandler) Upload(c *gin.Context) {
-	file, err := c.FormFile("file")
-	if err != nil {
-		utils.BadRequest(c, "请选择要上传的文件")
-		return
-	}
-
-	// 获取可选的相册ID
-	var albumID *int64
-	if albumIDStr := c.PostForm("album_id"); albumIDStr != "" {
-		id, err := strconv.ParseInt(albumIDStr, 10, 64)
-		if err == nil && id > 0 {
-			albumID = &id
-		}
-	}
-
-	image, err := database.Transaction1[*model.ImageVO](c, func(ctx context.Context) (*model.ImageVO, error) {
-		return h.service.Upload(c.Request.Context(), file, albumID)
-	})
-	if err != nil {
-		logger.Error("上传图片失败", zap.Error(err))
-		utils.Error(c, 500, err.Error())
-		return
-	}
-
-	// 通知客户端有新图片上传
-	h.notifier.NotifyImagesUploaded([]int64{image.ID})
-
-	utils.SuccessWithMessage(c, "上传成功", image)
-}
-
 // List 获取图片列表
 //
 //	@Summary		获取图片列表

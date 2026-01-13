@@ -62,6 +62,7 @@ export const S3_PROVIDER_PRESETS: Record<S3Provider, { name: string; endpoint: s
 // 完整存储配置（后端返回格式）
 export interface StorageConfigPO {
   storageId: StorageId                        // 默认存储ID
+  thumbnailStorageId?: StorageId              // 缩略图默认存储ID
   localConfig?: LocalStorageConfig            // 本地存储配置
   aliyunpanConfig?: AliyunPanStorageConfig[]  // 阿里云盘账号配置数组
   aliyunpanGlobal?: AliyunPanGlobalConfig     // 阿里云盘全局配置
@@ -142,16 +143,9 @@ export interface StorageConfig {
 
 // 设置 API
 export const settingsApi = {
-  // 获取所有设置
-  getAll: () => http.get<Record<string, any>>('/api/settings'),
-
   // 按分类获取设置
   getByCategory: (category: string) =>
     http.get<Record<string, any>>(`/api/settings/${category}`),
-
-  // 获取存储配置
-  getStorageConfig: () =>
-    http.get<StorageConfigPO>('/api/settings/storage'),
 
   // 获取密码设置状态
   getPasswordStatus: () =>
@@ -176,6 +170,10 @@ export const settingsApi = {
   // 设置默认存储
   setDefaultStorage: (storageId: StorageId) =>
     http.put<{ message: string }>('/api/settings/storage/default', { storageId }),
+
+  // 设置缩略图默认存储
+  setThumbnailDefaultStorage: (storageId: StorageId) =>
+    http.put<{ message: string }>('/api/settings/storage/thumbnail/default', { storageId }),
 
   // 更新阿里云盘全局配置
   updateGlobalConfig: (config: AliyunPanGlobalConfig) =>

@@ -284,6 +284,33 @@ func (h *SettingHandler) SetDefaultStorage(c *gin.Context) {
 	utils.Success(c, gin.H{"message": "默认存储设置成功"})
 }
 
+// SetThumbnailDefaultStorage 设置缩略图默认存储
+//
+//	@Summary		设置缩略图默认存储
+//	@Description	设置缩略图上传的默认存储终端
+//	@Tags			设置
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		SetDefaultStorageRequest	true	"存储ID"
+//	@Success		200		{object}	utils.Response	"设置成功"
+//	@Failure		400		{object}	utils.Response	"请求参数错误"
+//	@Failure		500		{object}	utils.Response	"服务器错误"
+//	@Router			/api/settings/storage/thumbnail/default [put]
+func (h *SettingHandler) SetThumbnailDefaultStorage(c *gin.Context) {
+	var req SetDefaultStorageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请求参数错误: "+err.Error())
+		return
+	}
+
+	if err := h.settingService.SetThumbnailDefaultStorage(c.Request.Context(), model.StorageId(req.StorageId)); err != nil {
+		utils.Error(c, 400, err.Error())
+		return
+	}
+
+	utils.Success(c, gin.H{"message": "缩略图默认存储设置成功"})
+}
+
 // UpdateAliyunpanGlobalConfig 更新阿里云盘全局配置
 //
 //	@Summary		更新阿里云盘全局配置

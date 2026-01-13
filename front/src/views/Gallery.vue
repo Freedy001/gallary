@@ -147,17 +147,40 @@ function gridComponent(): InstanceType<typeof ImageGrid> {
   return imageGridRef.value;
 }
 
+// 防抖定时器和待处理的图片ID集合
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+const pendingImageIds = new Set<number>()
+
 async function dynamicAddImage(payload: DataSyncPayload) {
-  if (payload.ids && payload.ids.length > 0) {
+  if (!payload.ids || payload.ids.length == 0) {
+    return
+  }
+
+  // 将新的图片ID添加到待处理集合
+  payload.ids.forEach(id => pendingImageIds.add(id))
+
+  // 清除之前的定时器
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+  }
+
+  // 设置新的防抖定时器（300ms）
+  debounceTimer = setTimeout(async () => {
+    if (pendingImageIds.size === 0) return
+
+    const idsToFetch = Array.from(pendingImageIds)
+    pendingImageIds.clear()
+    debounceTimer = null
+
     try {
-      const {data: uploadedImages} = await imageApi.getByIds(payload.ids)
+      const {data: uploadedImages} = await imageApi.getByIds(idsToFetch)
       gridComponent().insertImages(uploadedImages)
     } catch (e) {
       console.error('[Gallery] 获取上传的图片失败', e)
       // 降级为全量刷新
       await gridComponent().refresh()
     }
-  }
+  }, 1000)
 }
 
 // 监听数据同步事件

@@ -9,7 +9,6 @@ import (
 	"gallary/server/pkg/database"
 	"io"
 	"math"
-	"mime/multipart"
 	"os"
 	"path/filepath"
 	"strings"
@@ -115,7 +114,6 @@ type UploadInfo struct {
 
 // ImageService 图片服务接口
 type ImageService interface {
-	Upload(ctx context.Context, file *multipart.FileHeader, albumID *int64) (*model.ImageVO, error)
 	GetByID(ctx context.Context, id int64) (*model.ImageVO, error)
 	GetByIDs(ctx context.Context, ids []int64) ([]*model.ImageVO, error)
 	List(ctx context.Context, page, pageSize int, sortBy string) ([]*model.ImageVO, int64, error)
@@ -170,241 +168,6 @@ func NewImageService(repo repository.ImageRepository, albumRepo repository.Album
 		notifier:      notifier,
 		aiService:     aiService,
 	}
-}
-
-// Upload 上传图片（包含去重逻辑）
-//
-//goland:noinspection GoUnhandledErrorResult
-func (s *imageService) Upload(ctx context.Context, fileHeader *multipart.FileHeader, albumID *int64) (*model.ImageVO, error) {
-	// 1. 验证文件类型
-	if !s.cfg.Image.IsAllowedType(fileHeader.Header.Get("Content-Type")) {
-		return nil, fmt.Errorf("不支持的文件类型: %s", fileHeader.Header.Get("Content-Type"))
-	}
-
-	// 2. 验证文件大小
-	if fileHeader.Size > s.cfg.Image.MaxSize {
-		return nil, fmt.Errorf("文件大小超过限制: %d bytes", s.cfg.Image.MaxSize)
-	}
-
-	// 3. 打开上传的文件
-	src, err := fileHeader.Open()
-	if err != nil {
-		return nil, fmt.Errorf("打开上传文件失败: %w", err)
-	}
-	defer src.Close()
-
-	// 4. 保存到临时文件用于计算hash和提取EXIF
-	tempFile, err := os.CreateTemp("", "upload-*.tmp")
-	if err != nil {
-		return nil, fmt.Errorf("创建临时文件失败: %w", err)
-	}
-	defer os.Remove(tempFile.Name())
-	defer tempFile.Close()
-
-	// 复制数据到临时文件
-	if _, err := io.Copy(tempFile, src); err != nil {
-		return nil, fmt.Errorf("写入临时文件失败: %w", err)
-	}
-
-	// 5. 计算文件hash（用于去重）
-	fileHash, err := utils.CalculateFileHash(tempFile.Name())
-	if err != nil {
-		return nil, fmt.Errorf("计算文件hash失败: %w", err)
-	}
-
-	// 6. 检查是否已存在相同hash的文件（去重）
-	existingImage, err := s.repo.FindByHash(ctx, fileHash)
-	if err != nil {
-		return nil, fmt.Errorf("检查文件hash失败: %w", err)
-	}
-	if existingImage != nil {
-		// 检查是否是逻辑删除的记录
-		if existingImage.DeletedAt.Valid {
-			// 恢复逻辑删除的记录
-			logger.Info("检测到已删除的重复图片，恢复记录",
-				zap.String("hash", fileHash),
-				zap.Int64("existing_id", existingImage.ID))
-
-			if err := s.repo.Restore(ctx, existingImage.ID); err != nil {
-				return nil, fmt.Errorf("恢复图片记录失败: %w", err)
-			}
-
-			// 如果指定了相册ID，添加到相册
-			if albumID != nil {
-				if err := s.albumRepo.AddImages(ctx, *albumID, []int64{existingImage.ID}); err != nil {
-					return nil, fmt.Errorf("添加图片到相册失败: %w", err)
-				}
-			}
-
-			// 重新获取完整的记录信息
-			restored, err := s.repo.FindByID(ctx, existingImage.ID)
-			if err != nil {
-				return nil, err
-			}
-			return s.storage.ToVO(restored), nil
-		}
-
-		// 图片已存在，如果指定了相册ID，也添加到相册
-		if albumID != nil {
-			if err := s.albumRepo.AddImages(ctx, *albumID, []int64{existingImage.ID}); err != nil {
-				return nil, fmt.Errorf("添加图片到相册失败: %w", err)
-			}
-		}
-
-		logger.Info("检测到重复图片，返回已存在的图片",
-			zap.String("hash", fileHash),
-			zap.Int64("existing_id", existingImage.ID))
-		vo := s.storage.ToVO(existingImage)
-		return vo, nil
-	}
-
-	// 8. 生成存储路径（按日期分目录）
-	storagePath := strings.Join(
-		[]string{
-			"origin",
-			time.Now().Format("2006_01_02"),
-			fmt.Sprintf("%s%s", fileHash, filepath.Ext(fileHeader.Filename)),
-		},
-		"/",
-	)
-
-	// 9. 上传到存储系统
-	tempFile.Seek(0, 0) // 重置文件指针
-	finalPath, err := s.storage.UploadToDefaultStorage(ctx, tempFile, storagePath)
-	if err != nil {
-		return nil, fmt.Errorf("上传文件到存储失败: %w", err)
-	}
-
-	// 10. 提取图片尺寸
-	width, height, err := utils.GetImageDimensions(tempFile.Name())
-	if err != nil {
-		return nil, err
-	}
-
-	image := &model.Image{
-		OriginalName: fileHeader.Filename,
-		StoragePath:  finalPath,
-		StorageId:    s.storage.DefaultType(),
-		FileSize:     fileHeader.Size,
-		FileHash:     fileHash,
-		MimeType:     fileHeader.Header.Get("Content-Type"),
-		Width:        width,
-		Height:       height,
-	}
-
-	// 12. 创建缩略图
-	err = s.thumbImages(ctx, tempFile, image, fileHash)
-	if err != nil {
-		return nil, err
-	}
-
-	// 12. 提取EXIF信息
-	exifData, err := utils.ExtractExif(tempFile.Name())
-	if err != nil {
-		logger.Warn("提取EXIF失败", zap.Error(err))
-		exifData = &utils.ExifData{}
-	}
-
-	// 设置EXIF数据
-	image.TakenAt = exifData.TakenAt
-	image.SetLocation(exifData.Latitude, exifData.Longitude) // 使用 SetLocation 设置 PostGIS 格式
-	image.CameraModel = exifData.CameraModel
-	image.CameraMake = exifData.CameraMake
-	image.Aperture = exifData.Aperture
-	image.ShutterSpeed = exifData.ShutterSpeed
-	image.ISO = exifData.ISO
-	image.FocalLength = exifData.FocalLength
-
-	// 13. 保存到数据库
-	if err := s.repo.Create(ctx, image); err != nil {
-		// 保存失败，删除已上传的文件
-		_ = s.storage.Delete(ctx, image.StorageId, finalPath)
-		return nil, fmt.Errorf("保存图片记录失败: %w", err)
-	}
-
-	// 14. 自动添加设备标签
-	if err := s.autoAddDeviceTags(ctx, image); err != nil {
-		// 添加标签失败，但图片已上传成功，记录错误但不回滚
-		logger.Warn("自动添加设备标签失败", zap.Error(err), zap.Int64("image_id", image.ID))
-	}
-
-	// 15. 如果指定了相册ID，添加到相册
-	if albumID != nil {
-		if err := s.albumRepo.AddImages(ctx, *albumID, []int64{image.ID}); err != nil {
-			// 添加相册失败，但图片已上传成功，记录错误但不回滚
-			logger.Error("添加图片到相册失败", zap.Error(err), zap.Int64("image_id", image.ID), zap.Int64("album_id", *albumID))
-		}
-	}
-
-	logger.Info("图片上传成功",
-		zap.String("hash", image.FileHash),
-		zap.String("original_name", image.OriginalName))
-
-	// 广播图片总数更新
-	s.notifyCount(ctx)
-	return s.storage.ToVO(image), nil
-}
-
-func (s *imageService) thumbImages(ctx context.Context, tempFile *os.File, image *model.Image, imageHash string) error {
-	thumbnailTempFile, err := os.CreateTemp("", "thumbnail-*.jpg")
-	if err != nil {
-		return fmt.Errorf("创建临时文件失败: %w", err)
-	}
-
-	defer os.Remove(thumbnailTempFile.Name())
-	defer thumbnailTempFile.Close()
-
-	maxWith := uint(0)
-	maxHeight := uint(0)
-
-	if image.Width > image.Height {
-		maxWith = uint(s.cfg.Image.Thumbnail.Width)
-	} else {
-		maxHeight = uint(s.cfg.Image.Thumbnail.Height)
-	}
-
-	thumbnailWidth, thumbnailHeight, err := utils.GenerateThumbnail(
-		tempFile.Name(),
-		thumbnailTempFile.Name(),
-		maxWith,
-		maxHeight,
-	)
-
-	if err != nil {
-		return fmt.Errorf("生成缩略图失败: %w", err)
-	}
-	// 生成缩略图存储路径
-	thumbStoragePath := strings.Join(
-		[]string{
-			"thumbnails",
-			time.Now().Format("2006_01_02"),
-			fmt.Sprintf("%s_thumb.jpg", imageHash),
-		},
-		"/",
-	)
-
-	// 缩略图始终上传到本地存储
-	localStorage := s.storage.GetLocalStorage()
-	if localStorage == nil {
-		return fmt.Errorf("本地存储未初始化")
-	}
-
-	_, _ = thumbnailTempFile.Seek(0, 0)
-	thumbnailPath, err := localStorage.Upload(ctx, thumbnailTempFile, thumbStoragePath)
-	if err != nil {
-		return fmt.Errorf("上传缩略图失败: %w", err)
-	}
-
-	logger.Info("缩略图生成成功",
-		zap.String("path", thumbnailPath),
-		zap.Int("width", thumbnailWidth),
-		zap.Int("height", thumbnailHeight))
-
-	image.ThumbnailPath = thumbnailPath
-	image.ThumbnailWidth = &thumbnailWidth
-	image.ThumbnailHeight = &thumbnailHeight
-
-	return nil
 }
 
 // GetByID 根据ID获取图片
@@ -576,6 +339,8 @@ func (s *imageService) Download(ctx context.Context, image *model.Image) (io.Rea
 
 	return reader, nil
 }
+
+// DownloadThumbnail 下载缩略图（用于非本地存储的缩略图代理）
 
 // DownloadBatch 批量下载图片（打包为 ZIP，流式写入）
 func (s *imageService) DownloadZipped(ctx context.Context, ids []int64, writer io.Writer) (string, error) {
@@ -1004,13 +769,10 @@ func (s *imageService) PermanentlyDelete(ctx context.Context, ids []int64) error
 
 	// 收集文件路径信息（事务外获取，事务内删除数据库记录）
 	pathsByType := make(map[model.StorageId][]string)
-	var thumbnailPaths []string
 
 	for _, image := range images {
 		pathsByType[image.StorageId] = append(pathsByType[image.StorageId], image.StoragePath)
-		if image.ThumbnailPath != "" {
-			thumbnailPaths = append(thumbnailPaths, image.ThumbnailPath)
-		}
+		pathsByType[image.ThumbnailStorageId] = append(pathsByType[image.ThumbnailStorageId], image.ThumbnailPath)
 	}
 
 	// 使用事务删除数据库记录
@@ -1040,10 +802,6 @@ func (s *imageService) PermanentlyDelete(ctx context.Context, ids []int64) error
 	// 事务成功后删除物理文件（文件删除失败不影响数据一致性）
 	for storageType, paths := range pathsByType {
 		s.doDeleteBatch(ctx, storageType, paths)
-	}
-
-	if len(thumbnailPaths) > 0 {
-		s.doDeleteBatch(ctx, model.StorageTypeLocal, thumbnailPaths)
 	}
 
 	logger.Info("彻底删除图片完成",
@@ -1203,7 +961,7 @@ func (s *imageService) PrepareUpload(ctx context.Context, req *PrepareUploadRequ
 	s.cacheUploadInfo(uploadID, uploadInfo)
 
 	// 6. 生成原图上传凭证
-	originalCred, err := s.storage.GetUploadCredential(ctx, storagePath, req.MimeType)
+	originalCred, err := s.storage.GetUploadCredential(ctx, s.storage.DefaultStorageType(), storagePath, req.MimeType)
 	if err != nil {
 		return nil, fmt.Errorf("获取上传凭证失败: %w", err)
 	}
@@ -1214,11 +972,14 @@ func (s *imageService) PrepareUpload(ctx context.Context, req *PrepareUploadRequ
 	}
 
 	// 7. 生成缩略图上传凭证（始终使用本地存储）
-	thumbnailCred, err := s.storage.GetThumbnailUploadCredential(ctx, thumbnailPath, "image/jpeg")
+	thumbnailCred, err := s.storage.GetUploadCredential(ctx, s.storage.ThumbnailStorageType(), thumbnailPath, "image/jpeg")
 	if err != nil {
 		return nil, fmt.Errorf("获取缩略图上传凭证失败: %w", err)
 	}
-	thumbnailCred.URL = fmt.Sprintf("/api/images/upload-thumbnail/%s", uploadID)
+
+	if thumbnailCred.Type == "backend" {
+		thumbnailCred.URL = fmt.Sprintf("/api/images/upload-thumbnail/%s", uploadID)
+	}
 
 	return &PrepareUploadResponse{
 		IsDuplicate: false,
@@ -1244,7 +1005,7 @@ func (s *imageService) ConfirmUpload(ctx context.Context, req *ConfirmUploadRequ
 	prepareReq := uploadInfo.Request
 
 	// 2. 验证文件是否已上传
-	exists, err := s.storage.Exists(ctx, s.storage.DefaultType(), req.StoragePath)
+	exists, err := s.storage.Exists(ctx, s.storage.DefaultStorageType(), req.StoragePath)
 	if err != nil {
 		return nil, fmt.Errorf("验证文件失败: %w", err)
 	}
@@ -1254,15 +1015,16 @@ func (s *imageService) ConfirmUpload(ctx context.Context, req *ConfirmUploadRequ
 
 	// 3. 创建图片记录
 	image := &model.Image{
-		OriginalName:  prepareReq.OriginalName,
-		StoragePath:   req.StoragePath,
-		StorageId:     s.storage.DefaultType(),
-		FileSize:      prepareReq.FileSize,
-		FileHash:      prepareReq.FileHash,
-		MimeType:      prepareReq.MimeType,
-		Width:         prepareReq.Width,
-		Height:        prepareReq.Height,
-		ThumbnailPath: req.ThumbnailPath,
+		OriginalName:       prepareReq.OriginalName,
+		StoragePath:        req.StoragePath,
+		StorageId:          s.storage.DefaultStorageType(),
+		FileSize:           prepareReq.FileSize,
+		FileHash:           prepareReq.FileHash,
+		MimeType:           prepareReq.MimeType,
+		Width:              prepareReq.Width,
+		Height:             prepareReq.Height,
+		ThumbnailPath:      req.ThumbnailPath,
+		ThumbnailStorageId: s.storage.ThumbnailStorageType(),
 	}
 
 	// 4. 设置 EXIF 数据
@@ -1354,14 +1116,14 @@ func (s *imageService) HandleThumbnailUpload(ctx context.Context, uploadID strin
 		uploadInfo.ThumbnailHeight = height
 	}
 
-	// 4. 上传到本地存储
-	localStorage := s.storage.GetLocalStorage()
-	if localStorage == nil {
-		return fmt.Errorf("本地存储未初始化")
+	// 4. 使用配置的缩略图存储
+	thumbnailStorage := s.storage.GetThumbnailStorage()
+	if thumbnailStorage == nil {
+		return fmt.Errorf("缩略图存储未初始化")
 	}
 
 	tempFile.Seek(0, 0)
-	_, err = localStorage.Upload(ctx, tempFile, uploadInfo.ThumbnailPath)
+	_, err = thumbnailStorage.Upload(ctx, tempFile, uploadInfo.ThumbnailPath)
 	if err != nil {
 		return fmt.Errorf("上传缩略图失败: %w", err)
 	}
@@ -1369,6 +1131,7 @@ func (s *imageService) HandleThumbnailUpload(ctx context.Context, uploadID strin
 	logger.Info("缩略图上传成功",
 		zap.String("upload_id", uploadID),
 		zap.String("path", uploadInfo.ThumbnailPath),
+		zap.String("storage_id", string(s.storage.ThumbnailStorageType())),
 		zap.Int("width", width),
 		zap.Int("height", height))
 

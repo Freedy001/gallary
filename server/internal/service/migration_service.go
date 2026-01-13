@@ -208,7 +208,7 @@ func (s *migrationService) executeMigration(taskID int64, oldBasePath, newBasePa
 	//	if err := s.storageManager.SwitchStorage(newStorageCfg); err != nil {
 	//		logger.Warn("重新初始化存储管理器失败", zap.Error(err))
 	//	} else {
-	//		logger.Info("存储管理器已更新到新路径", zap.String("path", newBasePath))
+	//		logger.DriverId("存储管理器已更新到新路径", zap.String("path", newBasePath))
 	//	}
 	//}
 
@@ -338,7 +338,7 @@ func (s *migrationService) executeMove(ctx context.Context, storageType model.St
 //		return fmt.Errorf("清除迁移状态失败: %w", err)
 //	}
 //
-//	logger.Info("阿里云盘迁移提交完成")
+//	logger.DriverId("阿里云盘迁移提交完成")
 //	return nil
 //}
 //
@@ -372,7 +372,7 @@ func (s *migrationService) executeMove(ctx context.Context, storageType model.St
 //		return fmt.Errorf("清除迁移状态失败: %w", err)
 //	}
 //
-//	logger.Info("迁移提交完成")
+//	logger.DriverId("迁移提交完成")
 //	return nil
 //}
 //

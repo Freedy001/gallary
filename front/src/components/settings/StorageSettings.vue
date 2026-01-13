@@ -27,17 +27,31 @@
 
     <div v-else class="p-6 space-y-6">
       <!-- 默认存储方式选择 -->
-      <div>
-        <label class="block text-sm font-medium text-gray-300 mb-2">默认存储方式</label>
-        <div class="w-full md:w-64">
-          <BaseSelect
-              v-model="form.storageId"
-              :options="storageOptions"
-              @update:modelValue="handleDefaultStorageChange"
-              placeholder="选择默认存储"
-          />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">原图默认存储</label>
+          <div class="w-full">
+            <BaseSelect
+                v-model="form.storageId"
+                :options="storageOptions"
+                placeholder="选择默认存储"
+                @update:modelValue="handleDefaultStorageChange"
+            />
+          </div>
+          <p class="mt-1.5 text-xs text-gray-500">新上传的原图将使用此存储方式</p>
         </div>
-        <p class="mt-1.5 text-xs text-gray-500">新上传的图片将使用此存储方式</p>
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">缩略图默认存储</label>
+          <div class="w-full">
+            <BaseSelect
+                v-model="form.thumbnailStorageId"
+                :options="storageOptions"
+                placeholder="选择缩略图存储"
+                @update:modelValue="handleThumbnailStorageChange"
+            />
+          </div>
+          <p class="mt-1.5 text-xs text-gray-500">新上传的缩略图将使用此存储方式</p>
+        </div>
       </div>
 
       <!-- 存储配置选择 -->
@@ -155,6 +169,7 @@ const editingType = ref<string>('local')
 
 const form = reactive<StorageConfigPO>({
   storageId: 'local',
+  thumbnailStorageId: 'local',
   localConfig: {
     id: 'local',
     base_path: '',
@@ -171,6 +186,7 @@ const form = reactive<StorageConfigPO>({
 // 原始配置，用于对比是否有变化
 const originalForm = reactive<StorageConfigPO>({
   storageId: 'local',
+  thumbnailStorageId: 'local',
   localConfig: {
     id: 'local',
     base_path: '',
@@ -249,6 +265,7 @@ async function loadSettings() {
 
     Object.assign(form, {
       storageId: data.storageId || 'local',
+      thumbnailStorageId: data.thumbnailStorageId || 'local',
       localConfig: data.localConfig || { id: 'local', base_path: '', url_prefix: '' },
       aliyunpanConfig: data.aliyunpanConfig || [],
       aliyunpanGlobal: data.aliyunpanGlobal || { download_chunk_size: 512, download_concurrency: 8 },
@@ -258,6 +275,8 @@ async function loadSettings() {
 
     // 保存原始数据
     Object.assign(originalForm, JSON.parse(JSON.stringify(form)))
+    // 加载完成后，数据已同步，通知父组件无未保存更改
+    emit('change', false)
 
     // 初始化时，编辑类型默认为当前默认存储类型
     const { driver } = parseStorageId(form.storageId)
@@ -276,6 +295,10 @@ function handleMigrationCompleted() {
 async function handleDefaultStorageChange() {
   try {
     await settingsApi.setDefaultStorage(form.storageId)
+    // 同步 originalForm，因为后端已经保存
+    originalForm.storageId = form.storageId
+    // 重新计算是否有未保存的更改
+    emit('change', JSON.stringify(form) !== JSON.stringify(originalForm))
     dialogStore.alert({
       title: '成功',
       message: '默认存储已更新',
@@ -285,6 +308,29 @@ async function handleDefaultStorageChange() {
     dialogStore.alert({
       title: '错误',
       message: error.message || '设置默认存储失败',
+      type: 'error'
+    })
+    // 重新加载以恢复正确状态
+    await loadSettings()
+  }
+}
+
+async function handleThumbnailStorageChange() {
+  try {
+    await settingsApi.setThumbnailDefaultStorage(form.thumbnailStorageId!)
+    // 同步 originalForm，因为后端已经保存
+    originalForm.thumbnailStorageId = form.thumbnailStorageId
+    // 重新计算是否有未保存的更改
+    emit('change', JSON.stringify(form) !== JSON.stringify(originalForm))
+    dialogStore.alert({
+      title: '成功',
+      message: '缩略图默认存储已更新',
+      type: 'success'
+    })
+  } catch (error: any) {
+    dialogStore.alert({
+      title: '错误',
+      message: error.message || '设置缩略图默认存储失败',
       type: 'error'
     })
     // 重新加载以恢复正确状态

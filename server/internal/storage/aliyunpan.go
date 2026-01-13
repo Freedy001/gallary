@@ -771,7 +771,7 @@ func (s *AliyunPanStorage) DeleteBatch(ctx context.Context, paths []string) []De
 
 // GetURL 获取文件访问 URL
 func (s *AliyunPanStorage) GetURL(ctx context.Context, filePath string) (string, error) {
-	return "aliyunpan/" + filePath, nil
+	return "", fmt.Errorf("not supported")
 	//if err := s.ensureValidToken(); err != nil {
 	//	return "", err
 	//}

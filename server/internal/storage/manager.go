@@ -20,9 +20,10 @@ var OverrideStorageType storageTypeCtx = "override_storage_type"
 
 // StorageManager 存储管理器，支持动态切换存储实现
 type StorageManager struct {
-	mu        sync.RWMutex
-	defaultId model.StorageId             // 当前存储类型名称
-	storages  map[model.StorageId]Storage // 所有已初始化的存储实例
+	mu                 sync.RWMutex
+	defaultId          model.StorageId             // 原图默认存储类型
+	thumbnailStorageId model.StorageId             // 缩略图默认存储类型
+	storages           map[model.StorageId]Storage // 所有已初始化的存储实例
 }
 
 // NewStorageManager 创建存储管理器
@@ -71,6 +72,16 @@ func (m *StorageManager) InitStorage(cfg *model.StorageConfigPO) error {
 
 	logger.Info(string("使用" + *cfg.DefaultId + "存储"))
 	m.defaultId = *cfg.DefaultId
+
+	// 设置缩略图存储，默认使用本地存储
+	if cfg.ThumbnailStorageId != nil && *cfg.ThumbnailStorageId != "" {
+		m.thumbnailStorageId = *cfg.ThumbnailStorageId
+		logger.Info(string("缩略图使用" + *cfg.ThumbnailStorageId + "存储"))
+	} else {
+		m.thumbnailStorageId = model.StorageTypeLocal
+		logger.Info("缩略图使用本地存储")
+	}
+
 	return err
 }
 
@@ -87,12 +98,19 @@ func (m *StorageManager) getStorage(ctx context.Context) Storage {
 
 // 以下是 Storage 接口的代理实现
 
-// DefaultType 获取当前存储类型
-func (m *StorageManager) DefaultType() model.StorageId {
+// DefaultStorageType 获取当前存储类型
+func (m *StorageManager) DefaultStorageType() model.StorageId {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	return m.defaultId
+}
+
+// ThumbnailStorageType 获取当前缩略图存储类型
+func (m *StorageManager) ThumbnailStorageType() model.StorageId {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.thumbnailStorageId
 }
 
 // UploadToDefaultStorage 上传文件
@@ -147,6 +165,13 @@ func (m *StorageManager) GetLocalStorage() Storage {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.storages[model.StorageTypeLocal]
+}
+
+// GetThumbnailStorage 获取缩略图存储实例
+func (m *StorageManager) GetThumbnailStorage() Storage {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.storages[m.thumbnailStorageId]
 }
 
 // GetAliyunPanStorage 获取阿里云盘存储实例
@@ -217,13 +242,21 @@ func (m *StorageManager) GetMultiStorageStats(ctx context.Context) *MultiStorage
 
 // ImageUrl 获取文件访问URL
 func (m *StorageManager) ImageUrl(image *model.Image) (string, string) {
-	thumbnail := "/static/" + image.ThumbnailPath
-	if image.StorageId == model.StorageTypeLocal {
-		return "/static/" + image.StoragePath, thumbnail
+	return m.Url(image.StorageId, image.StoragePath), m.Url(image.ThumbnailStorageId, image.ThumbnailPath)
+}
+
+func (m *StorageManager) Url(id model.StorageId, path string) string {
+	storage := m.storages[id]
+	if storage == nil {
+		return "" ///没有存储信息
 	}
 
-	//fallback use hash to download
-	return fmt.Sprintf("/resouse/%s/file", image.FileHash), thumbnail
+	url, err := storage.GetURL(context.Background(), path)
+	if err != nil {
+		return fmt.Sprintf("/resouse/%s/%s", id, path)
+	}
+
+	return url
 }
 
 // ToVO 将 Image 转换为 ImageVO（包含URL）
@@ -264,8 +297,8 @@ type UploadCredential struct {
 }
 
 // GetUploadCredential 获取上传凭证
-func (m *StorageManager) GetUploadCredential(ctx context.Context, path string, contentType string) (*UploadCredential, error) {
-	storage := m.getStorage(ctx)
+func (m *StorageManager) GetUploadCredential(ctx context.Context, storageId model.StorageId, path string, contentType string) (*UploadCredential, error) {
+	storage := m.storages[storageId]
 	if storage == nil {
 		return nil, fmt.Errorf("存储未初始化")
 	}
@@ -286,15 +319,6 @@ func (m *StorageManager) GetUploadCredential(ctx context.Context, path string, c
 	}
 
 	// 不支持预签名，返回后端代理 URL
-	return &UploadCredential{
-		Type:   "backend",
-		Method: "PUT",
-	}, nil
-}
-
-// GetThumbnailUploadCredential 获取缩略图上传凭证（始终使用本地存储）
-func (m *StorageManager) GetThumbnailUploadCredential(ctx context.Context, path string, contentType string) (*UploadCredential, error) {
-	// 缩略图始终存储在本地，所以总是返回后端代理方式
 	return &UploadCredential{
 		Type:   "backend",
 		Method: "PUT",

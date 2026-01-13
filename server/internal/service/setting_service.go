@@ -49,6 +49,7 @@ type SettingService interface {
 	AddStorageConfig(ctx context.Context, storageItem model.StorageItem) (*StorageUpdateResult, error)
 	DeleteStorageConfig(ctx context.Context, storageId model.StorageId) error
 	SetDefaultStorage(ctx context.Context, storageId model.StorageId) error
+	SetThumbnailDefaultStorage(ctx context.Context, storageId model.StorageId) error
 	UpdateGlobalConfig(ctx context.Context, globalConfig *model.AliyunPanGlobalConfig) error
 
 	// 应用设置到运行时
@@ -539,6 +540,37 @@ func (s *settingService) SetDefaultStorage(ctx context.Context, storageId model.
 	}
 
 	logger.Info("默认存储已设置", zap.String("storageId", string(storageId)))
+	return nil
+}
+
+// SetThumbnailDefaultStorage 设置缩略图默认存储
+func (s *settingService) SetThumbnailDefaultStorage(ctx context.Context, storageId model.StorageId) error {
+	// 1. 获取当前配置
+	storageConfig, err := s.getCurrentStorageConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("获取当前配置失败: %w", err)
+	}
+
+	// 2. 验证存储配置存在
+	existing := storageConfig.GetStorageConfigById(storageId)
+	if existing == nil {
+		return fmt.Errorf("存储配置不存在: %s", storageId)
+	}
+
+	// 3. 更新缩略图默认存储
+	storageConfig.ThumbnailStorageId = &storageId
+
+	// 4. 保存配置
+	if err := s.repo.BatchUpsert(ctx, storageConfig.ToSettings()); err != nil {
+		return fmt.Errorf("保存存储配置失败: %w", err)
+	}
+
+	// 5. 重新加载存储
+	if _, err := s.ResetStorage(ctx); err != nil {
+		logger.Warn("重新加载存储失败", zap.Error(err))
+	}
+
+	logger.Info("缩略图默认存储已设置", zap.String("storageId", string(storageId)))
 	return nil
 }
 

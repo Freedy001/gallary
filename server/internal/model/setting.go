@@ -80,17 +80,24 @@ type StorageId string
 
 const StorageTypeLocal StorageId = "local"
 
-func (t StorageId) Info() (string, string) {
+func (t StorageId) DriverId() string {
 	split := strings.Split(string(t), ",")
-	if len(split) > 1 {
-		return split[0], split[1]
+	if len(split) == 2 {
+		return split[0]
 	}
-	return split[0], ""
+	return ""
+}
+
+func (t StorageId) Drivername() string {
+	split := strings.Split(string(t), ",")
+	if len(split) == 2 {
+		return split[1]
+	}
+	return ""
 }
 
 func (t StorageId) DriverName() string {
-	e, _ := t.Info()
-	switch e {
+	switch t.DriverId() {
 	case "local":
 		return "本地存储"
 	case "aliyunpan":
@@ -118,7 +125,8 @@ type StorageItem interface {
 
 // StorageConfigPO 存储配置 DTO
 type StorageConfigPO struct {
-	DefaultId *StorageId `json:"storageId"`
+	DefaultId          *StorageId `json:"storageId"`
+	ThumbnailStorageId *StorageId `json:"thumbnailStorageId"` // 缩略图默认存储
 
 	LocalConfig     *LocalStorageConfig       `json:"localConfig,omitempty"`
 	AliyunpanConfig []*AliyunPanStorageConfig `json:"aliyunpanConfig,omitempty"`

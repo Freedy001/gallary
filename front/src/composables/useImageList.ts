@@ -138,19 +138,57 @@ export class ImageListManager implements UseImageListReturn {
   insertImages = (newImages: Image[]) => {
     if (newImages.length === 0) return
 
+    // 1. 过滤重复 (保持原有逻辑)
     const existingIds = new Set(this.images.value.filter((img): img is Image => img !== null).map(img => img.id))
     const imagesToInsert = newImages.filter(img => !existingIds.has(img.id))
     if (imagesToInsert.length === 0) return
 
-    const allImages = [...this.images.value, ...imagesToInsert]
-    // 使用 taken_at 排序，如果没有 taken_at 则使用 created_at
-    allImages.sort((a, b) => {
-      const timeA = a?.taken_at ? new Date(a.taken_at).getTime() : (a?.created_at ? new Date(a.created_at).getTime() : 0)
-      const timeB = b?.taken_at ? new Date(b.taken_at).getTime() : (b?.created_at ? new Date(b.created_at).getTime() : 0)
-      return timeB - timeA
-    })
+    // 2. 辅助函数
+    const getSortKey = (img: Image | null | undefined): number => {
+      if (!img) return 0
+      return img.taken_at ? new Date(img.taken_at).getTime() : (img.created_at ? new Date(img.created_at).getTime() : 0)
+    }
 
-    this.images.value = allImages
+    // 3. 对新图片排序 (降序)
+    imagesToInsert.sort((a, b) => getSortKey(b) - getSortKey(a))
+
+    // 4. 双指针合并算法 (O(M+N) 高性能)
+    const oldImages = this.images.value
+    const mergedImages: (Image | null)[] = []
+
+    let i = 0 // 指向 oldImages
+    let j = 0 // 指向 imagesToInsert
+
+    while (i < oldImages.length && j < imagesToInsert.length) {
+      const oldKey = getSortKey(oldImages[i])
+      const newKey = getSortKey(imagesToInsert[j])
+
+      // 降序：谁大谁先进入数组
+      // 如果 key 相等，通常让新图片在前(或者在后，取决于你的需求)，这里假设新图片排在旧图片前
+      if (newKey >= oldKey) {
+        mergedImages.push(imagesToInsert[j] || null)
+        j++
+      } else {
+        mergedImages.push(oldImages[i] || null)
+        i++
+      }
+    }
+
+    // 5. 处理剩余的元素
+    if (i < oldImages.length) {
+      // 剩下的旧图片追加进去
+      // 性能提示：如果是 Vue 的 Ref 数组，使用 push (...items) 可能比 concat 快，视具体环境而定
+      // 但最简单的写法是 concat
+      mergedImages.push(...oldImages.slice(i))
+    }
+
+    if (j < imagesToInsert.length) {
+      // 剩下的新图片追加进去
+      mergedImages.push(...imagesToInsert.slice(j))
+    }
+
+    // 6. 一次性赋值，触发一次响应式更新
+    this.images.value = mergedImages
     this.total.value += imagesToInsert.length
   }
 }

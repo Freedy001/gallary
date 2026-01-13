@@ -61,7 +61,6 @@ func SetupRouter(
 		images := api.Group("/images")
 		images.Use(middleware.AuthMiddleware(configCompose.AdminConfig))
 		{
-			images.POST("/upload", imageHandler.Upload)
 			// 新上传流程
 			images.POST("/prepare-upload", imageHandler.PrepareUpload)
 			images.POST("/confirm-upload", imageHandler.ConfirmUpload)
@@ -132,12 +131,13 @@ func SetupRouter(
 			settings.GET("/configed-default-model/:type", settingHandler.HasConfigDefaultModel)
 
 			// 存储配置 CRUD
-			settings.POST("/storage", settingHandler.AddStorage)                                 // 添加存储配置
-			settings.POST("/storage/s3/test", settingHandler.TestS3Connection)                   // 测试 S3 连接
-			settings.PUT("/storage/default", settingHandler.SetDefaultStorage)                   // 设置默认存储（必须在 :storageId 之前）
-			settings.PUT("/storage/alyunpan/global", settingHandler.UpdateAliyunpanGlobalConfig) // 更新全局配置（必须在 :storageId 之前）
-			settings.PUT("/storage/:storageId", settingHandler.UpdateStorage)                    // 修改存储配置
-			settings.DELETE("/storage/:storageId", settingHandler.DeleteStorage)                 // 删除存储配置
+			settings.POST("/storage", settingHandler.AddStorage)                                  // 添加存储配置
+			settings.POST("/storage/s3/test", settingHandler.TestS3Connection)                    // 测试 S3 连接
+			settings.PUT("/storage/default", settingHandler.SetDefaultStorage)                    // 设置默认存储（必须在 :storageId 之前）
+			settings.PUT("/storage/thumbnail/default", settingHandler.SetThumbnailDefaultStorage) // 设置缩略图默认存储
+			settings.PUT("/storage/alyunpan/global", settingHandler.UpdateAliyunpanGlobalConfig)  // 更新全局配置（必须在 :storageId 之前）
+			settings.PUT("/storage/:storageId", settingHandler.UpdateStorage)                     // 修改存储配置
+			settings.DELETE("/storage/:storageId", settingHandler.DeleteStorage)                  // 删除存储配置
 		}
 
 		// 存储统计路由（需要认证）

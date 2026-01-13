@@ -115,11 +115,15 @@
         </div>
 
         <!-- 任务列表 -->
-        <div class="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
+        <RecycleScroller
+            v-slot="{ item: task }"
+            :item-size="56"
+            :items="uiStore.uploadTasks"
+            class="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20"
+            key-field="id"
+        >
           <div class="space-y-1">
             <div
-                v-for="task in uiStore.uploadTasks"
-                :key="task.id"
                 class="group flex items-center gap-3 rounded-xl p-2 transition-all hover:bg-white/5 border border-transparent hover:border-white/5"
             >
               <!-- 缩略图 -->
@@ -190,22 +194,24 @@
               </div>
             </div>
           </div>
-        </div>
+        </RecycleScroller>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import {useUIStore} from '@/stores/ui'
 import type {UploadTask} from '@/stores/ui'
+import {useUIStore} from '@/stores/ui'
+import {RecycleScroller} from 'vue-virtual-scroller'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 
 import {
+  ArrowPathIcon,
   ArrowUpTrayIcon,
-  PhotoIcon,
   CheckCircleIcon,
   ExclamationCircleIcon,
-  ArrowPathIcon,
+  PhotoIcon,
   XMarkIcon,
 } from '@heroicons/vue/24/outline'
 

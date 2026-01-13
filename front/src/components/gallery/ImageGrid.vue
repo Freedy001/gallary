@@ -51,20 +51,40 @@
         </div>
       </div>
 
-      <!-- 网格布局 -->
-      <div v-show="!layout.isWaterfall.value" :class="['grid gap-2', layout.gridClass.value]">
-        <ImageGridItem
-            v-for="(image, index) in imageList.images.value"
-            :key="image?.id ?? `placeholder-${index}`"
-            :ref="(el: any) => !layout.isWaterfall.value && setItemRef(el, index)"
-            :data-index="index"
-            :image="image"
-            :is-selected="image ? imageList.selectedImages.value.has(image.id) : false"
-            :is-selection-mode="uiStore.isSelectionMode"
-            :square="true"
-            @click="handleImageClick(image,index)"
-            @contextmenu.prevent="handleContextMenu($event,image,index)"
-        />
+      <!-- 网格布局 (虚拟滚动) -->
+      <div v-if="!layout.isWaterfall.value" class="h-full">
+        <DynamicScroller
+            :emitUpdate="true"
+            :items="virtualRows"
+            :min-item-size="200"
+            class="h-full"
+            key-field="id"
+            @update="onScrollerUpdate"
+        >
+          <template v-slot="{ item: row, index: rowIndex, active }">
+            <DynamicScrollerItem
+                :active="active"
+                :data-index="rowIndex"
+                :item="row"
+                class="pb-2"
+            >
+              <div :class="['grid gap-2', layout.gridClass.value]">
+                <ImageGridItem
+                    v-for="(image, colIndex) in row.items"
+                    :key="image?.id ?? `placeholder-${row.startIndex + colIndex}`"
+                    :ref="(el: any) => !layout.isWaterfall.value && setItemRef(el, row.startIndex + colIndex)"
+                    :data-index="row.startIndex + colIndex"
+                    :image="image"
+                    :is-selected="image ? imageList.selectedImages.value.has(image.id) : false"
+                    :is-selection-mode="uiStore.isSelectionMode"
+                    :square="true"
+                    @click="handleImageClick(image, row.startIndex + colIndex)"
+                    @contextmenu.prevent="handleContextMenu($event, image, row.startIndex + colIndex)"
+                />
+              </div>
+            </DynamicScrollerItem>
+          </template>
+        </DynamicScroller>
       </div>
     </div>
   </div>
@@ -79,7 +99,7 @@
 
 <script setup lang="ts">
 import type {ComponentPublicInstance} from 'vue'
-import {onMounted, onUnmounted, ref, watch} from 'vue'
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
 import {useUIStore} from '@/stores/ui'
 import type {Image} from '@/types'
 import SelectionBox from '@/components/common/SelectionBox.vue'
@@ -91,6 +111,8 @@ import {type Fether, useImageList} from '@/composables/useImageList'
 import {useImageGridLayout} from '@/composables/useImageGridLayout'
 import {useTimelineScroll} from '@/composables/useTimelineScroll'
 import {useGenericBoxSelection} from '@/composables/useGenericBoxSelection'
+import {DynamicScroller, DynamicScrollerItem} from 'vue-virtual-scroller'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 
 // Props
 const props = withDefaults(defineProps<{
@@ -120,6 +142,27 @@ const layout = useImageGridLayout(imageList.images)
 
 useTimelineScroll({
   images: imageList.images
+})
+
+// ==================== 虚拟滚动 ====================
+// 将一维图片数组转换为二维行数组
+const virtualRows = computed(() => {
+  if (layout.isWaterfall.value) return []
+
+  const cols = layout.currentColumnCount.value
+  const rows = []
+  const images = imageList.images.value
+
+  for (let i = 0; i < images.length; i += cols) {
+    const rowItems = images.slice(i, i + cols)
+    const firstValid = rowItems.find(img => img !== null)
+    rows.push({
+      id: firstValid ? `row-img-${firstValid.id}` : `row-idx-${Math.floor(i / cols)}`,
+      items: rowItems,
+      startIndex: i
+    })
+  }
+  return rows
 })
 
 // 右键菜单组件引用
@@ -193,6 +236,29 @@ function handleViewerDelete(id: number) {
   }
 }
 
+function onScrollerUpdate(startIndex: number, endIndex: number) {
+  // 根据可视范围加载数据
+  const pageSize = uiStore.imagePageSize
+  const cols = layout.currentColumnCount.value
+
+  // 将行索引转换为图片索引
+  const startImgIndex = startIndex * cols
+  const endImgIndex = endIndex * cols
+
+  // 计算涉及的页码
+  const startPage = Math.floor(startImgIndex / pageSize) + 1
+  const endPage = Math.floor(endImgIndex / pageSize) + 1
+
+  // 检查每页是否需要加载
+  for (let page = startPage; page <= endPage; page++) {
+    const pageStartIndex = (page - 1) * pageSize
+    // 检查该页的第一个元素是否存在，如果不存在（是 null），则需要加载
+    if (pageStartIndex < imageList.images.value.length && !imageList.images.value[pageStartIndex]) {
+      imageList.fetchImages(page, pageSize)
+    }
+  }
+}
+
 // 暴露方法给父组件
 defineExpose({
   refresh: imageList.refresh,
@@ -214,27 +280,63 @@ defineExpose({
 
 // ==================== 生命周期 ====================
 onMounted(async () => {
-  observer.value = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const index = Number((entry.target as HTMLElement).dataset.index)
-        if (!isNaN(index) && !imageList.images.value[index]) {
-          const pageSize = uiStore.imagePageSize
-          const page = Math.floor(index / pageSize) + 1
-          imageList.fetchImages(page, pageSize)
+  // 网格模式下不再使用 IntersectionObserver，依赖 DynamicScroller 的 update 事件
+  if (layout.isWaterfall.value) {
+    observer.value = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const index = Number((entry.target as HTMLElement).dataset.index)
+          if (!isNaN(index) && !imageList.images.value[index]) {
+            const pageSize = uiStore.imagePageSize
+            const page = Math.floor(index / pageSize) + 1
+            imageList.fetchImages(page, pageSize)
+          }
         }
-      }
+      })
+    }, {
+      rootMargin: '200px 0px',
+      threshold: 0
     })
-  }, {
-    rootMargin: '200px 0px',
-    threshold: 0
-  })
 
-  itemRefs.forEach((el) => {
-    observer.value?.observe(el)
-  })
+    itemRefs.forEach((el) => {
+      observer.value?.observe(el)
+    })
+  }
 
   await imageList.fetchImages(1, uiStore.imagePageSize)
+})
+
+watch(() => layout.isWaterfall.value, (isWaterfall) => {
+  if (isWaterfall) {
+    // 切换到瀑布流时初始化观察器
+    if (!observer.value) {
+      observer.value = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const index = Number((entry.target as HTMLElement).dataset.index)
+            if (!isNaN(index) && !imageList.images.value[index]) {
+              const pageSize = uiStore.imagePageSize
+              const page = Math.floor(index / pageSize) + 1
+              imageList.fetchImages(page, pageSize)
+            }
+          }
+        })
+      }, {
+        rootMargin: '200px 0px',
+        threshold: 0
+      })
+    }
+    // 需要重新观察所有元素 (等待 DOM 更新)
+    setTimeout(() => {
+      itemRefs.forEach((el) => {
+        observer.value?.observe(el)
+      })
+    }, 100)
+  } else {
+    // 切换回网格时销毁观察器
+    observer.value?.disconnect()
+    observer.value = null
+  }
 })
 
 onUnmounted(() => {
