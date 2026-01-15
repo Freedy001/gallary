@@ -61,6 +61,10 @@ type ImageRepository interface {
 
 	// AI 评分相关方法
 	FindImagesWithoutAIScore(ctx context.Context, limit int) ([]int64, error)
+
+	// 存储迁移相关方法
+	CountByMigrationFilter(ctx context.Context, migrationType model.MigrationType, sourceStorageId model.StorageId, filter *model.MigrationFilterConditions) (count int, totalSize int64, err error)
+	FindIDsByMigrationFilter(ctx context.Context, migrationType model.MigrationType, sourceStorageId model.StorageId, filter *model.MigrationFilterConditions) ([]int64, error)
 }
 
 type imageRepository struct {
@@ -757,4 +761,84 @@ func (r *imageRepository) FindImagesWithoutAIScore(ctx context.Context, limit in
 	}
 
 	return ids, nil
+}
+
+// CountByMigrationFilter 按迁移筛选条件统计图片数量和总大小
+func (r *imageRepository) CountByMigrationFilter(ctx context.Context, migrationType model.MigrationType, sourceStorageId model.StorageId, filter *model.MigrationFilterConditions) (count int, totalSize int64, err error) {
+	query := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{})
+
+	// 根据迁移类型筛选存储
+	if migrationType == model.MigrationTypeOriginal {
+		query = query.Where("storage_id = ?", sourceStorageId)
+	} else {
+		query = query.Where("thumbnail_storage_id = ?", sourceStorageId)
+	}
+
+	// 应用筛选条件
+	query = r.applyMigrationFilter(query, filter)
+
+	// 同时查询数量和总大小
+	var result struct {
+		Count     int64
+		TotalSize int64
+	}
+	if err := query.Select("COUNT(*) as count, COALESCE(SUM(file_size), 0) as total_size").Scan(&result).Error; err != nil {
+		return 0, 0, err
+	}
+
+	return int(result.Count), result.TotalSize, nil
+}
+
+// FindIDsByMigrationFilter 按迁移筛选条件获取图片ID列表
+func (r *imageRepository) FindIDsByMigrationFilter(ctx context.Context, migrationType model.MigrationType, sourceStorageId model.StorageId, filter *model.MigrationFilterConditions) ([]int64, error) {
+	var ids []int64
+	query := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).Select("id")
+
+	// 根据迁移类型筛选存储
+	if migrationType == model.MigrationTypeOriginal {
+		query = query.Where("storage_id = ?", sourceStorageId)
+	} else {
+		query = query.Where("thumbnail_storage_id = ?", sourceStorageId)
+	}
+
+	// 应用筛选条件
+	query = r.applyMigrationFilter(query, filter)
+
+	if err := query.Pluck("id", &ids).Error; err != nil {
+		return nil, err
+	}
+
+	return ids, nil
+}
+
+// applyMigrationFilter 应用迁移筛选条件
+func (r *imageRepository) applyMigrationFilter(query *gorm.DB, filter *model.MigrationFilterConditions) *gorm.DB {
+	if filter == nil {
+		return query
+	}
+
+	// 相册筛选
+	if len(filter.AlbumIDs) > 0 {
+		query = query.Where("id IN (SELECT image_id FROM image_tags WHERE tag_id IN ?)", filter.AlbumIDs)
+	}
+
+	// 时间范围筛选
+	if filter.StartDate != nil && !filter.StartDate.IsZero() {
+		query = query.Where("COALESCE(taken_at, created_at) >= ?", filter.StartDate.Time)
+	}
+	if filter.EndDate != nil && !filter.EndDate.IsZero() {
+		// 将结束日期设置为当天的 23:59:59
+		endOfDay := filter.EndDate.Time.Add(24*time.Hour - time.Second)
+		query = query.Where("COALESCE(taken_at, created_at) <= ?", endOfDay)
+	}
+
+	// 文件大小筛选
+	if filter.MinFileSize != nil {
+		query = query.Where("file_size >= ?", *filter.MinFileSize)
+	}
+	if filter.MaxFileSize != nil {
+		query = query.Where("file_size <= ?", *filter.MaxFileSize)
+	}
+
+	return query
 }

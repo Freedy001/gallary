@@ -134,6 +134,7 @@ type ImageService interface {
 	PermanentlyDelete(ctx context.Context, ids []int64) error
 	CleanupExpiredTrash(ctx context.Context) (int, error)
 	Repo() repository.ImageRepository
+	StorageManager() *storage.StorageManager
 
 	// 标签相关方法
 	SearchTags(ctx context.Context, keyword string, limit int) ([]*model.Tag, error)
@@ -866,6 +867,10 @@ func (s *imageService) CleanupExpiredTrash(ctx context.Context) (int, error) {
 
 func (s *imageService) Repo() repository.ImageRepository {
 	return s.repo
+}
+
+func (s *imageService) StorageManager() *storage.StorageManager {
+	return s.storage
 }
 
 // GetAllNormalTags 获取所有普通标签

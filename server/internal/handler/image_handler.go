@@ -8,6 +8,7 @@ import (
 	"gallary/server/internal/websocket"
 	"gallary/server/pkg/database"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -197,37 +198,8 @@ func (h *ImageHandler) Download(c *gin.Context) {
 		utils.BadRequest(c, "无效的图片ID")
 		return
 	}
-	h.doDownload(c, id, true)
-}
 
-// ProxyFile 代理获取图片文件（用于阿里云盘等需要后端代理的存储）
-//
-//	@Summary		代理获取图片
-//	@Description	通过后端代理获取图片文件内容，用于无法直接访问的存储类型
-//	@Tags			图片管理
-//	@Produce		image/*
-//	@Param			id	path		int				true	"图片ID"
-//	@Success		200	{file}		binary			"图片文件"
-//	@Failure		400	{object}	utils.Response	"无效的图片ID"
-//	@Failure		404	{object}	utils.Response	"图片不存在"
-//	@Router			/resouse/:hash/file
-func (h *ImageHandler) ProxyFile(c *gin.Context) {
-	hash := c.Param("hash")
-	if hash == "" {
-		utils.BadRequest(c, "未提供文件信息")
-		return
-	}
-	h.doDownload(c, hash, true)
-}
-
-func (h *ImageHandler) doDownload(c *gin.Context, idOrHash any, downloadHeader bool) {
-	var image *model.Image
-	var err error
-	if hash, ok := idOrHash.(string); ok {
-		image, err = h.service.Repo().FindByHash(c, hash)
-	} else if id, ok := idOrHash.(int64); ok {
-		image, err = h.service.Repo().FindByID(c, id)
-	}
+	image, err := h.service.Repo().FindByID(c, id)
 
 	if image == nil {
 		if err != nil {
@@ -259,13 +231,8 @@ func (h *ImageHandler) doDownload(c *gin.Context, idOrHash any, downloadHeader b
 	c.Header("Cache-Control", "public, max-age=31536000, immutable")
 	c.Header("ETag", etag)
 	c.Header("Content-Length", fmt.Sprintf("%d", image.FileSize))
-
-	if downloadHeader {
-		c.Header("Content-Disposition", "attachment; filename="+image.OriginalName)
-		c.Header("Content-Type", "application/octet-stream")
-	} else {
-		c.Header("Content-Type", image.MimeType)
-	}
+	c.Header("Content-Disposition", "attachment; filename="+image.OriginalName)
+	c.Header("Content-Type", "application/octet-stream")
 
 	// 手动写入响应，确保流式传输正常工作
 	c.Status(200)
@@ -277,6 +244,71 @@ func (h *ImageHandler) doDownload(c *gin.Context, idOrHash any, downloadHeader b
 			zap.Error(err),
 			zap.Int64("written", written),
 			zap.Int64("expected", image.FileSize))
+	}
+}
+
+// ProxyFile 代理获取文件（用于阿里云盘等需要后端代理的存储）
+//
+//	@Summary		代理获取文件
+//	@Description	通过后端代理获取文件内容，用于无法直接访问的存储类型
+//	@Tags			图片管理
+//	@Produce		image/*
+//	@Param			storageId	path		string			true	"存储ID"
+//	@Param			path		path		string			true	"存储路径"
+//	@Success		200	{file}		binary			"文件内容"
+//	@Failure		400	{object}	utils.Response	"无效的参数"
+//	@Failure		404	{object}	utils.Response	"文件不存在"
+//	@Router			/resouse/:storageId/:path
+func (h *ImageHandler) ProxyFile(c *gin.Context) {
+	storageId := model.StorageId(c.Param("storageId"))
+	path := c.Param("path")
+	if storageId == "" || path == "" {
+		utils.BadRequest(c, "未提供文件信息")
+		return
+	}
+
+	// 直接通过存储管理器下载文件
+	reader, err := h.service.StorageManager().Download(c.Request.Context(), storageId, path)
+	if err != nil {
+		logger.Error("代理下载文件失败",
+			zap.Error(err),
+			zap.String("storage_id", string(storageId)),
+			zap.String("path", path))
+		utils.NotFound(c, "文件不存在")
+		return
+	}
+	defer reader.Close()
+
+	// 设置缓存头
+	c.Header("Cache-Control", "public, max-age=31536000, immutable")
+
+	// 根据文件扩展名设置 Content-Type
+	contentType := "application/octet-stream"
+	if ext := filepath.Ext(path); ext != "" {
+		switch ext {
+		case ".jpg", ".jpeg":
+			contentType = "image/jpeg"
+		case ".png":
+			contentType = "image/png"
+		case ".gif":
+			contentType = "image/gif"
+		case ".webp":
+			contentType = "image/webp"
+		case ".mp4":
+			contentType = "video/mp4"
+		case ".mov":
+			contentType = "video/quicktime"
+		}
+	}
+	c.Header("Content-Type", contentType)
+
+	// 流式写入响应
+	c.Status(200)
+	written, err := io.Copy(c.Writer, reader)
+	if err != nil {
+		logger.Error("流式写入响应失败",
+			zap.Error(err),
+			zap.Int64("written", written))
 	}
 }
 

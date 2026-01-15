@@ -4,6 +4,7 @@ import {wsService} from '@/services/websocket'
 import {dataSyncService} from '@/services/dataSync'
 import type {AIQueueStatus} from '@/types/ai'
 import type {StorageStats} from '@/api/storage'
+import type {MigrationStatusVO} from '@/types/migration'
 
 // WebSocket 数据同步事件载荷类型
 interface AlbumsSyncPayload {
@@ -25,6 +26,9 @@ export const useNotificationStore = defineStore('notification', () => {
 
   // 图片总数
   const imageCount = ref<number>(0)
+
+  // 存储迁移状态
+  const migrationStatus = ref<MigrationStatusVO | null>(null)
 
   wsService.connect({
     onConnected: () => {
@@ -59,6 +63,11 @@ export const useNotificationStore = defineStore('notification', () => {
     imageCount.value = count
   })
 
+  // 订阅存储迁移进度更新
+  wsService.subscribe<MigrationStatusVO>('migration_progress', (data) => {
+    migrationStatus.value = data
+  })
+
   wsService.subscribe<AlbumsSyncPayload>('albums_updated', (data) => {
     dataSyncService.emit('albums:updated', { albumIds: data.albumIds, source: 'websocket' })
   })
@@ -81,6 +90,7 @@ export const useNotificationStore = defineStore('notification', () => {
     aiQueueStatus,
     storageStats,
     imageCount,
+    migrationStatus,
 
     // Actions
     disconnect,

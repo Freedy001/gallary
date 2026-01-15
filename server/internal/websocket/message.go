@@ -11,6 +11,7 @@ const (
 	MsgTypeStorageStats       MessageType = "storage_stats"        // 存储统计更新
 	MsgTypeImageCount         MessageType = "image_count"          // 图片总数更新
 	MsgTypeSmartAlbumProgress MessageType = "smart_album_progress" // 智能相册任务进度
+	MsgTypeMigrationProgress  MessageType = "migration_progress"   // 存储迁移进度
 
 	// 数据同步事件
 	MsgTypeAlbumsUpdated  MessageType = "albums_updated"  // 相册更新（AI命名完成等）

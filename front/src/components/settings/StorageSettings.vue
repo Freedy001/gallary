@@ -1,28 +1,23 @@
 <template>
   <div class="rounded-2xl bg-white/5 ring-1 ring-white/10 overflow-hidden">
-    <!-- 迁移进度（在卡片内顶部） -->
-    <MigrationProgress
-        ref="migrationProgressRef"
-        @migration-completed="handleMigrationCompleted"
-    />
 
-    <div class="border-b border-white/5 p-5 bg-white/2">
-      <h2 class="text-lg font-medium text-white">存储配置</h2>
-      <p class="mt-1 text-sm text-gray-500">选择并配置图片存储方式</p>
+    <div class="border-b border-white/5 p-5 bg-white/2 flex items-center justify-between">
+      <div>
+        <h2 class="text-lg font-medium text-white">存储配置</h2>
+        <p class="mt-1 text-sm text-gray-500">选择并配置图片存储方式</p>
+      </div>
+      <button
+          class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors"
+          @click="showMigrationDialog = true"
+      >
+        <ArrowsRightLeftIcon class="h-4 w-4" />
+        存储迁移
+      </button>
     </div>
 
     <!-- 加载状态 -->
     <div v-if="loading" class="p-6 flex justify-center">
       <div class="h-6 w-6 animate-spin rounded-full border-2 border-primary-500 border-t-transparent"></div>
-    </div>
-
-    <!-- 迁移中时显示锁定提示 -->
-    <div v-else-if="isMigrating" class="p-6 text-center space-y-4">
-      <div class="text-gray-400">
-        <div class="h-12 w-12 mx-auto mb-4 animate-spin rounded-full border-2 border-primary-500 border-t-transparent"></div>
-        <p class="text-lg font-medium text-white">迁移进行中</p>
-        <p class="text-sm mt-2">迁移期间配置无法修改，请等待迁移完成...</p>
-      </div>
     </div>
 
     <div v-else class="p-6 space-y-6">
@@ -124,6 +119,13 @@
         MinIO 配置暂未实现
       </div>
     </div>
+
+    <!-- 存储迁移对话框 -->
+    <StorageMigrationDialog
+        :storage-options="storageOptions"
+        :visible="showMigrationDialog"
+        @close="showMigrationDialog = false"
+    />
   </div>
 </template>
 
@@ -133,11 +135,12 @@ import {type AliyunPanStorageConfig, type S3StorageConfig, settingsApi, type Sto
 import type {StorageId} from '@/api/storage'
 import {parseStorageId} from '@/api/storage'
 import {useDialogStore} from '@/stores/dialog'
+import {ArrowsRightLeftIcon} from '@heroicons/vue/24/outline'
 import LocalStorageConfig from './storage/LocalStorageConfig.vue'
 import AliyunPanConfig from './storage/AliyunPanConfig.vue'
 import S3Config from './storage/S3Config.vue'
-import MigrationProgress from './MigrationProgress.vue'
 import BaseSelect from '@/components/common/BaseSelect.vue'
+import StorageMigrationDialog from './storage/StorageMigrationDialog.vue'
 
 const dialogStore = useDialogStore()
 
@@ -155,14 +158,8 @@ const storageTypes = [
 
 const loading = ref(true)
 const saving = ref(false)
+const showMigrationDialog = ref(false)
 
-// 迁移进度组件引用
-const migrationProgressRef = ref<InstanceType<typeof MigrationProgress> | null>(null)
-
-// 是否正在迁移
-const isMigrating = computed(() => {
-  return migrationProgressRef.value?.isMigrating ?? false
-})
 
 // 当前正在编辑的存储类型
 const editingType = ref<string>('local')
@@ -288,9 +285,6 @@ async function loadSettings() {
   }
 }
 
-function handleMigrationCompleted() {
-  loadSettings()
-}
 
 async function handleDefaultStorageChange() {
   try {
@@ -449,22 +443,11 @@ async function handleSave() {
       const resp = await settingsApi.updateStorage('local', form.localConfig)
       const result = resp.data
 
-      if (result.needs_migration) {
-        if (migrationProgressRef.value) {
-          migrationProgressRef.value.refresh()
-        }
-        dialogStore.alert({
-          title: '迁移已启动',
-          message: '存储路径已变更，正在迁移文件...',
-          type: 'info'
-        })
-      } else {
-        dialogStore.alert({
-          title: '成功',
-          message: result.message || '存储配置更新成功',
-          type: 'success'
-        })
-      }
+      dialogStore.alert({
+        title: '成功',
+        message: result.message || '存储配置更新成功',
+        type: 'success'
+      })
     } else if (editingType.value === 'aliyunpan' && form.aliyunpanGlobal) {
       // 保存全局配置
       await settingsApi.updateGlobalConfig(form.aliyunpanGlobal)

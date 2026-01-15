@@ -67,21 +67,14 @@ type SettingService interface {
 	// 获取阿里云盘用户信息
 	GetAliyunPanUserInfo(ctx context.Context) []*AliyunPanUserInfo
 
-	// 设置迁移服务
-	SetMigrationService(migrationSvc MigrationService)
-
-	// 检查是否有迁移正在进行
-	IsMigrationRunning(ctx context.Context) bool
-
 	// AI 配置管理
 	UpdateAIConfig(ctx context.Context, config *model.AIPo) error
 }
 
 type settingService struct {
-	repo             repository.SettingRepository
-	cfg              *internal.PlatformConfig
-	storageManager   *storage.StorageManager
-	migrationService MigrationService
+	repo           repository.SettingRepository
+	cfg            *internal.PlatformConfig
+	storageManager *storage.StorageManager
 }
 
 // NewSettingService 创建设置服务实例
@@ -172,12 +165,7 @@ func (s *settingService) UpdatePassword(ctx context.Context, dto *PasswordUpdate
 
 // UpdateStorageConfig 更新存储配置
 func (s *settingService) UpdateStorageConfig(ctx context.Context, storageItem model.StorageItem) (*StorageUpdateResult, error) {
-	// 1. 检查是否有迁移正在进行
-	if s.IsMigrationRunning(ctx) {
-		return nil, fmt.Errorf("迁移正在进行中，请等待完成后再修改配置")
-	}
-
-	// 2. 获取当前配置
+	// 1. 获取当前配置
 	storageConfig, err := s.getCurrentStorageConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取当前配置失败: %w", err)
@@ -187,57 +175,18 @@ func (s *settingService) UpdateStorageConfig(ctx context.Context, storageItem mo
 
 	var oldPath, newPath = oldStorageItem.Path(), storageItem.Path()
 
-	// 3. 检测是否需要迁移
+	// 2. 检测路径是否变更
 	if oldPath != newPath {
-		logger.Info("检测到存储路径变更，准备进行迁移",
-			zap.String("old_path", oldPath),
-			zap.String("new_path", newPath))
-
-		task, err := s.migrationService.StartSelfMigration(
-			ctx,
-			oldPath,
-			newPath,
-			storageItem.StorageId(),
-			func(err error) {
-				if err != nil {
-					return
-				}
-
-				s.cfg.DynamicStaticConfig.Update(newPath)
-
-				if err = s.repo.BatchUpsert(ctx, storageItem.ToSettings()); err != nil {
-					logger.Error("保存设置结果失败", zap.Error(err))
-					return
-				}
-
-				if _, err = s.ResetStorage(ctx); err != nil {
-					logger.Error("重置存储后端失败", zap.Error(err))
-					return
-				}
-			},
-		)
-
-		if err != nil {
-			return nil, fmt.Errorf("启动迁移失败: %w", err)
-		}
-
-		logger.Info("存储配置更新触发迁移",
-			zap.String("type", string(model.StorageTypeLocal)),
-			zap.Int64("task_id", task.ID))
-
-		return &StorageUpdateResult{
-			NeedsMigration: true,
-			TaskID:         task.ID,
-			Message:        "配置变更需要迁移文件，迁移任务已启动",
-		}, nil
+		// 更新动态静态配置
+		s.cfg.DynamicStaticConfig.Update(newPath)
 	}
 
-	// 5. 无需迁移，直接保存配置
+	// 3. 保存配置
 	if err := s.repo.BatchUpsert(ctx, storageItem.ToSettings()); err != nil {
 		return nil, fmt.Errorf("保存存储配置失败: %w", err)
 	}
 
-	// 6. 应用设置到运行时配置
+	// 4. 应用设置到运行时配置
 	if _, err := s.ResetStorage(ctx); err != nil {
 		logger.Warn("应用存储配置失败", zap.Error(err))
 	}
@@ -248,23 +197,6 @@ func (s *settingService) UpdateStorageConfig(ctx context.Context, storageItem mo
 		NeedsMigration: false,
 		Message:        "存储配置更新成功",
 	}, nil
-}
-
-// SetMigrationService 设置迁移服务
-func (s *settingService) SetMigrationService(migrationSvc MigrationService) {
-	s.migrationService = migrationSvc
-}
-
-// IsMigrationRunning 检查是否有迁移正在进行
-func (s *settingService) IsMigrationRunning(ctx context.Context) bool {
-	if s.migrationService == nil {
-		return false
-	}
-	task, err := s.migrationService.GetActiveMigration(ctx)
-	if err != nil {
-		return false
-	}
-	return task != nil && task.IsActive()
 }
 
 // UpdateCleanupConfig 更新清理配置

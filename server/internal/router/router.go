@@ -19,7 +19,7 @@ func SetupRouter(
 	albumHandler *handler.AlbumHandler,
 	settingHandler *handler.SettingHandler,
 	storageHandler *handler.StorageHandler,
-	migrationHandler *handler.MigrationHandler,
+	storageMigrationHandler *handler.StorageMigrationHandler,
 	aiHandler *handler.AIHandler,
 	wsHandler *handler.WebSocketHandler,
 ) *gin.Engine {
@@ -35,7 +35,7 @@ func SetupRouter(
 
 	// 动态静态文件中间件
 	r.Use(middleware.DynamicStaticMiddleware(configCompose.DynamicStaticConfig))
-	r.GET("/resouse/:hash/file", imageHandler.ProxyFile)
+	r.GET("/resouse/:storageId/:path", imageHandler.ProxyFile)
 
 	// API路由组
 	api := r.Group("/api")
@@ -154,11 +154,17 @@ func SetupRouter(
 				aliyunpan.POST("/logout", storageHandler.LogoutAliyunPan)
 			}
 
-			// 迁移相关路由
-			migration := storageGroup.Group("/migration")
+			// 存储迁移相关路由
+			storageMigration := storageGroup.Group("/storage-migration")
 			{
-				migration.GET("/active", migrationHandler.GetActive)
-				migration.GET("/:id", migrationHandler.GetByID)
+				storageMigration.POST("", storageMigrationHandler.CreateMigration)
+				storageMigration.POST("/preview", storageMigrationHandler.PreviewMigration)
+				storageMigration.GET("/list/active", storageMigrationHandler.ListActiveMigrations)
+				storageMigration.POST("/:id/pause", storageMigrationHandler.PauseMigration)
+				storageMigration.POST("/:id/resume", storageMigrationHandler.ResumeMigration)
+				storageMigration.GET("/:id/failed", storageMigrationHandler.GetFailedFileRecords)
+				storageMigration.POST("/:id/retry", storageMigrationHandler.RetryFailedFiles)
+				storageMigration.POST("/:id/dismiss", storageMigrationHandler.DismissFailedFiles)
 			}
 		}
 

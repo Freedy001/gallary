@@ -57,10 +57,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { ArrowRightIcon } from '@heroicons/vue/24/outline'
-import { useNotificationStore } from '@/stores/notification.ts'
-import StorageDetailModal from '@/components/widgets/StorageDetailModal.vue'
+import {computed, ref} from 'vue'
+import {ArrowRightIcon} from '@heroicons/vue/24/outline'
+import {useNotificationStore} from '@/stores/notification.ts'
+import StorageDetailModal from '@/components/widgets/storage/StorageDetailModal.vue'
 
 defineProps<{
   collapsed: boolean

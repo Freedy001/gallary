@@ -61,7 +61,7 @@ func main() {
 	// 创建通知器
 	notifier := websocket.NewNotifier(wsHub)
 
-	settingService, migrationService, imageService, shareService, albumService, aiService, smartAlbumService := initService(cfg, notifier)
+	settingService, storageMigrationService, imageService, shareService, albumService, aiService, smartAlbumService := initService(cfg, notifier)
 
 	// 11. 设置路由
 	r := router.SetupRouter(
@@ -72,7 +72,7 @@ func main() {
 		handler.NewAlbumHandler(albumService, aiService),
 		handler.NewSettingHandler(settingService),
 		handler.NewStorageHandler(settingService.GetStorageManager(), settingService),
-		handler.NewMigrationHandler(migrationService),
+		handler.NewStorageMigrationHandler(storageMigrationService),
 		handler.NewAIHandler(aiService, smartAlbumService),
 		handler.NewWebSocketHandler(wsHub),
 	)
@@ -125,12 +125,13 @@ func main() {
 	logger.Info("服务器已关闭")
 }
 
-func initService(cfg *config.Config, notifier websocket.Notifier) (service.SettingService, service.MigrationService, service.ImageService, service.ShareService, service.AlbumService, service.AIService, service.SmartAlbumService) {
+func initService(cfg *config.Config, notifier websocket.Notifier) (service.SettingService, service.StorageMigrationService, service.ImageService, service.ShareService, service.AlbumService, service.AIService, service.SmartAlbumService) {
 	var err error
 	// 6. 初始化Repository层
-	imageRepo, shareRepo, settingRepo, migrationRepo, albumRepo := repository.NewImageRepository(), repository.NewShareRepository(), repository.NewSettingRepository(), repository.NewMigrationRepository(), repository.NewAlbumRepository()
+	imageRepo, shareRepo, settingRepo, albumRepo := repository.NewImageRepository(), repository.NewShareRepository(), repository.NewSettingRepository(), repository.NewAlbumRepository()
 	aiTaskRepo, embeddingRepo := repository.NewAITaskRepository(), repository.NewEmbeddingRepository()
 	tagRepo, tagEmbeddingRepo := repository.NewTagRepository(), repository.NewTagEmbeddingRepository()
+	storageMigrationRepo := repository.NewStorageMigrationRepository()
 
 	// 7. 初始化设置服务并加载数据库设置
 	settingService := service.NewSettingService(settingRepo)
@@ -149,12 +150,12 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 	// 7.3 设置平台设置
 	initPlatformConfig(settingService)
 
-	// 8 初始化迁移服务
-	migrationService := service.NewMigrationService(
-		migrationRepo,
+	// 8 初始化存储迁移服务
+	storageMigrationService := service.NewStorageMigrationService(
+		storageMigrationRepo,
 		imageRepo,
-		settingRepo,
 		storageManager,
+		notifier,
 	)
 
 	// 9. 初始化Service层
@@ -232,12 +233,15 @@ func initService(cfg *config.Config, notifier websocket.Notifier) (service.Setti
 		if err == nil {
 			notifier.NotifyImageCount(count)
 		}
+		// 推送迁移任务状态（包含有失败文件的已完成任务）
+		migrationStatus, err := storageMigrationService.GetMigrationStatusVO(context.Background())
+		if err == nil && migrationStatus != nil {
+			notifier.NotifyMigrationProgress(migrationStatus)
+		}
 	})
 
 	// 10. 初始化Handler层
-	// 10.1 连接 SettingService 和 MigrationService
-	settingService.SetMigrationService(migrationService)
-	return settingService, migrationService, imageService, shareService, albumService, aiService, smartAlbumService
+	return settingService, storageMigrationService, imageService, shareService, albumService, aiService, smartAlbumService
 }
 
 func initPlatformConfig(settingService service.SettingService) {

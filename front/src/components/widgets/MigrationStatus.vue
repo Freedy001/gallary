@@ -8,8 +8,8 @@
     <template v-if="!collapsed">
       <div class="flex items-center justify-between text-xs text-gray-400 mb-1.5">
         <div class="flex items-center gap-1.5 font-mono tracking-wider">
-          <SparklesIcon :class="hasActiveTasks ? 'text-primary-400' : ''" class="h-3.5 w-3.5"/>
-          <span>AI 处理</span>
+          <ArrowsRightLeftIcon :class="migrationStore.hasTasks ? 'text-blue-400' : ''" class="h-3.5 w-3.5"/>
+          <span>存储迁移</span>
         </div>
         <ArrowRightIcon class="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity"/>
       </div>
@@ -18,8 +18,11 @@
       <div class="space-y-1.5">
         <div class="flex items-center justify-between text-xs">
           <span class="text-gray-300">
-            <template v-if="hasActiveTasks">
-              正在处理
+            <template v-if="migrationStore.runningCount > 0">
+              正在迁移
+            </template>
+            <template v-else-if="migrationStore.pausedCount > 0">
+              已暂停
             </template>
             <template v-else-if="hasFailedTasks">
               需关注
@@ -34,18 +37,22 @@
             <span v-if="totalFailed > 0" class="text-red-400 font-medium flex items-center gap-1">
               {{ totalFailed }} 失败
             </span>
-            <!-- 进行/等待数 -->
-            <span v-if="totalPending  > 0" class="text-primary-300">
-              {{ totalPending }} 任务
+            <!-- 暂停数 -->
+            <span v-if="migrationStore.pausedCount > 0" class="text-yellow-400 font-medium flex items-center gap-1">
+              {{ migrationStore.pausedCount }} 暂停
+            </span>
+            <!-- 运行数 -->
+            <span v-if="migrationStore.runningCount > 0" class="text-blue-300">
+              {{ migrationStore.runningCount }} 任务
             </span>
           </span>
         </div>
 
         <!-- 总体进度条 -->
-        <div v-if="hasActiveTasks" class="h-1 bg-white/5 rounded-full overflow-hidden">
+        <div v-if="migrationStore.runningCount > 0" class="h-1 bg-white/5 rounded-full overflow-hidden">
           <div
               :class="getProgressBarClass"
-              :style="{ width: `${overallProgress}%` }"
+              :style="{ width: `${(migrationStore.overallProgress)}%` }"
               class="h-full rounded-full transition-all duration-500 ease-out"
           ></div>
         </div>
@@ -56,11 +63,15 @@
     <template v-else>
       <div class="flex flex-col items-center gap-1">
         <div class="relative">
-          <SparklesIcon class="h-4 w-4 text-gray-500 group-hover:text-primary-400 transition-colors"/>
+          <ArrowsRightLeftIcon class="h-4 w-4 text-gray-500 group-hover:text-blue-400 transition-colors"/>
           <!-- 状态指示点 -->
           <span
-              v-if="hasActiveTasks"
-              class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary-500 animate-pulse border border-gray-900"
+              v-if="migrationStore.runningCount > 0"
+              class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500 animate-pulse border border-gray-900"
+          ></span>
+          <span
+              v-else-if="migrationStore.pausedCount > 0"
+              class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-500 border border-gray-900"
           ></span>
           <span
               v-else-if="hasFailedTasks"
@@ -69,32 +80,32 @@
         </div>
 
         <!-- 简单的数量指示 -->
-        <span v-if="hasActiveTasks " class="text-[10px] text-primary-400 font-bold">
-          {{ overallProgress }}%
+        <span v-if="migrationStore.runningCount > 0" class="text-[10px] text-blue-400 font-bold">
+          {{ migrationStore.overallProgress }}%
         </span>
       </div>
     </template>
 
     <!-- 详情弹窗 -->
-    <AIQueueListModal
-        :visible="modalVisible"
+    <MigrationDetailModal
         :trigger-rect="triggerRect"
+        :visible="modalVisible"
         @close="modalVisible = false"
     />
   </div>
 </template>
 
-<script setup lang="ts">
-import {computed, ref, watch} from 'vue'
-import {ArrowRightIcon, SparklesIcon} from '@heroicons/vue/24/outline'
-import {useNotificationStore} from '@/stores/notification.ts'
-import AIQueueListModal from '@/components/widgets/ai/AIQueueListModal.vue'
+<script lang="ts" setup>
+import {computed, ref} from 'vue'
+import {ArrowRightIcon, ArrowsRightLeftIcon} from '@heroicons/vue/24/outline'
+import {useMigrationStore} from '@/stores/migration'
+import MigrationDetailModal from '@/components/widgets/migration/MigrationDetailModal.vue'
 
 defineProps<{
   collapsed: boolean
 }>()
 
-const notificationStore = useNotificationStore()
+const migrationStore = useMigrationStore()
 const containerRef = ref<HTMLElement | null>(null)
 const modalVisible = ref(false)
 const triggerRect = ref<DOMRect | null>(null)
@@ -109,39 +120,17 @@ function openModal() {
 }
 
 // 计算属性
-
-const totalPending = computed(() => notificationStore.aiQueueStatus?.total_pending || 0)
-const totalFailed = computed(() => notificationStore.aiQueueStatus?.total_failed || 0)
-const hasActiveTasks = computed(() => totalPending.value > 0)
+// 失败相关
+const totalFailed = computed(() => migrationStore.tasks.reduce((sum, task) => sum + task.failed_files, 0))
 const hasFailedTasks = computed(() => totalFailed.value > 0)
 
-const total = ref<number>(0)
-watch(() => notificationStore.aiQueueStatus, (value, oldValue) => {
-  if (!value || !oldValue) return
-
-  if (value.total_pending === 0) {
-    total.value = 0
-    return;
-  }
-
-  if (value.total_pending > oldValue.total_pending) {
-    total.value = value.total_pending
-  }
-})
-
-
-// 总体进度计算
-const overallProgress = computed(() => {
-  if (total.value === 0) return 0 // 空闲时进度为0
-  // 简单的动画效果模拟：如果有正在处理的，显示至少 10%
-  return Math.round((1 - totalPending.value / total.value) * 100)
-})
-
 const getProgressBarClass = computed(() => {
-  if (hasActiveTasks.value) {
-    return 'bg-primary-500 animate-pulse'
+  if (migrationStore.runningCount > 0) {
+    return 'bg-blue-500 animate-pulse'
+  }
+  if (migrationStore.pausedCount > 0) {
+    return 'bg-yellow-500'
   }
   return 'bg-gray-700'
 })
-
 </script>

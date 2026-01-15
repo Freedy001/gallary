@@ -4,6 +4,7 @@ export type MessageType =
   | 'storage_stats'
   | 'image_count'
   | 'smart_album_progress'
+  | 'migration_progress'
   | 'ping'
   | 'pong'
   // 数据同步事件（后端推送）

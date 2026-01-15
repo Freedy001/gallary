@@ -242,6 +242,20 @@
           @click="showResultModal = true"
         />
       </Transition>
+
+      <!-- 存储迁移状态 - 仅在有任务时显示 -->
+      <Transition
+        enter-active-class="transition-all duration-300 ease-out"
+        enter-from-class="opacity-0 -translate-y-2 scale-95"
+        enter-to-class="opacity-100 translate-y-0 scale-100"
+        leave-active-class="transition-all duration-200 ease-in"
+        leave-from-class="opacity-100 translate-y-0 scale-100"
+        leave-to-class="opacity-0 -translate-y-2 scale-95"
+      >
+        <div v-if="migrationStore.hasTasks" class="mt-3">
+          <MigrationStatus :collapsed="uiStore.sidebarCollapsed" />
+        </div>
+      </Transition>
     </div>
 
     <!-- 智能相册结果弹窗 -->
@@ -255,11 +269,13 @@ import {useRoute, useRouter} from 'vue-router'
 import {useUIStore} from '@/stores/ui'
 import {useNotificationStore} from '@/stores/notification'
 import {useSmartAlbumStore} from '@/stores/smartAlbum'
+import {useMigrationStore} from '@/stores/migration'
 import UploadDrawer from '@/components/upload/UploadDrawer.vue'
 import StorageUsage from '@/components/widgets/StorageUsage.vue'
 import AIQueueStatus from '@/components/widgets/AIQueueStatus.vue'
 import SmartAlbumStatus from '@/components/widgets/SmartAlbumStatus.vue'
 import SmartAlbumResultModal from '@/components/album/SmartAlbumResultModal.vue'
+import MigrationStatus from '@/components/widgets/MigrationStatus.vue'
 import {
   Bars3Icon,
   ChevronLeftIcon,
@@ -276,6 +292,7 @@ const route = useRoute()
 const uiStore = useUIStore()
 const notificationStore = useNotificationStore()
 const smartAlbumStore = useSmartAlbumStore()
+const migrationStore = useMigrationStore()
 
 const showResultModal = ref(false)
 

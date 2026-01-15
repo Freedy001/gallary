@@ -109,12 +109,6 @@ func (h *SettingHandler) UpdateStorage(c *gin.Context) {
 		return
 	}
 
-	// 检查是否有迁移正在进行
-	if h.settingService.IsMigrationRunning(c.Request.Context()) {
-		utils.Error(c, 423, "迁移正在进行中，请等待完成后再修改配置")
-		return
-	}
-
 	result, err := h.settingService.UpdateStorageConfig(c.Request.Context(), req)
 	if err != nil {
 		utils.Error(c, 400, err.Error())

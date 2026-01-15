@@ -27,6 +27,9 @@ type Notifier interface {
 
 	// NotifyImagesUploaded 通知图片上传完成
 	NotifyImagesUploaded(imageIDs []int64)
+
+	// NotifyMigrationProgress 通知存储迁移进度
+	NotifyMigrationProgress(status *model.MigrationStatusVO)
 }
 
 // hubNotifier Hub 实现的通知器
@@ -67,6 +70,10 @@ func (n *hubNotifier) NotifyImagesUploaded(imageIDs []int64) {
 	n.hub.Broadcast(NewMessage(MsgTypeImagesUploaded, map[string]any{"ids": imageIDs}))
 }
 
+func (n *hubNotifier) NotifyMigrationProgress(status *model.MigrationStatusVO) {
+	n.hub.Broadcast(NewMessage(MsgTypeMigrationProgress, status))
+}
+
 // NoopNotifier 空实现（用于不需要 WebSocket 的场景）
 type NoopNotifier struct{}
 
@@ -77,3 +84,4 @@ func (n *NoopNotifier) NotifyImageCount(int64)                               {}
 func (n *NoopNotifier) NotifySmartAlbumProgress(*model.SmartAlbumProgressVO) {}
 func (n *NoopNotifier) NotifyAlbumsUpdated([]int64)                          {}
 func (n *NoopNotifier) NotifyImagesUploaded([]int64)                         {}
+func (n *NoopNotifier) NotifyMigrationProgress(*model.MigrationStatusVO)     {}
