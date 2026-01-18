@@ -6,7 +6,8 @@
 class ImageCache {
   private cache = new Map<string, string>() // url -> blob URL
   private loading = new Map<string, Promise<string>>() // url -> loading promise
-  private maxSize = 200 // 最大缓存数量
+  private refCount = new Map<string, number>() // url -> reference count
+  private maxSize = 500 // 最大缓存数量
 
   /**
    * 获取缓存的图片 URL，如果未缓存则返回原始 URL
@@ -20,6 +21,26 @@ class ImageCache {
    */
   has(url: string): boolean {
     return this.cache.has(url)
+  }
+
+  /**
+   * 增加引用计数
+   */
+  retain(url: string): void {
+    const count = this.refCount.get(url) || 0
+    this.refCount.set(url, count + 1)
+  }
+
+  /**
+   * 减少引用计数
+   */
+  release(url: string): void {
+    const count = this.refCount.get(url) || 0
+    if (count > 1) {
+      this.refCount.set(url, count - 1)
+    } else {
+      this.refCount.delete(url)
+    }
   }
 
   /**
@@ -66,21 +87,6 @@ class ImageCache {
     return URL.createObjectURL(blob)
   }
 
-  private set(url: string, blobUrl: string): void {
-    // 超过最大缓存数量时，删除最早的缓存
-    if (this.cache.size >= this.maxSize) {
-      const firstKey = this.cache.keys().next().value
-      if (firstKey) {
-        const oldBlobUrl = this.cache.get(firstKey)
-        if (oldBlobUrl) {
-          URL.revokeObjectURL(oldBlobUrl)
-        }
-        this.cache.delete(firstKey)
-      }
-    }
-    this.cache.set(url, blobUrl)
-  }
-
   /**
    * 清除所有缓存
    */
@@ -88,6 +94,31 @@ class ImageCache {
     this.cache.forEach(blobUrl => URL.revokeObjectURL(blobUrl))
     this.cache.clear()
     this.loading.clear()
+    this.refCount.clear()
+  }
+
+  private set(url: string, blobUrl: string): void {
+    // 超过最大缓存数量时，删除没有被引用的最早缓存
+    if (this.cache.size >= this.maxSize) {
+      this.evict()
+    }
+    this.cache.set(url, blobUrl)
+  }
+
+  /**
+   * 淘汰未被引用的缓存
+   */
+  private evict(): void {
+    // 找到没有被引用的缓存项并删除
+    for (const [url, blobUrl] of this.cache) {
+      if (!this.refCount.has(url) || this.refCount.get(url) === 0) {
+        URL.revokeObjectURL(blobUrl)
+        this.cache.delete(url)
+        this.refCount.delete(url)
+        return
+      }
+    }
+    // 如果所有缓存都被引用，不删除任何内容（允许临时超过 maxSize）
   }
 }
 

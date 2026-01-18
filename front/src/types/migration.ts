@@ -61,6 +61,8 @@ export interface MigrationProgressVO {
   processed_files: number
   failed_files: number
   progress_percent: number
+  speed: number              // 传输速度（字节/秒）
+  remaining_seconds: number  // 预计剩余时间（秒）
 }
 
 // 迁移状态 VO（包含所有活跃任务）

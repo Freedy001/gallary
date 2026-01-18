@@ -5,7 +5,7 @@
       <div class="flex items-center justify-between">
         <h3 class="text-sm font-medium text-gray-300">S3 存储账号</h3>
         <button
-            class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 ring-1 ring-blue-500/30 transition-all duration-300 text-xs"
+            class="px-3 py-1.5 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 ring-1 ring-primary-500/30 transition-all duration-300 text-xs"
             @click="openAddModal"
         >
           + 添加账号

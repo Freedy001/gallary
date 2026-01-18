@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -50,9 +51,8 @@ type CreateMigrationRequest struct {
 
 // MigrationPreview 迁移预览
 type MigrationPreview struct {
-	FilesCount           int   `json:"files_count"`
-	TotalSize            int64 `json:"total_size"`
-	EstimatedTimeSeconds int   `json:"estimated_time_seconds"`
+	FilesCount int   `json:"files_count"`
+	TotalSize  int64 `json:"total_size"`
 }
 
 type storageMigrationService struct {
@@ -66,6 +66,19 @@ type storageMigrationService struct {
 	isRunning   atomic.Bool
 	// 用于取消/暂停的控制
 	cancelFuncs sync.Map // map[int64]context.CancelFunc
+
+	// 迁移统计（用于计算速度和剩余时间）
+	migrationStats sync.Map // map[int64]*MigrationStats
+}
+
+// MigrationStats 迁移统计信息
+type MigrationStats struct {
+	StartTime       time.Time // 开始时间
+	TransferredSize int64     // 已传输字节数
+	TotalSize       int64     // 总字节数
+	LastUpdateTime  time.Time // 最后更新时间
+	LastSpeed       int64     // 最近计算的速度（字节/秒）
+	mu              sync.Mutex
 }
 
 // NewStorageMigrationService 创建存储迁移服务实例
@@ -146,13 +159,13 @@ func (s *storageMigrationService) PreviewMigration(ctx context.Context, req *Cre
 		return nil, err
 	}
 
-	// 估算时间（假设每个文件平均 1 秒）
-	estimatedTime := count
+	if req.MigrationType == model.MigrationTypeThumbnail {
+		totalSize = 0
+	}
 
 	return &MigrationPreview{
-		FilesCount:           count,
-		TotalSize:            totalSize,
-		EstimatedTimeSeconds: estimatedTime,
+		FilesCount: count,
+		TotalSize:  totalSize,
 	}, nil
 }
 
@@ -302,12 +315,19 @@ func (s *storageMigrationService) GetMigrationStatusVO(ctx context.Context) (*mo
 	}
 
 	for _, task := range tasks {
-		statusVO.Tasks = append(statusVO.Tasks, task.ToProgressVO())
+		progressVO := task.ToProgressVO()
+
+		// 对于运行中的任务，填充速度和剩余时间
 		if task.Status == model.StorageMigrationRunning {
+			speed, remainingSeconds := s.getMigrationStatsForTask(task.ID)
+			progressVO.Speed = speed
+			progressVO.RemainingSeconds = remainingSeconds
 			statusVO.TotalRunning++
 		} else if task.Status == model.StorageMigrationPaused {
 			statusVO.TotalPaused++
 		}
+
+		statusVO.Tasks = append(statusVO.Tasks, progressVO)
 	}
 
 	return statusVO, nil
@@ -349,6 +369,7 @@ func (s *storageMigrationService) executeMigration(taskID int64) {
 	defer func() {
 		cancel()
 		s.cancelFuncs.Delete(taskID)
+		s.migrationStats.Delete(taskID) // 清理统计信息
 	}()
 
 	// 获取任务
@@ -357,6 +378,15 @@ func (s *storageMigrationService) executeMigration(taskID int64) {
 		logger.Error("获取迁移任务失败", zap.Int64("task_id", taskID), zap.Error(err))
 		return
 	}
+
+	// 初始化迁移统计信息
+	totalSize, _ := s.migrationRepo.GetTotalSizeByTaskID(ctx, taskID, task.MigrationType)
+	stats := &MigrationStats{
+		StartTime:      time.Now(),
+		TotalSize:      totalSize,
+		LastUpdateTime: time.Now(),
+	}
+	s.migrationStats.Store(taskID, stats)
 
 	// 更新状态为运行中
 	now := time.Now()
@@ -543,9 +573,12 @@ func (s *storageMigrationService) migrateFile(ctx context.Context, task *model.S
 	}
 	defer reader.Close()
 
+	// 使用 countingReader 包装，统计实际传输字节数
+	cr := &countingReader{reader: reader}
+
 	// 上传到目标存储
 	targetCtx := context.WithValue(ctx, storage.OverrideStorageType, task.TargetStorageId)
-	_, err = s.storageManager.UploadToDefaultStorage(targetCtx, reader, sourcePath)
+	_, err = s.storageManager.UploadToDefaultStorage(targetCtx, cr, sourcePath)
 	if err != nil {
 		errMsg := fmt.Sprintf("上传文件失败: %v", err)
 		s.updateFileRecordStatus(ctx, task.ID, record.ID, model.MigrationFileRecordFailed, &errMsg)
@@ -572,6 +605,9 @@ func (s *storageMigrationService) migrateFile(ctx context.Context, task *model.S
 		}
 	}
 
+	// 更新迁移统计（使用实际传输的字节数）
+	s.updateMigrationStats(task.ID, cr.bytesRead)
+
 	logger.Info(fmt.Sprintf("文件迁移成功： %s -> %s %s", string(sourceStorageId), string(task.TargetStorageId), sourcePath))
 	// 更新记录状态
 	s.updateFileRecordStatus(ctx, task.ID, record.ID, model.MigrationFileRecordSuccess, nil)
@@ -590,4 +626,56 @@ func (s *storageMigrationService) notifyProgress(ctx context.Context) {
 	}
 
 	s.notifier.NotifyMigrationProgress(statusVO)
+}
+
+// updateMigrationStats 更新迁移统计信息
+func (s *storageMigrationService) updateMigrationStats(taskID int64, fileSize int64) {
+	if val, ok := s.migrationStats.Load(taskID); ok {
+		stats := val.(*MigrationStats)
+		stats.mu.Lock()
+		defer stats.mu.Unlock()
+
+		stats.TransferredSize += fileSize
+		now := time.Now()
+
+		// 计算速度（使用滑动窗口，每秒更新一次）
+		elapsed := now.Sub(stats.LastUpdateTime).Seconds()
+		if elapsed >= 1.0 {
+			totalElapsed := now.Sub(stats.StartTime).Seconds()
+			if totalElapsed > 0 {
+				stats.LastSpeed = int64(float64(stats.TransferredSize) / totalElapsed)
+			}
+			stats.LastUpdateTime = now
+		}
+	}
+}
+
+// getMigrationStatsForTask 获取任务的迁移统计信息
+func (s *storageMigrationService) getMigrationStatsForTask(taskID int64) (speed int64, remainingSeconds int) {
+	if val, ok := s.migrationStats.Load(taskID); ok {
+		stats := val.(*MigrationStats)
+		stats.mu.Lock()
+		defer stats.mu.Unlock()
+
+		speed = stats.LastSpeed
+		if speed > 0 {
+			remainingBytes := stats.TotalSize - stats.TransferredSize
+			if remainingBytes > 0 {
+				remainingSeconds = int(remainingBytes / speed)
+			}
+		}
+	}
+	return
+}
+
+// countingReader 用于统计实际读取字节数的 Reader 包装器
+type countingReader struct {
+	reader    io.Reader
+	bytesRead int64
+}
+
+func (c *countingReader) Read(p []byte) (n int, err error) {
+	n, err = c.reader.Read(p)
+	c.bytesRead += int64(n)
+	return
 }

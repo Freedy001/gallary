@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import {onMounted, ref, watch} from 'vue'
+import {onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {thumbnailCache} from '@/utils/imageCache.ts'
 
 const props = withDefaults(defineProps<{
@@ -41,30 +41,43 @@ defineEmits<{
 }>()
 
 const cachedUrl = ref<string>('')
+let currentSrc = '' // 跟踪当前正在使用的 src，用于引用计数
 
 async function loadImage() {
-  if (!props.src) {
+  const newSrc = props.src
+
+  // 释放旧的引用
+  if (currentSrc && currentSrc !== newSrc) {
+    thumbnailCache.release(currentSrc)
+  }
+
+  if (!newSrc) {
     cachedUrl.value = ''
+    currentSrc = ''
     return
   }
 
+  currentSrc = newSrc
+
   // 先检查缓存
-  if (thumbnailCache.has(props.src)) {
-    cachedUrl.value = thumbnailCache.get(props.src)
+  if (thumbnailCache.has(newSrc)) {
+    cachedUrl.value = thumbnailCache.get(newSrc)
+    thumbnailCache.retain(newSrc)
     return
   }
 
   // 如果需要预加载，先加载到缓存
   if (props.preload) {
     try {
-      cachedUrl.value = await thumbnailCache.preload(props.src)
+      cachedUrl.value = await thumbnailCache.preload(newSrc)
+      thumbnailCache.retain(newSrc)
     } catch {
       // 加载失败时使用原始 URL
-      cachedUrl.value = props.src
+      cachedUrl.value = newSrc
     }
   } else {
     // 不预加载，直接使用原始 URL（浏览器会自动缓存）
-    cachedUrl.value = props.src
+    cachedUrl.value = newSrc
   }
 }
 
@@ -73,6 +86,13 @@ watch(() => props.src, loadImage, { immediate: true })
 onMounted(() => {
   if (!cachedUrl.value && props.src) {
     loadImage()
+  }
+})
+
+onBeforeUnmount(() => {
+  // 组件卸载时释放引用
+  if (currentSrc) {
+    thumbnailCache.release(currentSrc)
   }
 })
 </script>

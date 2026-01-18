@@ -191,15 +191,17 @@ type MigrationFileRecordVO struct {
 
 // MigrationProgressVO 迁移进度 VO（用于 WebSocket 推送）
 type MigrationProgressVO struct {
-	TaskID          int64   `json:"task_id"`
-	Status          string  `json:"status"`
-	MigrationType   string  `json:"migration_type"`
-	SourceStorageId string  `json:"source_storage_id"`
-	TargetStorageId string  `json:"target_storage_id"`
-	TotalFiles      int     `json:"total_files"`
-	ProcessedFiles  int     `json:"processed_files"`
-	FailedFiles     int     `json:"failed_files"`
-	ProgressPercent float64 `json:"progress_percent"`
+	TaskID           int64   `json:"task_id"`
+	Status           string  `json:"status"`
+	MigrationType    string  `json:"migration_type"`
+	SourceStorageId  string  `json:"source_storage_id"`
+	TargetStorageId  string  `json:"target_storage_id"`
+	TotalFiles       int     `json:"total_files"`
+	ProcessedFiles   int     `json:"processed_files"`
+	FailedFiles      int     `json:"failed_files"`
+	ProgressPercent  float64 `json:"progress_percent"`
+	Speed            int64   `json:"speed"`             // 传输速度（字节/秒）
+	RemainingSeconds int     `json:"remaining_seconds"` // 预计剩余时间（秒）
 }
 
 // MigrationStatusVO 迁移状态 VO（包含所有活跃任务）

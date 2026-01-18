@@ -118,6 +118,11 @@ export function useGenericBoxSelection<T>(options: GenericBoxSelectionOptions<T>
   }
 
   function updateSelection() {
+    if (!options.containerRef.value) return
+
+    const containerRect = options.containerRef.value.getBoundingClientRect()
+
+    // 框选区域（相对于容器）
     const left = Math.min(selectionStart.value.x, selectionCurrent.value.x)
     const top = Math.min(selectionStart.value.y, selectionCurrent.value.y)
     const right = Math.max(selectionStart.value.x, selectionCurrent.value.x)
@@ -129,11 +134,38 @@ export function useGenericBoxSelection<T>(options: GenericBoxSelectionOptions<T>
       const item = items[index]
       if (!item) return
 
+      // 检查元素是否仍然在 DOM 中且可见
+      if (!el.isConnected) return
+
+      // 使用 getBoundingClientRect 获取元素在视口中的实际位置
+      // 这在虚拟滚动场景下更可靠，因为 offsetLeft/offsetTop 依赖于 offsetParent
+      const elRect = el.getBoundingClientRect()
+
+      // 跳过不可见的元素（虚拟滚动中被回收的元素可能有无效的尺寸）
+      if (elRect.width === 0 || elRect.height === 0) return
+
+      // 检查元素是否在容器的可视范围内（虚拟滚动场景下的额外验证）
+      // 元素的视口位置应该与容器有交集
+      if (elRect.bottom < containerRect.top || elRect.top > containerRect.bottom ||
+          elRect.right < containerRect.left || elRect.left > containerRect.right) {
+        return
+      }
+
+      // 将元素位置转换为相对于容器的坐标
+      let elLeft = elRect.left - containerRect.left
+      let elTop = elRect.top - containerRect.top
+
+      // 如果使用滚动，需要加上滚动偏移
+      if (options.useScroll) {
+        elLeft += options.containerRef.value!.scrollLeft
+        elTop += options.containerRef.value!.scrollTop
+      }
+
       const rect = {
-        left: el.offsetLeft,
-        top: el.offsetTop,
-        right: el.offsetLeft + el.offsetWidth,
-        bottom: el.offsetTop + el.offsetHeight
+        left: elLeft,
+        top: elTop,
+        right: elLeft + elRect.width,
+        bottom: elTop + elRect.height
       }
 
       const isIntersecting = !(

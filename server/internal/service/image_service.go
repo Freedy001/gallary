@@ -97,9 +97,12 @@ type UploadToken struct {
 
 // ConfirmUploadRequest 确认上传请求
 type ConfirmUploadRequest struct {
-	UploadID      string `json:"upload_id" binding:"required"`
-	StoragePath   string `json:"storage_path" binding:"required"`
-	ThumbnailPath string `json:"thumbnail_path,omitempty"`
+	UploadID        string `json:"upload_id" binding:"required"`
+	StoragePath     string `json:"storage_path" binding:"required"`
+	ThumbnailPath   string `json:"thumbnail_path,omitempty"`
+	ThumbnailSize   int64  `json:"thumbnail_size,omitempty"`   // 缩略图文件大小（字节），OSS 直传时由前端提供
+	ThumbnailWidth  int    `json:"thumbnail_width,omitempty"`  // 缩略图宽度，OSS 直传时由前端提供
+	ThumbnailHeight int    `json:"thumbnail_height,omitempty"` // 缩略图高度，OSS 直传时由前端提供
 }
 
 // UploadInfo 上传信息缓存
@@ -109,6 +112,7 @@ type UploadInfo struct {
 	ThumbnailPath   string
 	ThumbnailWidth  int
 	ThumbnailHeight int
+	ThumbnailSize   int64 // 缩略图文件大小（字节）
 	CreatedAt       time.Time
 }
 
@@ -1037,10 +1041,26 @@ func (s *imageService) ConfirmUpload(ctx context.Context, req *ConfirmUploadRequ
 		s.setExifData(image, prepareReq.ExifData)
 	}
 
-	// 5. 设置缩略图尺寸
-	if uploadInfo.ThumbnailWidth > 0 && uploadInfo.ThumbnailHeight > 0 {
-		image.ThumbnailWidth = &uploadInfo.ThumbnailWidth
-		image.ThumbnailHeight = &uploadInfo.ThumbnailHeight
+	// 5. 设置缩略图尺寸和大小（优先使用请求中的值，用于 OSS 直传场景）
+	thumbnailWidth := req.ThumbnailWidth
+	thumbnailHeight := req.ThumbnailHeight
+	thumbnailSize := req.ThumbnailSize
+	// 如果请求中没有，则使用缓存中的值（本地上传场景）
+	if thumbnailWidth == 0 && uploadInfo.ThumbnailWidth > 0 {
+		thumbnailWidth = uploadInfo.ThumbnailWidth
+	}
+	if thumbnailHeight == 0 && uploadInfo.ThumbnailHeight > 0 {
+		thumbnailHeight = uploadInfo.ThumbnailHeight
+	}
+	if thumbnailSize == 0 && uploadInfo.ThumbnailSize > 0 {
+		thumbnailSize = uploadInfo.ThumbnailSize
+	}
+	if thumbnailWidth > 0 && thumbnailHeight > 0 {
+		image.ThumbnailWidth = &thumbnailWidth
+		image.ThumbnailHeight = &thumbnailHeight
+	}
+	if thumbnailSize > 0 {
+		image.ThumbnailSize = thumbnailSize
 	}
 
 	// 6. 保存到数据库
@@ -1107,10 +1127,12 @@ func (s *imageService) HandleThumbnailUpload(ctx context.Context, uploadID strin
 	defer os.Remove(tempFile.Name())
 	defer tempFile.Close()
 
-	// 复制数据到临时文件
-	if _, err := io.Copy(tempFile, reader); err != nil {
+	// 复制数据到临时文件并记录大小
+	thumbnailSize, err := io.Copy(tempFile, reader)
+	if err != nil {
 		return fmt.Errorf("写入临时文件失败: %w", err)
 	}
+	uploadInfo.ThumbnailSize = thumbnailSize
 
 	// 3. 获取缩略图尺寸
 	width, height, err := utils.GetImageDimensions(tempFile.Name())
@@ -1138,7 +1160,8 @@ func (s *imageService) HandleThumbnailUpload(ctx context.Context, uploadID strin
 		zap.String("path", uploadInfo.ThumbnailPath),
 		zap.String("storage_id", string(s.storage.ThumbnailStorageType())),
 		zap.Int("width", width),
-		zap.Int("height", height))
+		zap.Int("height", height),
+		zap.Int64("size", thumbnailSize))
 
 	return nil
 }

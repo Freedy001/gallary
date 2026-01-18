@@ -25,6 +25,7 @@ type Image struct {
 	ThumbnailStorageId StorageId `gorm:"type:varchar(64);not null;default:local" json:"thumbnail_storage_id"`
 	ThumbnailWidth     *int      `gorm:"type:int" json:"thumbnail_width,omitempty"`
 	ThumbnailHeight    *int      `gorm:"type:int" json:"thumbnail_height,omitempty"`
+	ThumbnailSize      int64     `gorm:"type:bigint;not null;default:0" json:"thumbnail_size,omitempty"` // 缩略图文件大小（字节）
 
 	// EXIF 元数据
 	TakenAt      *time.Time `gorm:"type:timestamp" json:"taken_at,omitempty"`

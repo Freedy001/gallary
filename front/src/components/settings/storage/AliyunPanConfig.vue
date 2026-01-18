@@ -6,7 +6,7 @@
         <h3 class="text-sm font-medium text-gray-300">阿里云盘账号</h3>
         <button
             @click="showAddAccount = true"
-            class="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 ring-1 ring-blue-500/30 transition-all duration-300 text-xs"
+            class="px-3 py-1.5 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 ring-1 ring-primary-500/30 transition-all duration-300 text-xs"
         >
           + 添加账号
         </button>
@@ -176,7 +176,7 @@
               v-if="!qrCode.url || qrCode.status === 'EXPIRED'"
               @click="generateQRCode"
               :disabled="qrLoading"
-              class="px-5 py-2.5 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 ring-1 ring-blue-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-5 py-2.5 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 ring-1 ring-primary-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {{ qrLoading ? '生成中...' : (qrCode.status === 'EXPIRED' ? '刷新二维码' : '生成登录二维码') }}
           </button>

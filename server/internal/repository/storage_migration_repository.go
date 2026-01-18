@@ -26,6 +26,7 @@ type StorageMigrationRepository interface {
 	GetPendingFileRecords(ctx context.Context, taskID int64, limit int) ([]*model.MigrationFileRecord, error)
 	GetFailedFileRecords(ctx context.Context, taskID int64, page, pageSize int) ([]*model.MigrationFileRecord, int64, error)
 	UpdateFileRecordStatus(ctx context.Context, id int64, status string, errorMsg *string) error
+	GetTotalSizeByTaskID(ctx context.Context, taskID int64, migrationType model.MigrationType) (int64, error)
 
 	ResetFailedFileRecords(ctx context.Context, taskID int64) (int64, error)
 	DeleteFileRecordsByTaskID(ctx context.Context, taskID int64) error
@@ -238,6 +239,24 @@ func (r *storageMigrationRepository) DeleteFileRecordsByTaskID(ctx context.Conte
 	return database.GetDB(ctx).WithContext(ctx).
 		Where("task_id = ?", taskID).
 		Delete(&model.MigrationFileRecord{}).Error
+}
+
+// GetTotalSizeByTaskID 获取任务待迁移文件的总大小
+func (r *storageMigrationRepository) GetTotalSizeByTaskID(ctx context.Context, taskID int64, migrationType model.MigrationType) (int64, error) {
+	// 根据迁移类型选择正确的大小字段
+	sizeField := "images.file_size"
+	if migrationType == model.MigrationTypeThumbnail {
+		sizeField = "images.thumbnail_size"
+	}
+
+	var totalSize int64
+	err := database.GetDB(ctx).WithContext(ctx).
+		Model(&model.MigrationFileRecord{}).
+		Select("COALESCE(SUM("+sizeField+"), 0)").
+		Joins("JOIN images ON images.id = migration_file_records.image_id").
+		Where("migration_file_records.task_id = ?", taskID).
+		Scan(&totalSize).Error
+	return totalSize, err
 }
 
 // Delete 删除迁移任务（包含所有文件记录）

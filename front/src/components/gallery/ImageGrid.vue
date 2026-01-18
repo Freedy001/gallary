@@ -54,12 +54,10 @@
       <!-- 网格布局 (虚拟滚动) -->
       <div v-if="!layout.isWaterfall.value" class="h-full">
         <DynamicScroller
-            :emitUpdate="true"
             :items="virtualRows"
             :min-item-size="200"
             class="h-full"
             key-field="id"
-            @update="onScrollerUpdate"
         >
           <template v-slot="{ item: row, index: rowIndex, active }">
             <DynamicScrollerItem
@@ -179,7 +177,7 @@ watch(imageList.loading, (val) => emit('update:loading', val))
 // ==================== 框选 ====================
 const containerRef = ref<HTMLElement>()
 const itemRefs = new Map<number, HTMLElement>()
-const observer = ref<IntersectionObserver | null>(null)
+const loadObserver = ref<IntersectionObserver | null>(null)
 
 const {
   selectionBoxStyle,
@@ -200,14 +198,44 @@ const {
   useScroll: false
 })
 
+// 创建用于懒加载的 IntersectionObserver
+function createLoadObserver() {
+  if (loadObserver.value) {
+    loadObserver.value.disconnect()
+  }
+
+  loadObserver.value = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const index = Number((entry.target as HTMLElement).dataset.index)
+        if (!isNaN(index) && !imageList.images.value[index]) {
+          const pageSize = uiStore.imagePageSize
+          const page = Math.floor(index / pageSize) + 1
+          imageList.fetchImages(page, pageSize)
+        }
+      }
+    })
+  }, {
+    rootMargin: '400px 0px', // 提前 400px 开始加载
+    threshold: 0
+  })
+
+  return loadObserver.value
+}
+
 function setItemRef(el: Element | ComponentPublicInstance | null, index: number) {
   if (el) {
     const element = (el as any)?.$el ?? el as HTMLElement
     itemRefs.set(index, element)
-    if (observer.value) {
-      observer.value.observe(element)
+    // 对所有元素使用 IntersectionObserver 进行懒加载检测
+    if (loadObserver.value) {
+      loadObserver.value.observe(element)
     }
   } else {
+    const oldEl = itemRefs.get(index)
+    if (oldEl && loadObserver.value) {
+      loadObserver.value.unobserve(oldEl)
+    }
     itemRefs.delete(index)
   }
 }
@@ -236,29 +264,6 @@ function handleViewerDelete(id: number) {
   }
 }
 
-function onScrollerUpdate(startIndex: number, endIndex: number) {
-  // 根据可视范围加载数据
-  const pageSize = uiStore.imagePageSize
-  const cols = layout.currentColumnCount.value
-
-  // 将行索引转换为图片索引
-  const startImgIndex = startIndex * cols
-  const endImgIndex = endIndex * cols
-
-  // 计算涉及的页码
-  const startPage = Math.floor(startImgIndex / pageSize) + 1
-  const endPage = Math.floor(endImgIndex / pageSize) + 1
-
-  // 检查每页是否需要加载
-  for (let page = startPage; page <= endPage; page++) {
-    const pageStartIndex = (page - 1) * pageSize
-    // 检查该页的第一个元素是否存在，如果不存在（是 null），则需要加载
-    if (pageStartIndex < imageList.images.value.length && !imageList.images.value[pageStartIndex]) {
-      imageList.fetchImages(page, pageSize)
-    }
-  }
-}
-
 // 暴露方法给父组件
 defineExpose({
   refresh: imageList.refresh,
@@ -280,67 +285,28 @@ defineExpose({
 
 // ==================== 生命周期 ====================
 onMounted(async () => {
-  // 网格模式下不再使用 IntersectionObserver，依赖 DynamicScroller 的 update 事件
-  if (layout.isWaterfall.value) {
-    observer.value = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const index = Number((entry.target as HTMLElement).dataset.index)
-          if (!isNaN(index) && !imageList.images.value[index]) {
-            const pageSize = uiStore.imagePageSize
-            const page = Math.floor(index / pageSize) + 1
-            imageList.fetchImages(page, pageSize)
-          }
-        }
-      })
-    }, {
-      rootMargin: '200px 0px',
-      threshold: 0
-    })
+  // 创建懒加载观察器（网格和瀑布流模式通用）
+  createLoadObserver()
 
-    itemRefs.forEach((el) => {
-      observer.value?.observe(el)
-    })
-  }
-
+  // 初始加载第一页
   await imageList.fetchImages(1, uiStore.imagePageSize)
 })
 
-watch(() => layout.isWaterfall.value, (isWaterfall) => {
-  if (isWaterfall) {
-    // 切换到瀑布流时初始化观察器
-    if (!observer.value) {
-      observer.value = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const index = Number((entry.target as HTMLElement).dataset.index)
-            if (!isNaN(index) && !imageList.images.value[index]) {
-              const pageSize = uiStore.imagePageSize
-              const page = Math.floor(index / pageSize) + 1
-              imageList.fetchImages(page, pageSize)
-            }
-          }
-        })
-      }, {
-        rootMargin: '200px 0px',
-        threshold: 0
-      })
-    }
-    // 需要重新观察所有元素 (等待 DOM 更新)
-    setTimeout(() => {
-      itemRefs.forEach((el) => {
-        observer.value?.observe(el)
-      })
-    }, 100)
-  } else {
-    // 切换回网格时销毁观察器
-    observer.value?.disconnect()
-    observer.value = null
-  }
+// 布局切换时重新初始化观察器
+watch(() => layout.isWaterfall.value, () => {
+  // 重新创建观察器
+  createLoadObserver()
+
+  // 等待 DOM 更新后重新观察所有元素
+  setTimeout(() => {
+    itemRefs.forEach((el) => {
+      loadObserver.value?.observe(el)
+    })
+  }, 100)
 })
 
 onUnmounted(() => {
-  observer.value?.disconnect()
-  observer.value = null
+  loadObserver.value?.disconnect()
+  loadObserver.value = null
 })
 </script>

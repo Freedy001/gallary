@@ -7,7 +7,7 @@
         <p class="mt-1 text-sm text-gray-500">选择并配置图片存储方式</p>
       </div>
       <button
-          class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors"
+          class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors"
           @click="showMigrationDialog = true"
       >
         <ArrowsRightLeftIcon class="h-4 w-4" />

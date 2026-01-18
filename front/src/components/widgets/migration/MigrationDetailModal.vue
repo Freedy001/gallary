@@ -68,6 +68,11 @@
                         class="h-full rounded-full transition-all duration-500 ease-out"
                     ></div>
                   </div>
+                  <!-- 速度和剩余时间 -->
+                  <div v-if="task.status === 'running' && task.speed > 0" class="flex justify-between text-[10px] text-white/40 mt-1">
+                    <span>{{ formatSpeed(task.speed) }}</span>
+                    <span>剩余 {{ formatRemainingTime(task.remaining_seconds) }}</span>
+                  </div>
                 </div>
 
                 <!-- 失败数 -->
@@ -284,6 +289,37 @@ function getProgressBarClass(task: MigrationProgressVO): string {
     return 'bg-yellow-500'
   }
   return 'bg-gray-500'
+}
+
+// 格式化传输速度
+function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond < 1024) {
+    return `${bytesPerSecond} B/s`
+  } else if (bytesPerSecond < 1024 * 1024) {
+    return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
+  } else if (bytesPerSecond < 1024 * 1024 * 1024) {
+    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
+  } else {
+    return `${(bytesPerSecond / (1024 * 1024 * 1024)).toFixed(1)} GB/s`
+  }
+}
+
+// 格式化剩余时间
+function formatRemainingTime(seconds: number): string {
+  if (seconds <= 0) {
+    return '计算中...'
+  }
+  if (seconds < 60) {
+    return `${seconds}秒`
+  } else if (seconds < 3600) {
+    const minutes = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return secs > 0 ? `${minutes}分${secs}秒` : `${minutes}分钟`
+  } else {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    return minutes > 0 ? `${hours}小时${minutes}分` : `${hours}小时`
+  }
 }
 
 async function handlePause(taskId: number) {
