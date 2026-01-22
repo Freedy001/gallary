@@ -142,7 +142,7 @@
           </div>
 
           <!-- 文件大小筛选 -->
-          <div v-if="form.migration_type !== 'thumbnail'">
+          <div>
             <label class="block text-xs font-medium text-gray-400 mb-2">文件大小范围</label>
             <div class="flex items-center gap-2">
               <div class="relative flex-1">

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"gallary/server/internal/service"
-	"io"
 
 	"gallary/server/internal/llms"
 	"gallary/server/internal/model"
@@ -49,14 +48,14 @@ func (p *AestheticScoringProcessor) ProcessItem(ctx context.Context, itemID int6
 		return fmt.Errorf("图片不存在: %d", itemID)
 	}
 
-	// 2. 读取图片数据
-	imageData, err := p.readImageData(ctx, image)
+	// 2. 获取图片来源（根据存储类型选择 URL 或二进制数据）
+	src, err := p.storageManager.GetImageSource(ctx, image)
 	if err != nil {
-		return fmt.Errorf("读取图片数据失败: %v", err)
+		return fmt.Errorf("获取图片来源失败: %v", err)
 	}
 
 	// 3. 调用美学评分接口
-	score, err := p.Cast(client).Aesthetics(ctx, imageData)
+	score, err := p.Cast(client).Aesthetics(ctx, src)
 	if err != nil {
 		return err
 	}
@@ -68,13 +67,4 @@ func (p *AestheticScoringProcessor) ProcessItem(ctx context.Context, itemID int6
 	}
 
 	return nil
-}
-
-func (p *AestheticScoringProcessor) readImageData(ctx context.Context, image *model.Image) ([]byte, error) {
-	reader, err := p.storageManager.Download(ctx, image.StorageId, image.StoragePath)
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
-	return io.ReadAll(reader)
 }

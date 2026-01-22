@@ -12,6 +12,7 @@
         :draggable="false"
         :img-class="['w-full object-cover transition-transform duration-500', { 'h-full': square }]"
         :src="imageUrl"
+        :load-priority="loadPriority"
         @error="handleImageError"
     />
 
@@ -47,6 +48,7 @@ import type {Image} from '@/types'
 interface Props {
   image: Image | null | undefined
   square?: boolean
+  loadPriority?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -72,7 +74,8 @@ const imageUrl = computed(() => {
   return props.image.url
 })
 
-function handleImageError() {
+function handleImageError(event: Event) {
+  console.log('Image load error:', event)
   imageError.value = true
 }
 

@@ -36,6 +36,8 @@ export interface PrepareUploadRequest {
   original_name: string
   album_id?: number
   exif_data?: ExifData
+  thumbnail_width?: number  // 缩略图宽度
+  thumbnail_height?: number // 缩略图高度
 }
 
 // 准备上传响应
@@ -51,10 +53,6 @@ export interface PrepareUploadResponse {
 // 确认上传请求
 export interface ConfirmUploadRequest {
   upload_id: string
-  storage_path: string
-  thumbnail_path?: string
-  thumbnail_width?: number
-  thumbnail_height?: number
 }
 
 export const imageApi = {

@@ -70,8 +70,8 @@
           <input
             type="range"
             min="1"
-            max="10"
-            :value="gridDensity"
+            :value="displayDensity"
+            max="16"
             @input="handleDensityChange"
             class="w-24 cursor-pointer accent-white h-1 bg-white/10 rounded-full appearance-none hover:bg-white/20"
           />
@@ -83,8 +83,9 @@
 </template>
 
 <script setup lang="ts">
-import {computed, ref} from 'vue'
+import {computed, ref, watch} from 'vue'
 import {Square3Stack3DIcon, Squares2X2Icon} from '@heroicons/vue/24/outline'
+import {useDebounceFn} from '@vueuse/core'
 import BaseSelect, {type SelectOption} from '@/components/common/BaseSelect.vue'
 import type {SortBy} from '@/stores/ui'
 
@@ -133,9 +134,25 @@ const sortOptions: SelectOption[] = [
   { label: '美学评分', value: 'ai_score' }
 ]
 
+// 本地显示值，用于滑块即时响应
+const displayDensity = ref(props.gridDensity)
+
+// 同步 props 变化到本地显示值
+watch(() => props.gridDensity, (val) => {
+  displayDensity.value = val
+})
+
+// 防抖触发实际的密度变更，避免频繁触发布局重算
+const debouncedEmit = useDebounceFn((value: number) => {
+  emit('densityChange', value)
+}, 150)
+
 function handleDensityChange(event: Event) {
   const value = parseInt((event.target as HTMLInputElement).value)
-  emit('densityChange', value)
+  // 立即更新本地显示值（滑块位置即时响应）
+  displayDensity.value = value
+  // 防抖触发实际变更
+  debouncedEmit(value)
 }
 
 

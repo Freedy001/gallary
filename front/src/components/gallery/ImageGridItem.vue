@@ -3,6 +3,7 @@
     <ImageCard
         :image="image"
         :square="square"
+        :load-priority="loadPriority"
     />
 
     <!-- 选择模式遮罩 -->
@@ -42,5 +43,7 @@ defineProps<{
   isSelected: boolean
   isSelectionMode: boolean
   square?: boolean
+  loadPriority?: number
 }>()
 </script>
+

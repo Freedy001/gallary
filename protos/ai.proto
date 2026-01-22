@@ -41,10 +41,19 @@ message EmbeddingResponse {
 
 // ============== 美学评分服务 (Aesthetics) ==============
 
+// 图片输入项（支持二进制或 URL）
+message ImageInput {
+  oneof source {
+    bytes data = 1;  // 图片二进制数据
+    string url = 2;  // 图片 URL（用于远程存储，避免二次传输）
+  }
+}
+
 // 美学评分请求
 message AestheticRequest {
-  repeated bytes images = 1;  // 图片二进制数据
+  repeated bytes images = 1;  // 图片二进制数据（保留兼容）
   bool return_distribution = 2;  // 是否返回概率分布
+  repeated ImageInput image_inputs = 3;  // 新的图片输入方式（优先使用）
 }
 
 // 单个美学评分结果
@@ -69,6 +78,7 @@ message MultimodalContent {
   oneof content {
     string text = 1;
     bytes image = 2;  // 图片二进制数据
+    string image_url = 3;  // 图片 URL（用于远程存储，避免二次传输）
   }
 }
 

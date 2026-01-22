@@ -40,9 +40,9 @@ type EmbeddingClient interface {
 	ModelClient
 
 	// Embedding 嵌入向量计算
-	// imageData: 图片二进制数据 (可为 nil)
+	// imageSource: 图片来源（二进制数据或 URL，可为 nil）
 	// text: 文本内容 (可为空)
-	Embedding(ctx context.Context, imageData []byte, text string) ([]float32, error)
+	Embedding(ctx context.Context, imageSource *model.ImageSource, text string) ([]float32, error)
 }
 
 // LLMSClient 通用大模型客户端接口（支持多模态，标准 OpenAI API）
@@ -61,8 +61,8 @@ type SelfClient interface {
 	EmbeddingClient
 
 	// Aesthetics 美学评分
-	// imageData: 图片二进制数据 (必须提供)
-	Aesthetics(ctx context.Context, imageData []byte) (score float64, err error)
+	// imageSource: 图片来源（二进制数据或 URL，必须提供）
+	Aesthetics(ctx context.Context, imageSource *model.ImageSource) (score float64, err error)
 
 	// ClusterStream 流式聚类
 	// 通过 progressChan 发送进度更新，完成后关闭 channel

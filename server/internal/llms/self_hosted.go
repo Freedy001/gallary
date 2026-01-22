@@ -63,7 +63,7 @@ func newSelfHostedClient(provider *model.ModelConfig, modelItem *model.ModelItem
 }
 
 // Embedding 使用 gRPC 计算嵌入向量
-func (c *selfHostedClient) Embedding(ctx context.Context, imageData []byte, text string) ([]float32, error) {
+func (c *selfHostedClient) Embedding(ctx context.Context, imageSource *model.ImageSource, text string) ([]float32, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("gRPC 客户端未初始化")
 	}
@@ -74,12 +74,22 @@ func (c *selfHostedClient) Embedding(ctx context.Context, imageData []byte, text
 	}
 
 	// 添加图片内容
-	if len(imageData) > 0 {
-		req.Contents = append(req.Contents, &pb.MultimodalContent{
-			Content: &pb.MultimodalContent_Image{
-				Image: imageData,
-			},
-		})
+	if imageSource != nil {
+		if imageSource.URL != "" {
+			// 优先使用 URL（避免二次传输）
+			req.Contents = append(req.Contents, &pb.MultimodalContent{
+				Content: &pb.MultimodalContent_ImageUrl{
+					ImageUrl: imageSource.URL,
+				},
+			})
+		} else if len(imageSource.Data) > 0 {
+			// 使用二进制数据
+			req.Contents = append(req.Contents, &pb.MultimodalContent{
+				Content: &pb.MultimodalContent_Image{
+					Image: imageSource.Data,
+				},
+			})
+		}
 	}
 
 	// 添加文本内容
@@ -109,18 +119,38 @@ func (c *selfHostedClient) Embedding(ctx context.Context, imageData []byte, text
 }
 
 // Aesthetics 美学评分（使用 gRPC）
-func (c *selfHostedClient) Aesthetics(ctx context.Context, imageData []byte) (float64, error) {
+func (c *selfHostedClient) Aesthetics(ctx context.Context, imageSource *model.ImageSource) (float64, error) {
 	if c.client == nil {
 		return 0, fmt.Errorf("gRPC 客户端未初始化")
 	}
 
-	if len(imageData) == 0 {
+	if imageSource == nil || (len(imageSource.Data) == 0 && imageSource.URL == "") {
 		return 0, fmt.Errorf("必须提供图片")
 	}
 
 	req := &pb.AestheticRequest{
-		Images:             [][]byte{imageData},
 		ReturnDistribution: false,
+	}
+
+	// 优先使用新的 ImageInputs 字段
+	if imageSource.URL != "" {
+		// 使用 URL（避免二次传输）
+		req.ImageInputs = []*pb.ImageInput{
+			{
+				Source: &pb.ImageInput_Url{
+					Url: imageSource.URL,
+				},
+			},
+		}
+	} else {
+		// 使用二进制数据
+		req.ImageInputs = []*pb.ImageInput{
+			{
+				Source: &pb.ImageInput_Data{
+					Data: imageSource.Data,
+				},
+			},
+		}
 	}
 
 	resp, err := c.client.EvaluateAesthetic(ctx, req)

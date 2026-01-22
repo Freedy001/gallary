@@ -110,7 +110,7 @@ func (r *imageEmbeddingRepository) VectorSearchWithinIDs(ctx context.Context, mo
 	return embeddings, nil
 }
 
-// FindImagesWithoutEmbedding 查询未计算向量的图片 ID（未被删除的图片）
+// FindImagesWithoutEmbedding 查询未计算向量的图片 ID（未被删除的图片，排除已在队列中的）
 func (r *imageEmbeddingRepository) FindImagesWithoutEmbedding(ctx context.Context, modelName string, limit int) ([]int64, error) {
 	var imageIDs []int64
 
@@ -125,6 +125,7 @@ func (r *imageEmbeddingRepository) FindImagesWithoutEmbedding(ctx context.Contex
 		Select("id").
 		Where("deleted_at IS NULL").
 		Where("id NOT IN (?)", subQuery).
+		Where("id NOT IN (SELECT item_id FROM ai_task_items WHERE task_type = ?)", model.ImageEmbeddingTaskType).
 		Order("created_at DESC").
 		Limit(limit).
 		Pluck("id", &imageIDs).Error

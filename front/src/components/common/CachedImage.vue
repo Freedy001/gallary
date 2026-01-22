@@ -26,6 +26,7 @@ const props = withDefaults(defineProps<{
   loading?: 'lazy' | 'eager'
   draggable?: boolean
   preload?: boolean // 是否立即预加载到缓存
+  loadPriority?: number // 加载优先级，数值越小优先级越高
 }>(), {
   alt: '',
   imgClass: '',
@@ -69,7 +70,7 @@ async function loadImage() {
   // 如果需要预加载，先加载到缓存
   if (props.preload) {
     try {
-      cachedUrl.value = await thumbnailCache.preload(newSrc)
+      cachedUrl.value = await thumbnailCache.preload(newSrc, props.loadPriority)
       thumbnailCache.retain(newSrc)
     } catch {
       // 加载失败时使用原始 URL

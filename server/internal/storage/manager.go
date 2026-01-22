@@ -333,3 +333,39 @@ func (m *StorageManager) Exists(ctx context.Context, storageId model.StorageId, 
 	}
 	return storage.Exists(ctx, path)
 }
+
+// GetImageSource 根据存储类型获取图片来源
+// 对于本地存储，返回二进制数据；对于远程存储，返回 URL（避免二次传输）
+func (m *StorageManager) GetImageSource(ctx context.Context, image *model.Image) (*model.ImageSource, error) {
+	// 本地存储：直接读取二进制数据
+	if image.StorageId == model.StorageTypeLocal {
+		imageData, err := m.ReadImageData(ctx, image)
+		if err != nil {
+			return nil, err
+		}
+		return &model.ImageSource{Data: imageData}, nil
+	}
+
+	// 远程存储：获取 URL，让 AI 服务直接下载
+	url := m.Url(image.StorageId, image.StoragePath)
+	if url == "" {
+		// 如果无法获取 URL，回退到二进制数据方式
+		imageData, err := m.ReadImageData(ctx, image)
+		if err != nil {
+			return nil, err
+		}
+		return &model.ImageSource{Data: imageData}, nil
+	}
+
+	return &model.ImageSource{URL: url}, nil
+}
+
+// ReadImageData 读取图片二进制数据
+func (m *StorageManager) ReadImageData(ctx context.Context, image *model.Image) ([]byte, error) {
+	reader, err := m.Download(ctx, image.StorageId, image.StoragePath)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	return io.ReadAll(reader)
+}

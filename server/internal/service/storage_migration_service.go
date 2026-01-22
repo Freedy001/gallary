@@ -159,19 +159,11 @@ func (s *storageMigrationService) PreviewMigration(ctx context.Context, req *Cre
 		return nil, err
 	}
 
-	if req.MigrationType == model.MigrationTypeThumbnail {
-		totalSize = 0
-	}
-
 	return &MigrationPreview{
 		FilesCount: count,
 		TotalSize:  totalSize,
 	}, nil
 }
-
-// ListActiveMigrations 获取所有活跃迁移任务
-
-// CancelMigration 取消迁移任务
 
 // PauseMigration 暂停迁移任务
 func (s *storageMigrationService) PauseMigration(ctx context.Context, taskID int64) error {
@@ -215,8 +207,6 @@ func (s *storageMigrationService) ResumeMigration(ctx context.Context, taskID in
 
 	return nil
 }
-
-// ListMigrations 获取迁移历史
 
 // RetryFailedFiles 重试失败的文件
 func (s *storageMigrationService) RetryFailedFiles(ctx context.Context, taskID int64) error {
@@ -573,8 +563,15 @@ func (s *storageMigrationService) migrateFile(ctx context.Context, task *model.S
 	}
 	defer reader.Close()
 
+	closer, ok := reader.(io.ReadSeekCloser)
+	if !ok {
+		errMsg := fmt.Sprintf("下载 read 必须是ReadSeekCloser")
+		s.updateFileRecordStatus(ctx, task.ID, record.ID, model.MigrationFileRecordFailed, &errMsg)
+		return
+	}
+
 	// 使用 countingReader 包装，统计实际传输字节数
-	cr := &countingReader{reader: reader}
+	cr := &countingReader{reader: closer}
 
 	// 上传到目标存储
 	targetCtx := context.WithValue(ctx, storage.OverrideStorageType, task.TargetStorageId)
@@ -585,11 +582,21 @@ func (s *storageMigrationService) migrateFile(ctx context.Context, task *model.S
 		return
 	}
 
-	// 更新数据库中的存储 ID
+	// 更新数据库中的存储 ID，并补充缺失的文件大小
 	if task.MigrationType == model.MigrationTypeOriginal {
 		image.StorageId = task.TargetStorageId
+		// 如果数据库中没有文件大小，则补充
+		if image.FileSize == 0 && cr.bytesRead > 0 {
+			image.FileSize = cr.bytesRead
+			logger.Info("补充原始文件大小", zap.Int64("image_id", image.ID), zap.Int64("file_size", cr.bytesRead))
+		}
 	} else {
 		image.ThumbnailStorageId = task.TargetStorageId
+		// 如果数据库中没有缩略图大小，则补充
+		if image.ThumbnailSize == 0 && cr.bytesRead > 0 {
+			image.ThumbnailSize = cr.bytesRead
+			logger.Info("补充缩略图文件大小", zap.Int64("image_id", image.ID), zap.Int64("thumbnail_size", cr.bytesRead))
+		}
 	}
 
 	if err := database.GetDB(ctx).Save(image).Error; err != nil {
@@ -670,7 +677,7 @@ func (s *storageMigrationService) getMigrationStatsForTask(taskID int64) (speed 
 
 // countingReader 用于统计实际读取字节数的 Reader 包装器
 type countingReader struct {
-	reader    io.Reader
+	reader    io.ReadSeekCloser
 	bytesRead int64
 }
 
@@ -678,4 +685,8 @@ func (c *countingReader) Read(p []byte) (n int, err error) {
 	n, err = c.reader.Read(p)
 	c.bytesRead += int64(n)
 	return
+}
+
+func (c countingReader) Seek(offset int64, whence int) (int64, error) {
+	return c.reader.Seek(offset, whence)
 }

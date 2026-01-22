@@ -68,7 +68,9 @@ export const uploadService = {
       mime_type: file.type,
       original_name: file.name,
       album_id: albumId,
-      exif_data: preprocessResult.exifData || undefined
+      exif_data: preprocessResult.exifData || undefined,
+      thumbnail_width: preprocessResult.thumbnail?.width,
+      thumbnail_height: preprocessResult.thumbnail?.height
     }
 
     const response = await imageApi.prepareUpload(request)
@@ -130,21 +132,16 @@ export const uploadService = {
    * 确认上传：通知后端文件已上传完成
    */
   async confirmUpload(
-    prepareData: PrepareUploadResponse,
-    thumbnail: ThumbnailResult | null
+    prepareData: PrepareUploadResponse
   ): Promise<number> {
-    const {upload_id, storage_path, thumbnail_path} = prepareData
+    const {upload_id} = prepareData
 
-    if (!upload_id || !storage_path) {
+    if (!upload_id) {
       throw new Error('无效的上传信息')
     }
 
     const response = await imageApi.confirmUpload({
-      upload_id,
-      storage_path,
-      thumbnail_path,
-      thumbnail_width: thumbnail?.width,
-      thumbnail_height: thumbnail?.height
+      upload_id
     })
 
     return response.data.id
@@ -191,7 +188,7 @@ export const uploadService = {
 
       // 5. 确认上传
       callbacks?.onConfirm?.()
-      const imageId = await this.confirmUpload(prepareData, preprocessResult.thumbnail)
+      const imageId = await this.confirmUpload(prepareData)
 
       return {
         success: true,

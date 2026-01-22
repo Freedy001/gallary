@@ -302,18 +302,102 @@ func (x *EmbeddingResponse) GetTotalTokens() int32 {
 	return 0
 }
 
+// 图片输入项（支持二进制或 URL）
+type ImageInput struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Source:
+	//
+	//	*ImageInput_Data
+	//	*ImageInput_Url
+	Source        isImageInput_Source `protobuf_oneof:"source"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImageInput) Reset() {
+	*x = ImageInput{}
+	mi := &file_ai_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImageInput) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImageInput) ProtoMessage() {}
+
+func (x *ImageInput) ProtoReflect() protoreflect.Message {
+	mi := &file_ai_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImageInput.ProtoReflect.Descriptor instead.
+func (*ImageInput) Descriptor() ([]byte, []int) {
+	return file_ai_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ImageInput) GetSource() isImageInput_Source {
+	if x != nil {
+		return x.Source
+	}
+	return nil
+}
+
+func (x *ImageInput) GetData() []byte {
+	if x != nil {
+		if x, ok := x.Source.(*ImageInput_Data); ok {
+			return x.Data
+		}
+	}
+	return nil
+}
+
+func (x *ImageInput) GetUrl() string {
+	if x != nil {
+		if x, ok := x.Source.(*ImageInput_Url); ok {
+			return x.Url
+		}
+	}
+	return ""
+}
+
+type isImageInput_Source interface {
+	isImageInput_Source()
+}
+
+type ImageInput_Data struct {
+	Data []byte `protobuf:"bytes,1,opt,name=data,proto3,oneof"` // 图片二进制数据
+}
+
+type ImageInput_Url struct {
+	Url string `protobuf:"bytes,2,opt,name=url,proto3,oneof"` // 图片 URL（用于远程存储，避免二次传输）
+}
+
+func (*ImageInput_Data) isImageInput_Source() {}
+
+func (*ImageInput_Url) isImageInput_Source() {}
+
 // 美学评分请求
 type AestheticRequest struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
-	Images             [][]byte               `protobuf:"bytes,1,rep,name=images,proto3" json:"images,omitempty"`                                                    // 图片二进制数据
+	Images             [][]byte               `protobuf:"bytes,1,rep,name=images,proto3" json:"images,omitempty"`                                                    // 图片二进制数据（保留兼容）
 	ReturnDistribution bool                   `protobuf:"varint,2,opt,name=return_distribution,json=returnDistribution,proto3" json:"return_distribution,omitempty"` // 是否返回概率分布
+	ImageInputs        []*ImageInput          `protobuf:"bytes,3,rep,name=image_inputs,json=imageInputs,proto3" json:"image_inputs,omitempty"`                       // 新的图片输入方式（优先使用）
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
 
 func (x *AestheticRequest) Reset() {
 	*x = AestheticRequest{}
-	mi := &file_ai_proto_msgTypes[5]
+	mi := &file_ai_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -325,7 +409,7 @@ func (x *AestheticRequest) String() string {
 func (*AestheticRequest) ProtoMessage() {}
 
 func (x *AestheticRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[5]
+	mi := &file_ai_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -338,7 +422,7 @@ func (x *AestheticRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AestheticRequest.ProtoReflect.Descriptor instead.
 func (*AestheticRequest) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{5}
+	return file_ai_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *AestheticRequest) GetImages() [][]byte {
@@ -355,6 +439,13 @@ func (x *AestheticRequest) GetReturnDistribution() bool {
 	return false
 }
 
+func (x *AestheticRequest) GetImageInputs() []*ImageInput {
+	if x != nil {
+		return x.ImageInputs
+	}
+	return nil
+}
+
 // 单个美学评分结果
 type AestheticData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -368,7 +459,7 @@ type AestheticData struct {
 
 func (x *AestheticData) Reset() {
 	*x = AestheticData{}
-	mi := &file_ai_proto_msgTypes[6]
+	mi := &file_ai_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -380,7 +471,7 @@ func (x *AestheticData) String() string {
 func (*AestheticData) ProtoMessage() {}
 
 func (x *AestheticData) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[6]
+	mi := &file_ai_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -393,7 +484,7 @@ func (x *AestheticData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AestheticData.ProtoReflect.Descriptor instead.
 func (*AestheticData) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{6}
+	return file_ai_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AestheticData) GetIndex() int32 {
@@ -436,7 +527,7 @@ type AestheticResponse struct {
 
 func (x *AestheticResponse) Reset() {
 	*x = AestheticResponse{}
-	mi := &file_ai_proto_msgTypes[7]
+	mi := &file_ai_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -448,7 +539,7 @@ func (x *AestheticResponse) String() string {
 func (*AestheticResponse) ProtoMessage() {}
 
 func (x *AestheticResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[7]
+	mi := &file_ai_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -461,7 +552,7 @@ func (x *AestheticResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AestheticResponse.ProtoReflect.Descriptor instead.
 func (*AestheticResponse) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{7}
+	return file_ai_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *AestheticResponse) GetData() []*AestheticData {
@@ -492,6 +583,7 @@ type MultimodalContent struct {
 	//
 	//	*MultimodalContent_Text
 	//	*MultimodalContent_Image
+	//	*MultimodalContent_ImageUrl
 	Content       isMultimodalContent_Content `protobuf_oneof:"content"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -499,7 +591,7 @@ type MultimodalContent struct {
 
 func (x *MultimodalContent) Reset() {
 	*x = MultimodalContent{}
-	mi := &file_ai_proto_msgTypes[8]
+	mi := &file_ai_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -511,7 +603,7 @@ func (x *MultimodalContent) String() string {
 func (*MultimodalContent) ProtoMessage() {}
 
 func (x *MultimodalContent) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[8]
+	mi := &file_ai_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -524,7 +616,7 @@ func (x *MultimodalContent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MultimodalContent.ProtoReflect.Descriptor instead.
 func (*MultimodalContent) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{8}
+	return file_ai_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *MultimodalContent) GetContent() isMultimodalContent_Content {
@@ -552,6 +644,15 @@ func (x *MultimodalContent) GetImage() []byte {
 	return nil
 }
 
+func (x *MultimodalContent) GetImageUrl() string {
+	if x != nil {
+		if x, ok := x.Content.(*MultimodalContent_ImageUrl); ok {
+			return x.ImageUrl
+		}
+	}
+	return ""
+}
+
 type isMultimodalContent_Content interface {
 	isMultimodalContent_Content()
 }
@@ -564,9 +665,15 @@ type MultimodalContent_Image struct {
 	Image []byte `protobuf:"bytes,2,opt,name=image,proto3,oneof"` // 图片二进制数据
 }
 
+type MultimodalContent_ImageUrl struct {
+	ImageUrl string `protobuf:"bytes,3,opt,name=image_url,json=imageUrl,proto3,oneof"` // 图片 URL（用于远程存储，避免二次传输）
+}
+
 func (*MultimodalContent_Text) isMultimodalContent_Content() {}
 
 func (*MultimodalContent_Image) isMultimodalContent_Content() {}
+
+func (*MultimodalContent_ImageUrl) isMultimodalContent_Content() {}
 
 // 多模态嵌入请求
 type MultimodalEmbeddingRequest struct {
@@ -579,7 +686,7 @@ type MultimodalEmbeddingRequest struct {
 
 func (x *MultimodalEmbeddingRequest) Reset() {
 	*x = MultimodalEmbeddingRequest{}
-	mi := &file_ai_proto_msgTypes[9]
+	mi := &file_ai_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -591,7 +698,7 @@ func (x *MultimodalEmbeddingRequest) String() string {
 func (*MultimodalEmbeddingRequest) ProtoMessage() {}
 
 func (x *MultimodalEmbeddingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[9]
+	mi := &file_ai_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -604,7 +711,7 @@ func (x *MultimodalEmbeddingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MultimodalEmbeddingRequest.ProtoReflect.Descriptor instead.
 func (*MultimodalEmbeddingRequest) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{9}
+	return file_ai_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *MultimodalEmbeddingRequest) GetModel() string {
@@ -633,7 +740,7 @@ type MultimodalEmbeddingItem struct {
 
 func (x *MultimodalEmbeddingItem) Reset() {
 	*x = MultimodalEmbeddingItem{}
-	mi := &file_ai_proto_msgTypes[10]
+	mi := &file_ai_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -645,7 +752,7 @@ func (x *MultimodalEmbeddingItem) String() string {
 func (*MultimodalEmbeddingItem) ProtoMessage() {}
 
 func (x *MultimodalEmbeddingItem) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[10]
+	mi := &file_ai_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -658,7 +765,7 @@ func (x *MultimodalEmbeddingItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MultimodalEmbeddingItem.ProtoReflect.Descriptor instead.
 func (*MultimodalEmbeddingItem) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{10}
+	return file_ai_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *MultimodalEmbeddingItem) GetIndex() int32 {
@@ -695,7 +802,7 @@ type MultimodalEmbeddingResponse struct {
 
 func (x *MultimodalEmbeddingResponse) Reset() {
 	*x = MultimodalEmbeddingResponse{}
-	mi := &file_ai_proto_msgTypes[11]
+	mi := &file_ai_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -707,7 +814,7 @@ func (x *MultimodalEmbeddingResponse) String() string {
 func (*MultimodalEmbeddingResponse) ProtoMessage() {}
 
 func (x *MultimodalEmbeddingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[11]
+	mi := &file_ai_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -720,7 +827,7 @@ func (x *MultimodalEmbeddingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MultimodalEmbeddingResponse.ProtoReflect.Descriptor instead.
 func (*MultimodalEmbeddingResponse) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{11}
+	return file_ai_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *MultimodalEmbeddingResponse) GetEmbeddings() []*MultimodalEmbeddingItem {
@@ -764,7 +871,7 @@ type HDBSCANParams struct {
 
 func (x *HDBSCANParams) Reset() {
 	*x = HDBSCANParams{}
-	mi := &file_ai_proto_msgTypes[12]
+	mi := &file_ai_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -776,7 +883,7 @@ func (x *HDBSCANParams) String() string {
 func (*HDBSCANParams) ProtoMessage() {}
 
 func (x *HDBSCANParams) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[12]
+	mi := &file_ai_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -789,7 +896,7 @@ func (x *HDBSCANParams) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HDBSCANParams.ProtoReflect.Descriptor instead.
 func (*HDBSCANParams) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{12}
+	return file_ai_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *HDBSCANParams) GetMinClusterSize() int32 {
@@ -833,7 +940,7 @@ type UMAPParams struct {
 
 func (x *UMAPParams) Reset() {
 	*x = UMAPParams{}
-	mi := &file_ai_proto_msgTypes[13]
+	mi := &file_ai_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -845,7 +952,7 @@ func (x *UMAPParams) String() string {
 func (*UMAPParams) ProtoMessage() {}
 
 func (x *UMAPParams) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[13]
+	mi := &file_ai_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -858,7 +965,7 @@ func (x *UMAPParams) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UMAPParams.ProtoReflect.Descriptor instead.
 func (*UMAPParams) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{13}
+	return file_ai_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *UMAPParams) GetEnabled() bool {
@@ -899,7 +1006,7 @@ type Embedding struct {
 
 func (x *Embedding) Reset() {
 	*x = Embedding{}
-	mi := &file_ai_proto_msgTypes[14]
+	mi := &file_ai_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -911,7 +1018,7 @@ func (x *Embedding) String() string {
 func (*Embedding) ProtoMessage() {}
 
 func (x *Embedding) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[14]
+	mi := &file_ai_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -924,7 +1031,7 @@ func (x *Embedding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Embedding.ProtoReflect.Descriptor instead.
 func (*Embedding) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{14}
+	return file_ai_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Embedding) GetValues() []float32 {
@@ -948,7 +1055,7 @@ type ClusteringRequest struct {
 
 func (x *ClusteringRequest) Reset() {
 	*x = ClusteringRequest{}
-	mi := &file_ai_proto_msgTypes[15]
+	mi := &file_ai_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -960,7 +1067,7 @@ func (x *ClusteringRequest) String() string {
 func (*ClusteringRequest) ProtoMessage() {}
 
 func (x *ClusteringRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[15]
+	mi := &file_ai_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -973,7 +1080,7 @@ func (x *ClusteringRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClusteringRequest.ProtoReflect.Descriptor instead.
 func (*ClusteringRequest) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{15}
+	return file_ai_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ClusteringRequest) GetEmbeddings() []*Embedding {
@@ -1023,7 +1130,7 @@ type ClusterResult struct {
 
 func (x *ClusterResult) Reset() {
 	*x = ClusterResult{}
-	mi := &file_ai_proto_msgTypes[16]
+	mi := &file_ai_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1035,7 +1142,7 @@ func (x *ClusterResult) String() string {
 func (*ClusterResult) ProtoMessage() {}
 
 func (x *ClusterResult) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[16]
+	mi := &file_ai_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1048,7 +1155,7 @@ func (x *ClusterResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClusterResult.ProtoReflect.Descriptor instead.
 func (*ClusterResult) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{16}
+	return file_ai_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ClusterResult) GetClusterId() int32 {
@@ -1085,7 +1192,7 @@ type ClusteringResponse struct {
 
 func (x *ClusteringResponse) Reset() {
 	*x = ClusteringResponse{}
-	mi := &file_ai_proto_msgTypes[17]
+	mi := &file_ai_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1097,7 +1204,7 @@ func (x *ClusteringResponse) String() string {
 func (*ClusteringResponse) ProtoMessage() {}
 
 func (x *ClusteringResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[17]
+	mi := &file_ai_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1110,7 +1217,7 @@ func (x *ClusteringResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClusteringResponse.ProtoReflect.Descriptor instead.
 func (*ClusteringResponse) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{17}
+	return file_ai_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ClusteringResponse) GetClusters() []*ClusterResult {
@@ -1156,7 +1263,7 @@ type ProgressUpdate struct {
 
 func (x *ProgressUpdate) Reset() {
 	*x = ProgressUpdate{}
-	mi := &file_ai_proto_msgTypes[18]
+	mi := &file_ai_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1168,7 +1275,7 @@ func (x *ProgressUpdate) String() string {
 func (*ProgressUpdate) ProtoMessage() {}
 
 func (x *ProgressUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_ai_proto_msgTypes[18]
+	mi := &file_ai_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1181,7 +1288,7 @@ func (x *ProgressUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProgressUpdate.ProtoReflect.Descriptor instead.
 func (*ProgressUpdate) Descriptor() ([]byte, []int) {
-	return file_ai_proto_rawDescGZIP(), []int{18}
+	return file_ai_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ProgressUpdate) GetTaskId() int64 {
@@ -1247,10 +1354,16 @@ const file_ai_proto_rawDesc = "" +
 	"\x04data\x18\x01 \x03(\v2\x11.ai.EmbeddingDataR\x04data\x12\x14\n" +
 	"\x05model\x18\x02 \x01(\tR\x05model\x12#\n" +
 	"\rprompt_tokens\x18\x03 \x01(\x05R\fpromptTokens\x12!\n" +
-	"\ftotal_tokens\x18\x04 \x01(\x05R\vtotalTokens\"[\n" +
+	"\ftotal_tokens\x18\x04 \x01(\x05R\vtotalTokens\"@\n" +
+	"\n" +
+	"ImageInput\x12\x14\n" +
+	"\x04data\x18\x01 \x01(\fH\x00R\x04data\x12\x12\n" +
+	"\x03url\x18\x02 \x01(\tH\x00R\x03urlB\b\n" +
+	"\x06source\"\x8e\x01\n" +
 	"\x10AestheticRequest\x12\x16\n" +
 	"\x06images\x18\x01 \x03(\fR\x06images\x12/\n" +
-	"\x13return_distribution\x18\x02 \x01(\bR\x12returnDistribution\"u\n" +
+	"\x13return_distribution\x18\x02 \x01(\bR\x12returnDistribution\x121\n" +
+	"\fimage_inputs\x18\x03 \x03(\v2\x0e.ai.ImageInputR\vimageInputs\"u\n" +
 	"\rAestheticData\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x05R\x05index\x12\x14\n" +
 	"\x05score\x18\x02 \x01(\x02R\x05score\x12\x14\n" +
@@ -1259,10 +1372,11 @@ const file_ai_proto_rawDesc = "" +
 	"\x11AestheticResponse\x12%\n" +
 	"\x04data\x18\x01 \x03(\v2\x11.ai.AestheticDataR\x04data\x12\x14\n" +
 	"\x05model\x18\x02 \x01(\tR\x05model\x12\x18\n" +
-	"\abackend\x18\x03 \x01(\tR\abackend\"L\n" +
+	"\abackend\x18\x03 \x01(\tR\abackend\"k\n" +
 	"\x11MultimodalContent\x12\x14\n" +
 	"\x04text\x18\x01 \x01(\tH\x00R\x04text\x12\x16\n" +
-	"\x05image\x18\x02 \x01(\fH\x00R\x05imageB\t\n" +
+	"\x05image\x18\x02 \x01(\fH\x00R\x05image\x12\x1d\n" +
+	"\timage_url\x18\x03 \x01(\tH\x00R\bimageUrlB\t\n" +
 	"\acontent\"e\n" +
 	"\x1aMultimodalEmbeddingRequest\x12\x14\n" +
 	"\x05model\x18\x01 \x01(\tR\x05model\x121\n" +
@@ -1344,55 +1458,57 @@ func file_ai_proto_rawDescGZIP() []byte {
 	return file_ai_proto_rawDescData
 }
 
-var file_ai_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_ai_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_ai_proto_goTypes = []any{
 	(*HealthRequest)(nil),               // 0: ai.HealthRequest
 	(*HealthResponse)(nil),              // 1: ai.HealthResponse
 	(*EmbeddingRequest)(nil),            // 2: ai.EmbeddingRequest
 	(*EmbeddingData)(nil),               // 3: ai.EmbeddingData
 	(*EmbeddingResponse)(nil),           // 4: ai.EmbeddingResponse
-	(*AestheticRequest)(nil),            // 5: ai.AestheticRequest
-	(*AestheticData)(nil),               // 6: ai.AestheticData
-	(*AestheticResponse)(nil),           // 7: ai.AestheticResponse
-	(*MultimodalContent)(nil),           // 8: ai.MultimodalContent
-	(*MultimodalEmbeddingRequest)(nil),  // 9: ai.MultimodalEmbeddingRequest
-	(*MultimodalEmbeddingItem)(nil),     // 10: ai.MultimodalEmbeddingItem
-	(*MultimodalEmbeddingResponse)(nil), // 11: ai.MultimodalEmbeddingResponse
-	(*HDBSCANParams)(nil),               // 12: ai.HDBSCANParams
-	(*UMAPParams)(nil),                  // 13: ai.UMAPParams
-	(*Embedding)(nil),                   // 14: ai.Embedding
-	(*ClusteringRequest)(nil),           // 15: ai.ClusteringRequest
-	(*ClusterResult)(nil),               // 16: ai.ClusterResult
-	(*ClusteringResponse)(nil),          // 17: ai.ClusteringResponse
-	(*ProgressUpdate)(nil),              // 18: ai.ProgressUpdate
-	nil,                                 // 19: ai.ClusteringResponse.ParamsUsedEntry
+	(*ImageInput)(nil),                  // 5: ai.ImageInput
+	(*AestheticRequest)(nil),            // 6: ai.AestheticRequest
+	(*AestheticData)(nil),               // 7: ai.AestheticData
+	(*AestheticResponse)(nil),           // 8: ai.AestheticResponse
+	(*MultimodalContent)(nil),           // 9: ai.MultimodalContent
+	(*MultimodalEmbeddingRequest)(nil),  // 10: ai.MultimodalEmbeddingRequest
+	(*MultimodalEmbeddingItem)(nil),     // 11: ai.MultimodalEmbeddingItem
+	(*MultimodalEmbeddingResponse)(nil), // 12: ai.MultimodalEmbeddingResponse
+	(*HDBSCANParams)(nil),               // 13: ai.HDBSCANParams
+	(*UMAPParams)(nil),                  // 14: ai.UMAPParams
+	(*Embedding)(nil),                   // 15: ai.Embedding
+	(*ClusteringRequest)(nil),           // 16: ai.ClusteringRequest
+	(*ClusterResult)(nil),               // 17: ai.ClusterResult
+	(*ClusteringResponse)(nil),          // 18: ai.ClusteringResponse
+	(*ProgressUpdate)(nil),              // 19: ai.ProgressUpdate
+	nil,                                 // 20: ai.ClusteringResponse.ParamsUsedEntry
 }
 var file_ai_proto_depIdxs = []int32{
 	3,  // 0: ai.EmbeddingResponse.data:type_name -> ai.EmbeddingData
-	6,  // 1: ai.AestheticResponse.data:type_name -> ai.AestheticData
-	8,  // 2: ai.MultimodalEmbeddingRequest.contents:type_name -> ai.MultimodalContent
-	10, // 3: ai.MultimodalEmbeddingResponse.embeddings:type_name -> ai.MultimodalEmbeddingItem
-	14, // 4: ai.ClusteringRequest.embeddings:type_name -> ai.Embedding
-	12, // 5: ai.ClusteringRequest.hdbscan_params:type_name -> ai.HDBSCANParams
-	13, // 6: ai.ClusteringRequest.umap_params:type_name -> ai.UMAPParams
-	16, // 7: ai.ClusteringResponse.clusters:type_name -> ai.ClusterResult
-	19, // 8: ai.ClusteringResponse.params_used:type_name -> ai.ClusteringResponse.ParamsUsedEntry
-	17, // 9: ai.ProgressUpdate.result:type_name -> ai.ClusteringResponse
-	0,  // 10: ai.AIService.Health:input_type -> ai.HealthRequest
-	2,  // 11: ai.AIService.CreateEmbedding:input_type -> ai.EmbeddingRequest
-	5,  // 12: ai.AIService.EvaluateAesthetic:input_type -> ai.AestheticRequest
-	9,  // 13: ai.AIService.CreateMultimodalEmbedding:input_type -> ai.MultimodalEmbeddingRequest
-	15, // 14: ai.AIService.ClusterStream:input_type -> ai.ClusteringRequest
-	1,  // 15: ai.AIService.Health:output_type -> ai.HealthResponse
-	4,  // 16: ai.AIService.CreateEmbedding:output_type -> ai.EmbeddingResponse
-	7,  // 17: ai.AIService.EvaluateAesthetic:output_type -> ai.AestheticResponse
-	11, // 18: ai.AIService.CreateMultimodalEmbedding:output_type -> ai.MultimodalEmbeddingResponse
-	18, // 19: ai.AIService.ClusterStream:output_type -> ai.ProgressUpdate
-	15, // [15:20] is the sub-list for method output_type
-	10, // [10:15] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	5,  // 1: ai.AestheticRequest.image_inputs:type_name -> ai.ImageInput
+	7,  // 2: ai.AestheticResponse.data:type_name -> ai.AestheticData
+	9,  // 3: ai.MultimodalEmbeddingRequest.contents:type_name -> ai.MultimodalContent
+	11, // 4: ai.MultimodalEmbeddingResponse.embeddings:type_name -> ai.MultimodalEmbeddingItem
+	15, // 5: ai.ClusteringRequest.embeddings:type_name -> ai.Embedding
+	13, // 6: ai.ClusteringRequest.hdbscan_params:type_name -> ai.HDBSCANParams
+	14, // 7: ai.ClusteringRequest.umap_params:type_name -> ai.UMAPParams
+	17, // 8: ai.ClusteringResponse.clusters:type_name -> ai.ClusterResult
+	20, // 9: ai.ClusteringResponse.params_used:type_name -> ai.ClusteringResponse.ParamsUsedEntry
+	18, // 10: ai.ProgressUpdate.result:type_name -> ai.ClusteringResponse
+	0,  // 11: ai.AIService.Health:input_type -> ai.HealthRequest
+	2,  // 12: ai.AIService.CreateEmbedding:input_type -> ai.EmbeddingRequest
+	6,  // 13: ai.AIService.EvaluateAesthetic:input_type -> ai.AestheticRequest
+	10, // 14: ai.AIService.CreateMultimodalEmbedding:input_type -> ai.MultimodalEmbeddingRequest
+	16, // 15: ai.AIService.ClusterStream:input_type -> ai.ClusteringRequest
+	1,  // 16: ai.AIService.Health:output_type -> ai.HealthResponse
+	4,  // 17: ai.AIService.CreateEmbedding:output_type -> ai.EmbeddingResponse
+	8,  // 18: ai.AIService.EvaluateAesthetic:output_type -> ai.AestheticResponse
+	12, // 19: ai.AIService.CreateMultimodalEmbedding:output_type -> ai.MultimodalEmbeddingResponse
+	19, // 20: ai.AIService.ClusterStream:output_type -> ai.ProgressUpdate
+	16, // [16:21] is the sub-list for method output_type
+	11, // [11:16] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_ai_proto_init() }
@@ -1400,18 +1516,23 @@ func file_ai_proto_init() {
 	if File_ai_proto != nil {
 		return
 	}
-	file_ai_proto_msgTypes[8].OneofWrappers = []any{
+	file_ai_proto_msgTypes[5].OneofWrappers = []any{
+		(*ImageInput_Data)(nil),
+		(*ImageInput_Url)(nil),
+	}
+	file_ai_proto_msgTypes[9].OneofWrappers = []any{
 		(*MultimodalContent_Text)(nil),
 		(*MultimodalContent_Image)(nil),
+		(*MultimodalContent_ImageUrl)(nil),
 	}
-	file_ai_proto_msgTypes[12].OneofWrappers = []any{}
+	file_ai_proto_msgTypes[13].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ai_proto_rawDesc), len(file_ai_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

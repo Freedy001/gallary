@@ -105,7 +105,7 @@
                       恢复
                     </button>
                   </template>
-                  <template v-else-if="task.status === 'completed' && task.failed_files > 0">
+                  <template v-else-if="(task.status === 'completed' || task.status === 'failed') && task.failed_files > 0">
                     <button
                         :disabled="migrationStore.loading"
                         class="flex-1 text-[10px] px-2 py-1 bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 transition-colors border border-blue-500/20 disabled:opacity-50"
@@ -113,6 +113,15 @@
                     >
                       重试失败
                     </button>
+                    <button
+                        :disabled="migrationStore.loading"
+                        class="flex-1 text-[10px] px-2 py-1 bg-gray-500/20 text-gray-300 rounded hover:bg-gray-500/30 transition-colors border border-gray-500/20 disabled:opacity-50"
+                        @click="handleDismiss(task.task_id)"
+                    >
+                      忽略
+                    </button>
+                  </template>
+                  <template v-else-if="task.status === 'failed'">
                     <button
                         :disabled="migrationStore.loading"
                         class="flex-1 text-[10px] px-2 py-1 bg-gray-500/20 text-gray-300 rounded hover:bg-gray-500/30 transition-colors border border-gray-500/20 disabled:opacity-50"
@@ -288,6 +297,15 @@ function getProgressBarClass(task: MigrationProgressVO): string {
   if (task.status === 'paused') {
     return 'bg-yellow-500'
   }
+  if (task.status === 'failed') {
+    return 'bg-red-500'
+  }
+  if (task.status === 'completed' && task.failed_files > 0) {
+    return 'bg-orange-500'
+  }
+  if (task.status === 'completed') {
+    return 'bg-green-500'
+  }
   return 'bg-gray-500'
 }
 
@@ -307,7 +325,7 @@ function formatSpeed(bytesPerSecond: number): string {
 // 格式化剩余时间
 function formatRemainingTime(seconds: number): string {
   if (seconds <= 0) {
-    return '计算中...'
+    return '未知文件大小'
   }
   if (seconds < 60) {
     return `${seconds}秒`

@@ -45,6 +45,7 @@
               :is-selected="item.image ? imageList.selectedImages.value.has(item.image.id) : false"
               :is-selection-mode="uiStore.isSelectionMode"
               :square="false"
+              :load-priority="item.index"
               @click="handleImageClick(item.image,item.index)"
               @contextmenu.prevent="handleContextMenu($event,item.image,item.index)"
           />
@@ -56,6 +57,7 @@
         <DynamicScroller
             :items="virtualRows"
             :min-item-size="200"
+            :buffer="2000"
             class="h-full"
             key-field="id"
         >
@@ -76,6 +78,7 @@
                     :is-selected="image ? imageList.selectedImages.value.has(image.id) : false"
                     :is-selection-mode="uiStore.isSelectionMode"
                     :square="true"
+                    :load-priority="row.startIndex + colIndex"
                     @click="handleImageClick(image, row.startIndex + colIndex)"
                     @contextmenu.prevent="handleContextMenu($event, image, row.startIndex + colIndex)"
                 />
@@ -198,6 +201,7 @@ const {
   useScroll: false
 })
 
+
 // 创建用于懒加载的 IntersectionObserver
 function createLoadObserver() {
   if (loadObserver.value) {
@@ -208,11 +212,8 @@ function createLoadObserver() {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         const index = Number((entry.target as HTMLElement).dataset.index)
-        if (!isNaN(index) && !imageList.images.value[index]) {
-          const pageSize = uiStore.imagePageSize
-          const page = Math.floor(index / pageSize) + 1
-          imageList.fetchImages(page, pageSize)
-        }
+        checkPage(index);
+        checkPage(index + 100);
       }
     })
   }, {
@@ -221,6 +222,14 @@ function createLoadObserver() {
   })
 
   return loadObserver.value
+}
+
+function checkPage(index: number) {
+  if (!isNaN(index) && !imageList.images.value[index]) {
+    const pageSize = uiStore.imagePageSize
+    const page = Math.floor(index / pageSize) + 1
+    imageList.fetchImages(page, pageSize)
+  }
 }
 
 function setItemRef(el: Element | ComponentPublicInstance | null, index: number) {
@@ -297,6 +306,20 @@ watch(() => layout.isWaterfall.value, () => {
   // 重新创建观察器
   createLoadObserver()
 
+  // 等待 DOM 更新后重新观察所有元素
+  setTimeout(() => {
+    itemRefs.forEach((el) => {
+      loadObserver.value?.observe(el)
+    })
+  }, 100)
+})
+
+// 网格密度变化时刷新数据（pageSize 会随之变化）
+watch(() => uiStore.imagePageSize, async (newPageSize) => {
+  // 重新加载第一页，使用新的 pageSize
+  await imageList.refresh(newPageSize)
+  // 重新创建观察器
+  createLoadObserver()
   // 等待 DOM 更新后重新观察所有元素
   setTimeout(() => {
     itemRefs.forEach((el) => {

@@ -34,3 +34,9 @@ type ClusterResultVO struct {
 	Count      int64    `json:"count"`
 	CoverImage *ImageVO `json:"cover_image"`
 }
+
+// ImageSource 图片来源（支持二进制数据或 URL）
+type ImageSource struct {
+	Data []byte // 图片二进制数据
+	URL  string // 图片 URL（用于远程存储，避免二次传输）
+}

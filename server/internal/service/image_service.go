@@ -18,7 +18,6 @@ import (
 	"gallary/server/config"
 	"gallary/server/internal/model"
 	"gallary/server/internal/storage"
-	"gallary/server/internal/utils"
 	"gallary/server/pkg/logger"
 
 	"github.com/google/uuid"
@@ -56,14 +55,16 @@ type MetadataUpdate struct {
 
 // PrepareUploadRequest 准备上传请求
 type PrepareUploadRequest struct {
-	FileHash     string           `json:"file_hash" binding:"required"`
-	FileSize     int64            `json:"file_size" binding:"required,min=1"`
-	Width        int              `json:"width" binding:"required,min=1"`
-	Height       int              `json:"height" binding:"required,min=1"`
-	MimeType     string           `json:"mime_type" binding:"required"`
-	OriginalName string           `json:"original_name" binding:"required"`
-	AlbumID      *int64           `json:"album_id,omitempty"`
-	ExifData     *ExifDataRequest `json:"exif_data,omitempty"`
+	FileHash        string           `json:"file_hash" binding:"required"`
+	FileSize        int64            `json:"file_size" binding:"required,min=1"`
+	Width           int              `json:"width" binding:"required,min=1"`
+	Height          int              `json:"height" binding:"required,min=1"`
+	MimeType        string           `json:"mime_type" binding:"required"`
+	OriginalName    string           `json:"original_name" binding:"required"`
+	AlbumID         *int64           `json:"album_id,omitempty"`
+	ExifData        *ExifDataRequest `json:"exif_data,omitempty"`
+	ThumbnailWidth  int              `json:"thumbnail_width,omitempty"`  // 缩略图宽度，前端生成缩略图时提供
+	ThumbnailHeight int              `json:"thumbnail_height,omitempty"` // 缩略图高度，前端生成缩略图时提供
 }
 
 // ExifDataRequest EXIF 数据请求
@@ -97,23 +98,16 @@ type UploadToken struct {
 
 // ConfirmUploadRequest 确认上传请求
 type ConfirmUploadRequest struct {
-	UploadID        string `json:"upload_id" binding:"required"`
-	StoragePath     string `json:"storage_path" binding:"required"`
-	ThumbnailPath   string `json:"thumbnail_path,omitempty"`
-	ThumbnailSize   int64  `json:"thumbnail_size,omitempty"`   // 缩略图文件大小（字节），OSS 直传时由前端提供
-	ThumbnailWidth  int    `json:"thumbnail_width,omitempty"`  // 缩略图宽度，OSS 直传时由前端提供
-	ThumbnailHeight int    `json:"thumbnail_height,omitempty"` // 缩略图高度，OSS 直传时由前端提供
+	UploadID string `json:"upload_id" binding:"required"`
 }
 
 // UploadInfo 上传信息缓存
 type UploadInfo struct {
-	Request         *PrepareUploadRequest
-	StoragePath     string
-	ThumbnailPath   string
-	ThumbnailWidth  int
-	ThumbnailHeight int
-	ThumbnailSize   int64 // 缩略图文件大小（字节）
-	CreatedAt       time.Time
+	Request       *PrepareUploadRequest
+	StoragePath   string
+	ThumbnailPath string
+	ThumbnailSize int64 // 缩略图文件大小（字节），本地上传时由后端填充
+	CreatedAt     time.Time
 }
 
 // ImageService 图片服务接口
@@ -205,10 +199,10 @@ func (s *imageService) GetByIDs(ctx context.Context, ids []int64) ([]*model.Imag
 // List 获取图片列表
 func (s *imageService) List(ctx context.Context, page, pageSize int, sortBy string) ([]*model.ImageVO, int64, error) {
 	if page < 1 {
-		page = 1
+		return []*model.ImageVO{}, 0, nil
 	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
+	if pageSize < 1 {
+		return []*model.ImageVO{}, 0, nil
 	}
 	images, total, err := s.repo.List(ctx, page, pageSize, sortBy)
 	if err != nil {
@@ -1014,7 +1008,7 @@ func (s *imageService) ConfirmUpload(ctx context.Context, req *ConfirmUploadRequ
 	prepareReq := uploadInfo.Request
 
 	// 2. 验证文件是否已上传
-	exists, err := s.storage.Exists(ctx, s.storage.DefaultStorageType(), req.StoragePath)
+	exists, err := s.storage.Exists(ctx, s.storage.DefaultStorageType(), uploadInfo.StoragePath)
 	if err != nil {
 		return nil, fmt.Errorf("验证文件失败: %w", err)
 	}
@@ -1025,14 +1019,14 @@ func (s *imageService) ConfirmUpload(ctx context.Context, req *ConfirmUploadRequ
 	// 3. 创建图片记录
 	image := &model.Image{
 		OriginalName:       prepareReq.OriginalName,
-		StoragePath:        req.StoragePath,
+		StoragePath:        uploadInfo.StoragePath,
 		StorageId:          s.storage.DefaultStorageType(),
 		FileSize:           prepareReq.FileSize,
 		FileHash:           prepareReq.FileHash,
 		MimeType:           prepareReq.MimeType,
 		Width:              prepareReq.Width,
 		Height:             prepareReq.Height,
-		ThumbnailPath:      req.ThumbnailPath,
+		ThumbnailPath:      uploadInfo.ThumbnailPath,
 		ThumbnailStorageId: s.storage.ThumbnailStorageType(),
 	}
 
@@ -1041,20 +1035,12 @@ func (s *imageService) ConfirmUpload(ctx context.Context, req *ConfirmUploadRequ
 		s.setExifData(image, prepareReq.ExifData)
 	}
 
-	// 5. 设置缩略图尺寸和大小（优先使用请求中的值，用于 OSS 直传场景）
-	thumbnailWidth := req.ThumbnailWidth
-	thumbnailHeight := req.ThumbnailHeight
-	thumbnailSize := req.ThumbnailSize
-	// 如果请求中没有，则使用缓存中的值（本地上传场景）
-	if thumbnailWidth == 0 && uploadInfo.ThumbnailWidth > 0 {
-		thumbnailWidth = uploadInfo.ThumbnailWidth
-	}
-	if thumbnailHeight == 0 && uploadInfo.ThumbnailHeight > 0 {
-		thumbnailHeight = uploadInfo.ThumbnailHeight
-	}
-	if thumbnailSize == 0 && uploadInfo.ThumbnailSize > 0 {
-		thumbnailSize = uploadInfo.ThumbnailSize
-	}
+	// 5. 设置缩略图尺寸和大小
+	// 优先使用 PrepareUpload 请求中的值，其次使用缓存中的值（本地上传场景由 HandleThumbnailUpload 填充）
+	thumbnailWidth := prepareReq.ThumbnailWidth
+	thumbnailHeight := prepareReq.ThumbnailHeight
+	thumbnailSize := uploadInfo.ThumbnailSize
+
 	if thumbnailWidth > 0 && thumbnailHeight > 0 {
 		image.ThumbnailWidth = &thumbnailWidth
 		image.ThumbnailHeight = &thumbnailHeight
@@ -1119,7 +1105,7 @@ func (s *imageService) HandleThumbnailUpload(ctx context.Context, uploadID strin
 		return fmt.Errorf("无效的上传 ID 或已过期")
 	}
 
-	// 2. 保存缩略图到临时文件以获取尺寸
+	// 2. 保存缩略图到临时文件以获取文件大小
 	tempFile, err := os.CreateTemp("", "thumbnail-*.jpg")
 	if err != nil {
 		return fmt.Errorf("创建临时文件失败: %w", err)
@@ -1134,16 +1120,7 @@ func (s *imageService) HandleThumbnailUpload(ctx context.Context, uploadID strin
 	}
 	uploadInfo.ThumbnailSize = thumbnailSize
 
-	// 3. 获取缩略图尺寸
-	width, height, err := utils.GetImageDimensions(tempFile.Name())
-	if err != nil {
-		logger.Warn("获取缩略图尺寸失败", zap.Error(err))
-	} else {
-		uploadInfo.ThumbnailWidth = width
-		uploadInfo.ThumbnailHeight = height
-	}
-
-	// 4. 使用配置的缩略图存储
+	// 3. 使用配置的缩略图存储
 	thumbnailStorage := s.storage.GetThumbnailStorage()
 	if thumbnailStorage == nil {
 		return fmt.Errorf("缩略图存储未初始化")
@@ -1159,8 +1136,6 @@ func (s *imageService) HandleThumbnailUpload(ctx context.Context, uploadID strin
 		zap.String("upload_id", uploadID),
 		zap.String("path", uploadInfo.ThumbnailPath),
 		zap.String("storage_id", string(s.storage.ThumbnailStorageType())),
-		zap.Int("width", width),
-		zap.Int("height", height),
 		zap.Int64("size", thumbnailSize))
 
 	return nil

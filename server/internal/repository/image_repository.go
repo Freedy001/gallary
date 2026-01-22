@@ -746,12 +746,13 @@ func (r *imageRepository) CountByStorageType(ctx context.Context, storageType st
 
 // UpdateStoragePath 更新图片存储路径
 
-// FindImagesWithoutAIScore 查找没有 AI 评分的图片ID列表
+// FindImagesWithoutAIScore 查找没有 AI 评分的图片ID列表（排除已在队列中的）
 func (r *imageRepository) FindImagesWithoutAIScore(ctx context.Context, limit int) ([]int64, error) {
 	var ids []int64
 	err := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{}).
 		Select("id").
 		Where("ai_score IS NULL").
+		Where("id NOT IN (SELECT item_id FROM ai_task_items WHERE task_type = ?)", model.AestheticScoringTaskType).
 		Order("created_at DESC").
 		Limit(limit).
 		Pluck("id", &ids).Error
@@ -767,22 +768,24 @@ func (r *imageRepository) FindImagesWithoutAIScore(ctx context.Context, limit in
 func (r *imageRepository) CountByMigrationFilter(ctx context.Context, migrationType model.MigrationType, sourceStorageId model.StorageId, filter *model.MigrationFilterConditions) (count int, totalSize int64, err error) {
 	query := database.GetDB(ctx).WithContext(ctx).Model(&model.Image{})
 
-	// 根据迁移类型筛选存储
+	// 根据迁移类型筛选存储和大小字段
+	sizeField := "file_size"
 	if migrationType == model.MigrationTypeOriginal {
 		query = query.Where("storage_id = ?", sourceStorageId)
 	} else {
 		query = query.Where("thumbnail_storage_id = ?", sourceStorageId)
+		sizeField = "thumbnail_size"
 	}
 
 	// 应用筛选条件
-	query = r.applyMigrationFilter(query, filter)
+	query = r.applyMigrationFilter(query, migrationType, filter)
 
 	// 同时查询数量和总大小
 	var result struct {
 		Count     int64
 		TotalSize int64
 	}
-	if err := query.Select("COUNT(*) as count, COALESCE(SUM(file_size), 0) as total_size").Scan(&result).Error; err != nil {
+	if err := query.Select("COUNT(*) as count, COALESCE(SUM(" + sizeField + "), 0) as total_size").Scan(&result).Error; err != nil {
 		return 0, 0, err
 	}
 
@@ -802,7 +805,7 @@ func (r *imageRepository) FindIDsByMigrationFilter(ctx context.Context, migratio
 	}
 
 	// 应用筛选条件
-	query = r.applyMigrationFilter(query, filter)
+	query = r.applyMigrationFilter(query, migrationType, filter)
 
 	if err := query.Pluck("id", &ids).Error; err != nil {
 		return nil, err
@@ -812,7 +815,7 @@ func (r *imageRepository) FindIDsByMigrationFilter(ctx context.Context, migratio
 }
 
 // applyMigrationFilter 应用迁移筛选条件
-func (r *imageRepository) applyMigrationFilter(query *gorm.DB, filter *model.MigrationFilterConditions) *gorm.DB {
+func (r *imageRepository) applyMigrationFilter(query *gorm.DB, migrationType model.MigrationType, filter *model.MigrationFilterConditions) *gorm.DB {
 	if filter == nil {
 		return query
 	}
@@ -832,12 +835,16 @@ func (r *imageRepository) applyMigrationFilter(query *gorm.DB, filter *model.Mig
 		query = query.Where("COALESCE(taken_at, created_at) <= ?", endOfDay)
 	}
 
-	// 文件大小筛选
+	// 文件大小筛选（根据迁移类型选择正确的字段）
+	sizeField := "file_size"
+	if migrationType == model.MigrationTypeThumbnail {
+		sizeField = "thumbnail_size"
+	}
 	if filter.MinFileSize != nil {
-		query = query.Where("file_size >= ?", *filter.MinFileSize)
+		query = query.Where(sizeField+" >= ?", *filter.MinFileSize)
 	}
 	if filter.MaxFileSize != nil {
-		query = query.Where("file_size <= ?", *filter.MaxFileSize)
+		query = query.Where(sizeField+" <= ?", *filter.MaxFileSize)
 	}
 
 	return query

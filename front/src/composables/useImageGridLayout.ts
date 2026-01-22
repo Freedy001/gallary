@@ -7,17 +7,17 @@ export function useImageGridLayout(images: Ref<(Image | null)[]>) {
 
   const currentColumnCount = ref(4)
 
-  const isWaterfall = computed(() => uiStore.gridDensity >= 8)
+  const isWaterfall = computed(() => uiStore.gridDensity >= 14)
 
   const waterfallImages = computed(() => {
     if (!isWaterfall.value) return []
 
     const cols: { image: Image | null, index: number }[][] =
-        Array.from({length: currentColumnCount.value}, () => [])
+      Array.from({ length: currentColumnCount.value }, () => [])
 
     images.value.forEach((image, index) => {
       const colIndex = index % currentColumnCount.value
-      if (cols[colIndex]) cols[colIndex].push({image, index})
+      if (cols[colIndex]) cols[colIndex].push({ image, index })
     })
 
     return cols
@@ -35,6 +35,13 @@ export function useImageGridLayout(images: Ref<(Image | null)[]>) {
       7: 'md:grid-cols-7',
       8: 'md:grid-cols-8',
       9: 'md:grid-cols-9',
+      10: 'md:grid-cols-10',
+      11: 'md:grid-cols-11',
+      12: 'md:grid-cols-12',
+      13: 'md:grid-cols-13',
+      14: 'md:grid-cols-14',
+      15: 'md:grid-cols-15',
+      16: 'md:grid-cols-16',
     }[columns.desktop] || 'md:grid-cols-4'
 
     const tabletClass = {

@@ -51,13 +51,23 @@ class EmbeddingResponse(_message.Message):
     total_tokens: int
     def __init__(self, data: _Optional[_Iterable[_Union[EmbeddingData, _Mapping]]] = ..., model: _Optional[str] = ..., prompt_tokens: _Optional[int] = ..., total_tokens: _Optional[int] = ...) -> None: ...
 
+class ImageInput(_message.Message):
+    __slots__ = ("data", "url")
+    DATA_FIELD_NUMBER: _ClassVar[int]
+    URL_FIELD_NUMBER: _ClassVar[int]
+    data: bytes
+    url: str
+    def __init__(self, data: _Optional[bytes] = ..., url: _Optional[str] = ...) -> None: ...
+
 class AestheticRequest(_message.Message):
-    __slots__ = ("images", "return_distribution")
+    __slots__ = ("images", "return_distribution", "image_inputs")
     IMAGES_FIELD_NUMBER: _ClassVar[int]
     RETURN_DISTRIBUTION_FIELD_NUMBER: _ClassVar[int]
+    IMAGE_INPUTS_FIELD_NUMBER: _ClassVar[int]
     images: _containers.RepeatedScalarFieldContainer[bytes]
     return_distribution: bool
-    def __init__(self, images: _Optional[_Iterable[bytes]] = ..., return_distribution: bool = ...) -> None: ...
+    image_inputs: _containers.RepeatedCompositeFieldContainer[ImageInput]
+    def __init__(self, images: _Optional[_Iterable[bytes]] = ..., return_distribution: bool = ..., image_inputs: _Optional[_Iterable[_Union[ImageInput, _Mapping]]] = ...) -> None: ...
 
 class AestheticData(_message.Message):
     __slots__ = ("index", "score", "level", "distribution")
@@ -82,12 +92,14 @@ class AestheticResponse(_message.Message):
     def __init__(self, data: _Optional[_Iterable[_Union[AestheticData, _Mapping]]] = ..., model: _Optional[str] = ..., backend: _Optional[str] = ...) -> None: ...
 
 class MultimodalContent(_message.Message):
-    __slots__ = ("text", "image")
+    __slots__ = ("text", "image", "image_url")
     TEXT_FIELD_NUMBER: _ClassVar[int]
     IMAGE_FIELD_NUMBER: _ClassVar[int]
+    IMAGE_URL_FIELD_NUMBER: _ClassVar[int]
     text: str
     image: bytes
-    def __init__(self, text: _Optional[str] = ..., image: _Optional[bytes] = ...) -> None: ...
+    image_url: str
+    def __init__(self, text: _Optional[str] = ..., image: _Optional[bytes] = ..., image_url: _Optional[str] = ...) -> None: ...
 
 class MultimodalEmbeddingRequest(_message.Message):
     __slots__ = ("model", "contents")

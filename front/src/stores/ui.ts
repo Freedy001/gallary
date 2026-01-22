@@ -42,16 +42,22 @@ export const useUIStore = defineStore('ui', () => {
   // Computed
   const gridColumns = computed(() => {
     const desktopColumns = {
-      1: 9,  // Grid
-      2: 8,  // Grid
-      3: 7,  // Grid
-      4: 6,  // Grid
-      5: 5,  // Grid
-      6: 4,  // Grid (Default)
-      7: 3,  // Grid
-      8: 3,  // Waterfall
-      9: 2,  // Waterfall
-      10: 1, // Waterfall
+      1: 16, // Grid - 最密集
+      2: 14, // Grid
+      3: 12, // Grid
+      4: 10, // Grid
+      5: 9,  // Grid
+      6: 8,  // Grid
+      7: 7,  // Grid
+      8: 6,  // Grid
+      9: 5,  // Grid
+      10: 4, // Grid (Default)
+      11: 3, // Grid
+      12: 3, // Waterfall
+      13: 2, // Waterfall
+      14: 2, // Waterfall
+      15: 1, // Waterfall
+      16: 1, // Waterfall - 最稀疏
     }[gridDensity.value] || 4
 
     return {
@@ -93,7 +99,7 @@ export const useUIStore = defineStore('ui', () => {
 
   // Actions
   function setGridDensity(density: number) {
-    gridDensity.value = Math.max(1, Math.min(10, density))
+    gridDensity.value = Math.max(1, Math.min(16, density))
     localStorage.setItem("gridDensity", gridDensity.value + '')
   }
 

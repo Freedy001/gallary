@@ -526,7 +526,7 @@ func (s *aiService) SemanticSearchWithinIDs(ctx context.Context, imageData []byt
 	}
 
 	// 获取查询向量（图片+文本混合）
-	queryEmbedding, err := embeddingClient.Embedding(ctx, imageData, text)
+	queryEmbedding, err := embeddingClient.Embedding(ctx, &model.ImageSource{Data: imageData}, text)
 	if err != nil {
 		return nil, fmt.Errorf("生成查询向量失败: %v", err)
 	}

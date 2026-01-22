@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"gallary/server/internal/service"
 	"gallary/server/pkg/logger"
-	"io"
 
 	"gallary/server/internal"
 	"gallary/server/internal/llms"
@@ -58,14 +57,14 @@ func (p *ImageEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64,
 		return fmt.Errorf("图片不存在: %d", itemID)
 	}
 
-	// 2. 读取图片数据
-	imageData, err := p.readImageData(ctx, image)
+	// 2. 获取图片来源（根据存储类型选择 URL 或二进制数据）
+	src, err := p.storageManager.GetImageSource(ctx, image)
 	if err != nil {
-		return fmt.Errorf("读取图片数据失败: %v", err)
+		return fmt.Errorf("获取图片来源失败: %v", err)
 	}
 
 	// 3. 计算嵌入向量
-	embedding, err := p.Cast(client).Embedding(ctx, imageData, "")
+	embedding, err := p.Cast(client).Embedding(ctx, src, "")
 	if err != nil {
 		return err
 	}
@@ -91,13 +90,4 @@ func (p *ImageEmbeddingProcessor) ProcessItem(ctx context.Context, itemID int64,
 	}
 
 	return nil
-}
-
-func (p *ImageEmbeddingProcessor) readImageData(ctx context.Context, image *model.Image) ([]byte, error) {
-	reader, err := p.storageManager.Download(ctx, image.StorageId, image.StoragePath)
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
-	return io.ReadAll(reader)
 }

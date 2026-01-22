@@ -47,15 +47,20 @@ func newAliyunMultimodalEmbedding(provider *model.ModelConfig, modelItem *model.
 }
 
 // Embedding 计算嵌入向量
-func (c *AliyunMultimodalEmbedding) Embedding(ctx context.Context, imageData []byte, text string) ([]float32, error) {
+func (c *AliyunMultimodalEmbedding) Embedding(ctx context.Context, imageSource *model.ImageSource, text string) ([]float32, error) {
 	contents := make([]map[string]string, 0)
 
-	if len(imageData) > 0 {
-		base64Data, err := c.prepareImageBase64(imageData)
-		if err != nil {
-			return nil, fmt.Errorf("处理图片数据失败: %v", err)
+	if imageSource != nil {
+		if imageSource.URL != "" {
+			// 阿里云支持直接传递图片 URL
+			contents = append(contents, map[string]string{"image": imageSource.URL})
+		} else if len(imageSource.Data) > 0 {
+			base64Data, err := c.prepareImageBase64(imageSource.Data)
+			if err != nil {
+				return nil, fmt.Errorf("处理图片数据失败: %v", err)
+			}
+			contents = append(contents, map[string]string{"image": base64Data})
 		}
-		contents = append(contents, map[string]string{"image": base64Data})
 	}
 
 	if text != "" {
@@ -84,7 +89,7 @@ func (c *AliyunMultimodalEmbedding) callMultimodalEmbedding(ctx context.Context,
 
 	// 如果未配置模型名称，使用默认模型
 	if reqBody.Model == "" {
-		reqBody.Model = "tongyi-embedding-vision-plus"
+		return nil, fmt.Errorf("模型名称未配置")
 	}
 
 	jsonBody, err := json.Marshal(reqBody)

@@ -10,6 +10,7 @@ from concurrent import futures
 from functools import wraps
 
 import grpc
+import httpx
 from PIL import Image
 from loguru import logger
 
@@ -23,13 +24,8 @@ from ..services.clustering_service import (
 )
 from ..services.embedding_service import model_service
 
-
-# 配置日志
-# logger = logging.getLogger(__name__)
-# logging.basicConfig(
-#     level=logging.INFO,
-#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-# )
+# HTTP 客户端用于下载远程图片
+_http_client = httpx.Client(timeout=30.0, follow_redirects=True)
 
 
 def log_grpc_request(method_name: str):
@@ -149,6 +145,14 @@ def load_image_from_bytes(image_bytes: bytes) -> Image.Image:
     return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
 
+def load_image_from_url(url: str) -> Image.Image:
+    """从 URL 下载并加载图片"""
+    logger.debug(f"从 URL 下载图片: {url}")
+    response = _http_client.get(url)
+    response.raise_for_status()
+    return Image.open(io.BytesIO(response.content)).convert("RGB")
+
+
 class AIServicer(ai_pb2_grpc.AIServiceServicer):
     """gRPC AI 服务实现"""
 
@@ -213,14 +217,32 @@ class AIServicer(ai_pb2_grpc.AIServiceServicer):
             return ai_pb2.AestheticResponse()
 
         try:
-            image_bytes_list = list(request.images)
-            if not image_bytes_list:
+            images = []
+
+            # 优先使用新的 image_inputs 字段（支持 URL）
+            if request.image_inputs:
+                for img_input in request.image_inputs:
+                    if img_input.HasField("url"):
+                        # 从 URL 下载图片
+                        image = load_image_from_url(img_input.url)
+                        images.append(image)
+                    elif img_input.HasField("data"):
+                        # 从二进制数据加载图片
+                        image = load_image_from_bytes(img_input.data)
+                        images.append(image)
+            else:
+                # 兼容旧的 images 字段
+                image_bytes_list = list(request.images)
+                if not image_bytes_list:
+                    context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                    context.set_details("Images cannot be empty")
+                    return ai_pb2.AestheticResponse()
+                images = [load_image_from_bytes(img_bytes) for img_bytes in image_bytes_list]
+
+            if not images:
                 context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
                 context.set_details("Images cannot be empty")
                 return ai_pb2.AestheticResponse()
-
-            # 从二进制数据加载图片
-            images = [load_image_from_bytes(img_bytes) for img_bytes in image_bytes_list]
 
             # 批量推理
             results = model_service.infer_batch(images)
@@ -276,6 +298,11 @@ class AIServicer(ai_pb2_grpc.AIServiceServicer):
                 elif content.HasField("image"):
                     # 从二进制数据加载图片
                     image = load_image_from_bytes(content.image)
+                    images.append(image)
+                    image_indices.append(idx)
+                elif content.HasField("image_url"):
+                    # 从 URL 下载图片（避免二次传输）
+                    image = load_image_from_url(content.image_url)
                     images.append(image)
                     image_indices.append(idx)
 
