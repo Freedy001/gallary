@@ -13,6 +13,13 @@
         <div class="h-px bg-white/10 my-1"></div>
       </template>
 
+      <ContextMenuItem :icon="(isAltPressed || contextMenuTargetIds.length > 1) ? LinkIcon : ClipboardDocumentIcon" @click="handleCopy">
+        {{
+          (contextMenuTargetIds.length > 1)
+              ? `复制链接 (${contextMenuTargetIds.length})`
+              : (isAltPressed ? '复制原图链接' : '复制原图')
+        }}
+      </ContextMenuItem>
       <ContextMenuItem :icon="RectangleStackIcon" @click="handleAddToAlbum">
         添加到相册 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
       </ContextMenuItem>
@@ -22,11 +29,11 @@
       <ContextMenuItem :icon="PencilIcon" @click="handleEdit">
         编辑元数据 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
       </ContextMenuItem>
-      <ContextMenuItem :icon="ArrowDownTrayIcon" @click="handleDownload">
-        下载 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
-      </ContextMenuItem>
-      <ContextMenuItem v-if="contextMenuTargetIds.length > 1" :icon="ArchiveBoxArrowDownIcon" @click="handleBatchDownload">
-        打包下载 {{ `(${contextMenuTargetIds.length})` }}
+      <ContextMenuItem
+          :icon="isAltPressed ? ArchiveBoxArrowDownIcon : ArrowDownTrayIcon"
+          @click="isAltPressed ? handleBatchDownload() : handleDownload()"
+      >
+        {{ isAltPressed ? '打包下载' : '下载' }} {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
       </ContextMenuItem>
       <ContextMenuItem :danger="true" :icon="TrashIcon" @click="handleDelete">
         删除 {{ contextMenuTargetIds.length > 1 ? `(${contextMenuTargetIds.length})` : '' }}
@@ -68,7 +75,7 @@
 </template>
 
 <script lang="ts" setup>
-import {ref, type Ref} from 'vue'
+import {onMounted, onUnmounted, ref, type Ref} from 'vue'
 import type {Image} from '@/types'
 import {useDialogStore} from '@/stores/dialog'
 import {useAlbumStore} from '@/stores/album'
@@ -79,6 +86,8 @@ import {
   ArchiveBoxArrowDownIcon,
   ArrowDownTrayIcon,
   ArrowUturnLeftIcon,
+  ClipboardDocumentIcon,
+  LinkIcon,
   MinusCircleIcon,
   PencilIcon,
   PhotoIcon,
@@ -112,6 +121,9 @@ const contextMenu = ref({visible: false, x: 0, y: 0})
 const contextMenuTargetIds = ref<number[]>([])
 const contextMenuSingleTarget = ref<{ image: Image, index: number } | null>(null)
 
+// 键盘状态
+const isAltPressed = ref(false)
+
 // 弹窗状态
 const isMetadataEditorOpen = ref(false)
 const metadataEditorTargetIds = ref<number[]>([])
@@ -123,12 +135,33 @@ const shareTargetIds = ref<number[]>([])
 const isAddToAlbumOpen = ref(false)
 const addToAlbumTargetIds = ref<number[]>([])
 
+function handleKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Alt') isAltPressed.value = true
+}
+
+function handleKeyUp(e: KeyboardEvent) {
+  if (e.key === 'Alt') isAltPressed.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('keyup', handleKeyUp)
+})
+
 function handleContextMenu(e: MouseEvent, image: Image, index: number) {
   contextMenu.value = {
     visible: true,
     x: e.clientX,
     y: e.clientY
   }
+
+  // 检查 Alt 键初始状态
+  isAltPressed.value = e.altKey
 
   if (props.selectedImages.value.has(image.id)) {
     contextMenuTargetIds.value = Array.from(props.selectedImages.value)
@@ -144,6 +177,61 @@ function closeMenu() {
 }
 
 // ==================== Gallery 模式操作 ====================
+async function handleCopy() {
+  closeMenu()
+  const ids = contextMenuTargetIds.value
+  if (ids.length === 0) return
+
+  // Mode Link if: Alt is pressed OR Multiple images selected
+  const isCopyLinkMode = isAltPressed.value || ids.length > 1
+
+  if (isCopyLinkMode) {
+    const urls: string[] = []
+    
+    // Find URLs for all selected IDs
+    for (const id of ids) {
+      const img = props.images.value.find(i => i?.id === id)
+      if (img?.url) {
+        urls.push(img.url)
+      }
+    }
+
+    if (urls.length === 0) {
+      dialogStore.alert({title: '错误', message: '未找到可复制的链接', type: 'error'})
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(urls.join('\n'))
+      
+      const msg = ids.length > 1 
+        ? `已复制 ${urls.length} 个链接` 
+        : '链接已复制'
+      
+      dialogStore.alert({title: '成功', message: msg, type: 'success'})
+    } catch (err) {
+      console.error('复制链接失败', err)
+      dialogStore.alert({title: '错误', message: '复制链接失败', type: 'error'})
+    }
+  } else {
+    // Single select AND !Alt -> Copy Original Image Blob
+    const targetId = ids[0]
+    const img = props.images.value.find(i => i?.id === targetId)
+
+    if (!img || !img.url) return
+
+    try {
+      // 这里的 url 可能是相对路径或 absolute URL，fetch 应该都能处理
+      const blob = await fetch(img.url).then(r => r.blob())
+      await navigator.clipboard.write([new ClipboardItem({[blob.type]: blob})])
+      dialogStore.alert({title: '成功', message: '图片已复制', type: 'success'})
+    } catch (err) {
+      console.error('复制图片失败', err)
+      dialogStore.alert({title: '错误', message: '复制图片失败', type: 'error'})
+    }
+  }
+}
+
 async function handleSetAlbumCover() {
   closeMenu()
   if (!props.albumId || contextMenuTargetIds.value.length !== 1) return
@@ -217,9 +305,136 @@ function handleDownload() {
   }
 }
 
-function handleBatchDownload() {
+async function handleBatchDownload() {
   closeMenu()
-  imageApi.downloadZipped(contextMenuTargetIds.value.filter((id): id is number => id !== undefined))
+  const ids = contextMenuTargetIds.value.filter((id): id is number => id !== undefined)
+  
+  if (ids.length === 0) return
+
+  try {
+    dialogStore.notify({
+      title: '开始下载',
+      message: `正在流式打包 ${ids.length} 张图片...`,
+      type: 'info',
+      duration: 3000
+    })
+
+    // 动态导入依赖
+    const [{ downloadZip }, streamSaver] = await Promise.all([
+      import('client-zip'),
+      import('streamsaver')
+    ])
+
+    // 创建文件名生成器，处理重复文件名
+    const usedNames = new Set<string>()
+    const getUniqueFilename = (originalName: string): string => {
+      if (!usedNames.has(originalName)) {
+        usedNames.add(originalName)
+        return originalName
+      }
+
+      let counter = 1
+      let filename: string
+      const lastDot = originalName.lastIndexOf('.')
+      
+      do {
+        if (lastDot > 0) {
+          const nameWithoutExt = originalName.substring(0, lastDot)
+          const ext = originalName.substring(lastDot)
+          filename = `${nameWithoutExt}_${counter}${ext}`
+        } else {
+          filename = `${originalName}_${counter}`
+        }
+        counter++
+      } while (usedNames.has(filename))
+      
+      usedNames.add(filename)
+      return filename
+    }
+
+    // 异步生成器：按需 fetch 图片
+    async function* generateFiles() {
+      for (const id of ids) {
+        const img = props.images.value.find(i => i?.id === id)
+        if (!img || !img.url) {
+          console.warn(`Skipping image ${id}: not found or no URL`)
+          continue
+        }
+
+        try {
+          const response = await fetch(img.url)
+          if (!response.ok) {
+            console.error(`Failed to fetch image ${id}: ${response.status}`)
+            continue
+          }
+
+          yield {
+            name: getUniqueFilename(img.original_name),
+            lastModified: img.taken_at ? new Date(img.taken_at) : new Date(img.created_at),
+            input: response
+          }
+        } catch (err) {
+          console.error(`Error fetching image ${id}:`, err)
+        }
+      }
+    }
+
+    // 生成流式 zip
+    const zipStream = downloadZip(generateFiles()).body
+
+    if (!zipStream) {
+      throw new Error('Failed to create zip stream')
+    }
+
+    // 计算所有图片的总大小
+    let totalSize = 0
+    for (const id of ids) {
+      const img = props.images.value.find(i => i?.id === id)
+      if (img?.file_size) {
+        totalSize += img.file_size
+      }
+    }
+
+    // 创建文件写入流（真正的流式下载）
+    const fileStream = streamSaver.createWriteStream(
+      `images_${new Date().getTime()}.zip`,
+      {
+        // zip 压缩后的大小通常比原始文件小，但这里提供原始大小作为参考
+        // 这样浏览器可以显示下载进度
+        size: totalSize > 0 ? totalSize : undefined
+      }
+    )
+
+    // 将 zip stream 管道连接到文件写入流
+    // 这样就实现了：fetch 图片 → 压缩 → 直接写入磁盘
+    const writer = fileStream.getWriter()
+    const reader = zipStream.getReader()
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        await writer.write(value)
+      }
+      await writer.close()
+
+      dialogStore.alert({
+        title: '成功',
+        message: `已完成打包下载`,
+        type: 'success'
+      })
+    } catch (err) {
+      await writer.abort()
+      throw err
+    }
+  } catch (err) {
+    console.error('Batch download failed:', err)
+    dialogStore.alert({
+      title: '错误',
+      message: '打包下载失败',
+      type: 'error'
+    })
+  }
 }
 
 async function handleDelete() {

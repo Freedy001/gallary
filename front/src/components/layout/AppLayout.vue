@@ -72,8 +72,12 @@ const dragCounter = ref(0)
 
 function handleDragEnter(e: DragEvent) {
   dragCounter.value++
-  // 支持文件和目录的拖拽检测
-  if (e.dataTransfer?.types.includes('Files') || e.dataTransfer?.items.length) {
+  // 支持文件和目录的拖拽检测,但排除相册拖拽
+  const hasFiles = e.dataTransfer?.types.includes('Files')
+  const hasAlbumData = e.dataTransfer?.types.includes('application/json')
+
+  // 只在拖拽文件且不是相册数据时显示上传遮罩
+  if (hasFiles && !hasAlbumData) {
     isDragging.value = true
   }
 }

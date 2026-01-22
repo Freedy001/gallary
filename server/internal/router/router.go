@@ -67,7 +67,6 @@ func SetupRouter(
 			images.PUT("/upload-direct/:uploadId", imageHandler.UploadDirect)
 			images.PUT("/upload-thumbnail/:uploadId", imageHandler.UploadThumbnail)
 			images.POST("/batch-delete", imageHandler.BatchDelete)
-			images.POST("/batch-download", imageHandler.BatchDownload)
 			images.POST("/batch", imageHandler.GetByIDs)
 			images.PUT("/metadata", imageHandler.BatchUpdateMetadata)
 			images.GET("", imageHandler.List)
@@ -187,8 +186,7 @@ func SetupRouter(
 			ai.POST("/queues/:id/retry", aiHandler.RetryQueueFailedItems) // 重试队列所有失败项目
 
 			// AI 任务项操作
-			ai.POST("/task-items/:id/retry", aiHandler.RetryTaskItem)   // 重试单个任务项
-			ai.POST("/task-items/:id/ignore", aiHandler.IgnoreTaskItem) // 忽略单个任务项
+			ai.POST("/task-items/:id/retry", aiHandler.RetryTaskItem) // 重试单个任务项
 			// 智能相册异步任务路由
 			ai.POST("/smart-albums-generate", aiHandler.GenerateSmartAlbums)
 		}

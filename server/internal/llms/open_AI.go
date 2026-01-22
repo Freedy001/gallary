@@ -99,8 +99,7 @@ func (c *OpenAIClient) ChatCompletion(ctx context.Context, messages []ChatMessag
 		return "", err
 	}
 
-	url := c.config.Endpoint + "/v1/chat/completions"
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.config.Endpoint, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", err
 	}

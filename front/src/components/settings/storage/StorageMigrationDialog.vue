@@ -231,7 +231,6 @@
 <script lang="ts" setup>
 import {computed, reactive, ref, watch} from 'vue'
 import {ArrowsRightLeftIcon, CheckIcon, XMarkIcon} from '@heroicons/vue/24/outline'
-import {useMigrationStore} from '@/stores/migration'
 import {useDialogStore} from '@/stores/dialog'
 import {useAlbumStore} from '@/stores/album'
 import {storageMigrationApi} from '@/api/storageMigration'
@@ -254,7 +253,6 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const migrationStore = useMigrationStore()
 const dialogStore = useDialogStore()
 const albumStore = useAlbumStore()
 
@@ -391,12 +389,12 @@ async function loadPreview() {
     error.value = ''
     loading.value = true
     // 清理空的过滤条件
-    const requestData = {...form}
+    const requestData: Partial<CreateMigrationRequest> = {...form}
     if (requestData.filter) {
       const filter = requestData.filter
       if (!filter.album_ids?.length && !filter.start_date && !filter.end_date &&
           !filter.min_file_size && !filter.max_file_size) {
-        requestData.filter = undefined
+        delete requestData.filter
       } else {
         // 清理未设置的字段
         if (!filter.album_ids?.length) delete filter.album_ids
@@ -406,7 +404,7 @@ async function loadPreview() {
         if (!filter.max_file_size) delete filter.max_file_size
       }
     }
-    const response = await storageMigrationApi.previewMigration(requestData)
+    const response = await storageMigrationApi.previewMigration(requestData as CreateMigrationRequest)
     preview.value = response.data
   } catch (err: any) {
     error.value = err.message || '预览失败'
@@ -465,12 +463,12 @@ async function handleSubmit() {
 
   try {
     // 清理空的过滤条件
-    const requestData = {...form}
+    const requestData: Partial<CreateMigrationRequest> = {...form}
     if (requestData.filter) {
       const filter = requestData.filter
       if (!filter.album_ids?.length && !filter.start_date && !filter.end_date &&
           !filter.min_file_size && !filter.max_file_size) {
-        requestData.filter = undefined
+        delete requestData.filter
       } else {
         // 清理未设置的字段
         if (!filter.album_ids?.length) delete filter.album_ids
@@ -481,7 +479,7 @@ async function handleSubmit() {
       }
     }
 
-    await storageMigrationApi.createMigration(requestData)
+    await storageMigrationApi.createMigration(requestData as CreateMigrationRequest)
     dialogStore.alert({
       title: '成功',
       message: '迁移任务已创建',
@@ -493,16 +491,6 @@ async function handleSubmit() {
   } finally {
     loading.value = false
   }
-}
-
-function formatEstimatedTime(seconds: number): string {
-  if (seconds < 60) {
-    return `${seconds} 秒`
-  }
-  if (seconds < 3600) {
-    return `${Math.round(seconds / 60)} 分钟`
-  }
-  return `${(seconds / 3600).toFixed(1)} 小时`
 }
 
 function formatFileSize(bytes: number): string {

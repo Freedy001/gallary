@@ -33,7 +33,8 @@ type AIService interface {
 
 	// 单个任务项操作
 	RetryTaskItem(ctx context.Context, taskItemID int64) error
-	IgnoreTaskItem(ctx context.Context, taskItemID int64) error
+	// 批量根据图片 ID 删除任务项
+	DeleteTaskItemsByImageIDs(ctx context.Context, imageIDs []int64) error
 
 	// 批量操作
 	RetryQueueFailedItems(ctx context.Context, queueID int64) error
@@ -244,10 +245,18 @@ func (s *aiService) RetryTaskItem(ctx context.Context, taskItemID int64) error {
 	return s.taskRepo.RetryTaskItem(ctx, taskItemID)
 }
 
-// IgnoreTaskItem 忽略单个任务项（删除关联）
-func (s *aiService) IgnoreTaskItem(ctx context.Context, taskItemID int64) error {
-	defer s.notifyStatusChange(ctx)
-	return s.taskRepo.RemoveTaskItem(ctx, taskItemID)
+// DeleteTaskItemsByImageIDs 批量根据图片 ID 删除任务项
+func (s *aiService) DeleteTaskItemsByImageIDs(ctx context.Context, imageIDs []int64) error {
+	if len(imageIDs) == 0 {
+		return nil
+	}
+	err := s.taskRepo.RemoveTaskItemsByItemIds(ctx, imageIDs, []model.TaskType{model.ImageEmbeddingTaskType, model.AestheticScoringTaskType})
+	if err != nil {
+		return err
+	}
+	// 通知前端队列状态变化
+	s.notifyStatusChange(ctx)
+	return nil
 }
 
 // ================== 批量操作 ==================
@@ -330,6 +339,7 @@ func (s *aiService) aiTaskAdder() {
 	if err != nil {
 		logger.Error("获取所有队列失败", zap.Error(err))
 	} else {
+		hasDeleted := false
 		for _, queue := range allQueues {
 			if !validModels[queue.ModelName] {
 				logger.Info("检测到无效模型队列，准备清理",
@@ -345,9 +355,21 @@ func (s *aiService) aiTaskAdder() {
 					logger.Info("成功删除无效模型队列",
 						zap.String("model_name", queue.ModelName),
 						zap.Int64("queue_id", queue.ID))
+					hasDeleted = true
 				}
-				s.notifyStatusChange(ctx)
 			}
+		}
+
+		// 清理孤儿 item（没有关联队列的 item）
+		if deleted, err := s.taskRepo.DeleteOrphanItems(ctx); err != nil {
+			logger.Error("清理孤儿任务项失败", zap.Error(err))
+		} else if deleted > 0 {
+			logger.Info("成功清理孤儿任务项", zap.Int64("deleted_count", deleted))
+			hasDeleted = true
+		}
+
+		if hasDeleted {
+			s.notifyStatusChange(ctx)
 		}
 	}
 

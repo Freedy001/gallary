@@ -66,7 +66,7 @@
                 :active="active"
                 :data-index="rowIndex"
                 :item="row"
-                class="pb-2"
+                class="pb-1 p-1"
             >
               <div :class="['grid gap-2', layout.gridClass.value]">
                 <ImageGridItem

@@ -114,12 +114,12 @@
                 <ArrowPathIcon class="h-4 w-4"/>
               </button>
               <button
-                  @click="ignoreItem(item.id)"
-                  :disabled="aiStore.loading"
-                  class="glass-icon-btn text-gray-400 hover:text-white hover:bg-white/10"
-                  title="忽略"
+                  :disabled="aiStore.loading || item.item_type === 'tag-embedding'"
+                  class="glass-icon-btn text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                  title="删除图片"
+                  @click="deleteItem(item)"
               >
-                <XMarkIcon class="h-4 w-4"/>
+                <TrashIcon class="h-4 w-4"/>
               </button>
             </div>
           </div>
@@ -147,13 +147,14 @@ import {
   ExclamationCircleIcon,
   PhotoIcon,
   TagIcon,
-  XMarkIcon
+  TrashIcon
 } from '@heroicons/vue/24/outline'
 import {useAIStore} from '@/stores/ai.ts'
 import type {AIQueueInfo, AITaskItemInfo} from '@/types/ai.ts'
 import {getQueueDisplayName} from '@/types/ai.ts'
 import Modal from '@/components/common/Modal.vue'
 import {useDialogStore} from "@/stores/dialog.ts";
+import {imageApi} from "@/api/image.ts";
 
 const props = defineProps<{
   queue: AIQueueInfo
@@ -268,19 +269,35 @@ async function retryItem(taskItemId: number) {
   }
 }
 
-// 忽略单个任务项
-async function ignoreItem(taskItemId: number) {
+// 删除图片（移动到回收站）
+async function deleteItem(item: AITaskItemInfo) {
+  // 只有图片类型才能删除
+  if (item.item_type === 'tag-embedding') {
+    dialogStore.notify({
+      title: '提示',
+      message: '标签类型不支持删除操作',
+      type: 'warning'
+    })
+    return
+  }
+
   try {
-    await aiStore.ignoreTaskItem(taskItemId)
+    // 调用图片删除 API（移动到回收站）
+    await imageApi.delete(item.item_id)
     // 从列表中移除该项
-    const index = failedItems.value.findIndex(item => item.id === taskItemId)
+    const index = failedItems.value.findIndex(i => i.id === item.id)
     if (index !== -1) {
       failedItems.value.splice(index, 1)
     }
+    dialogStore.notify({
+      title: '成功',
+      message: '图片已移动到回收站',
+      type: 'success'
+    })
   } catch (error) {
     dialogStore.notify({
       title: '错误',
-      message: (error as Error)?.message || '忽略失败',
+      message: (error as Error)?.message || '删除失败',
       type: 'error'
     })
   }

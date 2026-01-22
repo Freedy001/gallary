@@ -19,10 +19,12 @@ type AITaskRepository interface {
 	UpdateQueue(ctx context.Context, queue *model.AIQueue) error
 	GetAllQueues(ctx context.Context) ([]*model.AIQueue, error)
 	DeleteQueueWithItems(ctx context.Context, queueID int64) error
+	DeleteOrphanItems(ctx context.Context) (int64, error) // 删除没有关联队列的孤儿 item
 
 	// 队列任务项管理（通用）
 	AddItemsToQueue(ctx context.Context, queueID int64, queueKey string, itemIDs []int64, taskType model.TaskType) (int, error)
 	RemoveTaskItem(ctx context.Context, taskItemID int64) error
+	RemoveTaskItemsByItemIds(ctx context.Context, itemIDs []int64, taskTypes []model.TaskType) error // 批量根据 ItemID 删除任务项
 	GetPendingTaskItems(ctx context.Context, queueID int64, limit int) ([]*model.AITaskItem, error)
 	UpdateTaskItem(ctx context.Context, taskItem *model.AITaskItem) error
 
@@ -131,6 +133,32 @@ func (r *aiTaskRepository) DeleteQueueWithItems(ctx context.Context, queueID int
 
 		return nil
 	})
+}
+
+// DeleteOrphanItems 删除孤儿 item（item_id 对应的实体已不存在）
+// 根据 task_type 检查不同的表：图片类任务检查 images 表，标签类任务检查 tags 表
+func (r *aiTaskRepository) DeleteOrphanItems(ctx context.Context) (int64, error) {
+	db := database.GetDB(ctx).WithContext(ctx)
+
+	// 删除图片类任务中 item_id 不存在于 images 表的记录
+	imageResult := db.
+		Where("task_type IN ?", []model.TaskType{model.ImageEmbeddingTaskType, model.AestheticScoringTaskType}).
+		Where("item_id NOT IN (SELECT id FROM images WHERE deleted_at IS NULL)").
+		Delete(&model.AITaskItem{})
+	if imageResult.Error != nil {
+		return 0, imageResult.Error
+	}
+
+	// 删除标签类任务中 item_id 不存在于 tags 表的记录
+	tagResult := db.
+		Where("task_type = ?", model.TagEmbeddingTaskType).
+		Where("item_id NOT IN (SELECT id FROM tags)").
+		Delete(&model.AITaskItem{})
+	if tagResult.Error != nil {
+		return imageResult.RowsAffected, tagResult.Error
+	}
+
+	return imageResult.RowsAffected + tagResult.RowsAffected, nil
 }
 
 // DeleteQueuesByModelName 删除指定模型的所有队列及其关联的任务项
@@ -311,6 +339,17 @@ func (r *aiTaskRepository) RetryQueueFailedItems(ctx context.Context, queueID in
 		}).Error
 }
 
+// DeleteTaskItemsByItemIDs 批量根据 ItemID 删除任务项
+func (r *aiTaskRepository) RemoveTaskItemsByItemIds(ctx context.Context, itemIDs []int64, taskTypes []model.TaskType) error {
+	if len(itemIDs) == 0 {
+		return nil
+	}
+	return database.GetDB(ctx).WithContext(ctx).
+		Where("item_id IN ?", itemIDs).
+		Where("task_type IN ?", taskTypes).
+		Delete(&model.AITaskItem{}).Error
+}
+
 // ================== 查找队列 ==================
 
 // FindQueuesWithPendingItems 查找有待处理任务项的队列
@@ -330,13 +369,3 @@ func (r *aiTaskRepository) FindQueuesWithPendingItems(ctx context.Context, limit
 
 	return queues, err
 }
-
-// ================== 智能相册任务管理 ==================
-
-// CreateSmartAlbumTask 创建智能相册任务
-
-// UpdateTaskExtra 更新任务的 Extra 信息
-
-// GetPendingSmartAlbumTasks 获取待处理的智能相册任务
-
-// GetSmartAlbumTaskByID 根据 ID 获取智能相册任务

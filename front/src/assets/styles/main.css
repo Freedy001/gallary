@@ -10,6 +10,10 @@
 
 /* Fallback variables for safety */
 :root {
+    /* Tailwind v4 color-mix 需要的基础颜色变量 */
+    --color-black: #000000;
+    --color-white: #ffffff;
+    
     --color-primary-500: #8b5cf6;
     --color-primary-700: #6d28d9;
     --color-surface-ground: #050505;

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"archive/zip"
 	"context"
 	"fmt"
 	"gallary/server/internal/repository"
@@ -119,7 +118,6 @@ type ImageService interface {
 	DeleteBatch(ctx context.Context, ids []int64) error
 	Search(ctx context.Context, params *model.SearchParams) ([]*model.ImageVO, int64, error)
 	Download(ctx context.Context, image *model.Image) (io.ReadCloser, error)
-	DownloadZipped(ctx context.Context, ids []int64, writer io.Writer) (string, error)
 	BatchUpdateMetadata(ctx context.Context, req *UpdateMetadataRequest) ([]int64, error)
 	GetImagesWithLocation(ctx context.Context) ([]*model.ImageVO, error)
 	GetClusters(ctx context.Context, minLat, maxLat, minLng, maxLng float64, zoom int) ([]*model.ClusterResultVO, error)
@@ -225,8 +223,23 @@ func (s *imageService) Delete(ctx context.Context, id int64) error {
 		zap.String("file_hash", image.FileHash),
 		zap.String("storage_path", image.StoragePath))
 
-	// 仅从数据库逻辑删除记录，不删除本地文件
-	err = s.repo.Delete(ctx, id)
+	// 使用事务确保删除图片记录和AI任务项的原子性
+	err = database.Transaction0(ctx, func(txCtx context.Context) error {
+		// 仅从数据库逻辑删除记录，不删除本地文件
+		if err := s.repo.Delete(txCtx, id); err != nil {
+			return err
+		}
+
+		// 删除 AI 任务队列中的相关任务项
+		if s.aiService != nil {
+			if err := s.aiService.DeleteTaskItemsByImageIDs(txCtx, []int64{id}); err != nil {
+				return fmt.Errorf("删除图片关联的 AI 任务项失败: %w", err)
+			}
+		}
+
+		return nil
+	})
+
 	if err != nil {
 		return err
 	}
@@ -248,8 +261,23 @@ func (s *imageService) DeleteBatch(ctx context.Context, ids []int64) error {
 		zap.Int("count", len(images)),
 		zap.Any("ids", ids))
 
-	// 仅从数据库批量逻辑删除记录，不删除本地文件
-	err = s.repo.DeleteBatch(ctx, ids)
+	// 使用事务确保批量删除图片记录和AI任务项的原子性
+	err = database.Transaction0(ctx, func(txCtx context.Context) error {
+		// 仅从数据库批量逻辑删除记录，不删除本地文件
+		if err := s.repo.DeleteBatch(txCtx, ids); err != nil {
+			return err
+		}
+
+		// 批量删除 AI 任务队列中的相关任务项
+		if s.aiService != nil {
+			if err := s.aiService.DeleteTaskItemsByImageIDs(txCtx, ids); err != nil {
+				return fmt.Errorf("批量删除图片关联的 AI 任务项失败: %w", err)
+			}
+		}
+
+		return nil
+	})
+
 	if err != nil {
 		return err
 	}
@@ -342,67 +370,6 @@ func (s *imageService) Download(ctx context.Context, image *model.Image) (io.Rea
 // DownloadThumbnail 下载缩略图（用于非本地存储的缩略图代理）
 
 // DownloadBatch 批量下载图片（打包为 ZIP，流式写入）
-func (s *imageService) DownloadZipped(ctx context.Context, ids []int64, writer io.Writer) (string, error) {
-	// 获取所有图片信息
-	images, err := s.repo.FindByIDs(ctx, ids)
-	if err != nil {
-		return "", fmt.Errorf("获取图片信息失败: %w", err)
-	}
-
-	if len(images) == 0 {
-		return "", fmt.Errorf("未找到要下载的图片")
-	}
-
-	// 创建 ZIP writer，直接写入到响应流
-	zipWriter := zip.NewWriter(writer)
-	defer zipWriter.Close()
-
-	// 用于处理重名文件
-	nameCount := make(map[string]int)
-
-	// 将每个图片添加到 ZIP 中
-	for _, image := range images {
-		// 从存储获取文件
-		reader, err := s.storage.Download(ctx, image.StorageId, image.StoragePath)
-		if err != nil {
-			logger.Warn("下载文件失败，跳过", zap.Int64("id", image.ID), zap.Error(err))
-			continue
-		}
-
-		// 处理重名文件
-		filename := image.OriginalName
-		if count, exists := nameCount[filename]; exists {
-			ext := filepath.Ext(filename)
-			base := strings.TrimSuffix(filename, ext)
-			filename = fmt.Sprintf("%s_%d%s", base, count+1, ext)
-		}
-		nameCount[image.OriginalName]++
-
-		// 创建 ZIP 内的文件
-		writer, err := zipWriter.Create(filename)
-		if err != nil {
-			reader.Close()
-			logger.Warn("创建 ZIP 条目失败，跳过", zap.String("filename", filename), zap.Error(err))
-			continue
-		}
-
-		// 写入文件内容
-		_, err = io.Copy(writer, reader)
-		reader.Close()
-		if err != nil {
-			logger.Warn("写入 ZIP 内容失败，跳过", zap.String("filename", filename), zap.Error(err))
-			continue
-		}
-	}
-
-	zipFilename := fmt.Sprintf("images_%s.zip", time.Now().Format("20060102_150405"))
-
-	logger.Info("批量下载图片打包完成",
-		zap.Int("count", len(images)),
-		zap.String("filename", zipFilename))
-
-	return zipFilename, nil
-}
 
 // updateImageMetadata 更新图片自定义元数据
 func (s *imageService) updateImageMetadata(ctx context.Context, image *model.Image, metadata []MetadataUpdate) error {

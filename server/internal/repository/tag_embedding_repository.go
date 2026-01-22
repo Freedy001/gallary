@@ -37,7 +37,7 @@ func (r *tagEmbeddingRepository) Save(ctx context.Context, embedding *model.TagE
 	return database.GetDB(ctx).WithContext(ctx).
 		Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "tag_id"}, {Name: "model_name"}},
-			DoUpdates: clause.AssignmentColumns([]string{"embedding", "dimension", "vector_description", "category_id", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"embedding", "dimension", "updated_at"}),
 		}).
 		Create(embedding).Error
 }

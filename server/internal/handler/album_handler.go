@@ -209,8 +209,9 @@ func (h *AlbumHandler) BatchCopy(c *gin.Context) {
 //	@Router			/api/albums/batch-merge [post]
 func (h *AlbumHandler) BatchMerge(c *gin.Context) {
 	var req struct {
-		SourceIDs []int64 `json:"source_ids" binding:"required"`
-		TargetID  int64   `json:"target_id" binding:"required"`
+		SourceIDs  []int64 `json:"source_ids" binding:"required"`
+		TargetID   int64   `json:"target_id" binding:"required"`
+		KeepSource bool    `json:"keep_source"` // 是否保留源相册
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		utils.BadRequest(c, "无效的参数")
@@ -222,7 +223,7 @@ func (h *AlbumHandler) BatchMerge(c *gin.Context) {
 		return
 	}
 
-	if err := h.albumService.Merge(c.Request.Context(), req.SourceIDs, req.TargetID); err != nil {
+	if err := h.albumService.Merge(c.Request.Context(), req.SourceIDs, req.TargetID, req.KeepSource); err != nil {
 		logger.Error("合并相册失败", zap.Error(err))
 		utils.Error(c, 500, err.Error())
 		return

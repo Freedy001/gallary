@@ -29,7 +29,7 @@ type AlbumService interface {
 	SetCover(ctx context.Context, albumID int64, imageID int64) error
 	RemoveCover(ctx context.Context, albumID int64) error
 	SetAverageCover(ctx context.Context, albumID int64, modelName string) error
-	Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64) error
+	Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64, keepSource bool) error
 }
 
 // CreateAlbumRequest 创建相册请求
@@ -366,18 +366,18 @@ func (s *albumService) SetAverageCover(ctx context.Context, albumID int64, model
 }
 
 // Merge 合并相册
-func (s *albumService) Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64) error {
+func (s *albumService) Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64, keepSource bool) error {
 	// 验证目标相册存在
 	if _, err := s.repo.FindByID(ctx, targetAlbumID); err != nil {
 		return fmt.Errorf("目标相册不存在: %w", err)
 	}
 
 	// 执行合并
-	if err := s.repo.Merge(ctx, sourceAlbumIDs, targetAlbumID); err != nil {
+	if err := s.repo.Merge(ctx, sourceAlbumIDs, targetAlbumID, keepSource); err != nil {
 		return fmt.Errorf("合并相册失败: %w", err)
 	}
 
-	logger.Info("合并相册成功", zap.Int64s("source_ids", sourceAlbumIDs), zap.Int64("target_id", targetAlbumID))
+	logger.Info("合并相册成功", zap.Int64s("source_ids", sourceAlbumIDs), zap.Int64("target_id", targetAlbumID), zap.Bool("keep_source", keepSource))
 	return nil
 }
 

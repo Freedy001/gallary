@@ -14,15 +14,16 @@ export const useDialogStore = defineStore('dialog', () => {
   let notificationIdCounter = 0
 
   // Keep track of the promise resolve function
-  let resolvePromise: ((value: boolean) => void) | null = null
+  let resolvePromise: ((value: boolean | string) => void) | null = null
 
-  function show(options: DialogOptions): Promise<boolean> {
+  function show(options: DialogOptions): Promise<boolean | string> {
     state.value = {
       ...options,
       visible: true,
       type: options.type || 'info',
       confirmText: options.confirmText || '确定',
-      cancelText: options.cancelText
+      cancelText: options.cancelText,
+      thirdText: options.thirdText
     }
 
     return new Promise((resolve) => {
@@ -30,8 +31,8 @@ export const useDialogStore = defineStore('dialog', () => {
     })
   }
 
-  function confirm(options: DialogOptions | string): Promise<boolean> {
-    const opts = typeof options === 'string' ? {title: '确认操作', message: options} : options
+  function confirm(options: DialogOptions | string): Promise<boolean | string> {
+    const opts = typeof options === 'string' ? { title: '确认操作', message: options } : options
     return show({
       ...opts,
       type: opts.type || 'confirm',
@@ -57,7 +58,7 @@ export const useDialogStore = defineStore('dialog', () => {
   }
 
   function alert(options: DialogOptions | string) {
-    const opts = typeof options === 'string' ? {title: '提示', message: options} : options
+    const opts = typeof options === 'string' ? { title: '提示', message: options } : options
     notify({
       title: opts.title || '提示',
       message: opts.message,
@@ -83,12 +84,22 @@ export const useDialogStore = defineStore('dialog', () => {
     }
   }
 
+  function handleThird() {
+    state.value.visible = false
+    state.value.onThird?.()
+    if (resolvePromise) {
+      resolvePromise('third')
+      resolvePromise = null
+    }
+  }
+
   return {
     state,
     notifications,
     removeNotification,
     handleConfirm,
     handleCancel,
+    handleThird,
     confirm: confirm,
     alert: alert,
     notify: notify,

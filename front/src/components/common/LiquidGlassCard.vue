@@ -25,7 +25,7 @@
     <!-- Default Liquid Glass Effect (when no target image) -->
     <div
         v-else
-        class="absolute inset-0 rounded-[24px] z-0 pointer-events-none liquid-default-container bg-black/40"
+        class="absolute inset-0 rounded-[24px] z-0 pointer-events-none liquid-default-container"
     >
         <!-- Subtle noise overlay -->
         <div class="absolute inset-0 opacity-[0.08] noise-overlay"></div>
@@ -142,16 +142,19 @@ onUnmounted(() => pause())
 .liquid-glass-card {
   position: relative;
   border-radius: 24px;
-  /* Darker, cooler glass background */
-  background: linear-gradient(
-      145deg,
-      rgba(255, 255, 255, 0.03) 0%,
-      rgba(255, 255, 255, 0.01) 100%
-  );
+  /* Darker, cooler glass background - 使用更深的基础背景色确保一致性 */
+  background:
+      linear-gradient(
+          145deg,
+          rgba(255, 255, 255, 0.03) 0%,
+          rgba(255, 255, 255, 0.01) 100%
+      ),
+      rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(20px) saturate(120%);
-  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  /* 使用 !important 防止被 Tailwind utilities 层覆盖 */
+  -webkit-backdrop-filter: blur(20px) saturate(120%) !important;
+  backdrop-filter: blur(20px) saturate(120%) !important;
   overflow: hidden;
   transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -207,6 +210,11 @@ onUnmounted(() => pause())
   mask: radial-gradient(closest-side, transparent 60%, black 100%);
   opacity: 0.6;
   z-index: 1;
+}
+
+.liquid-default-container {
+  /* 使用固定的 rgba 值，避免 Tailwind v4 的 color-mix() 在 oklab 色彩空间的计算差异 */
+  background-color: rgba(0, 0, 0, 0.4);
 }
 
 .edge-refraction-layer {

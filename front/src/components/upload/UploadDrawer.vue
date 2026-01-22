@@ -67,7 +67,7 @@
     >
       <div
           v-if="uiStore.uploadDrawerOpen"
-          class="fixed z-50 flex max-h-[600px] w-80 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/80 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] backdrop-blur-xl origin-bottom-left"
+          class="fixed z-40 flex max-h-[600px] w-80 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/80 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] backdrop-blur-xl origin-bottom-left"
           :class="[props.collapsed ? 'left-20 bottom-4' : 'left-68 bottom-4']"
           :style="{ left: props.collapsed ? '5.5rem' : '17.5rem' }"
       >

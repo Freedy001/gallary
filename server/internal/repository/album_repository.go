@@ -35,7 +35,7 @@ type AlbumRepository interface {
 	GetCoverImage(ctx context.Context, coverImageID int64) (*model.Image, error)
 	GetFirstImages(ctx context.Context, albumIDs []int64) (map[int64]*model.Image, error)
 	FindBestCoverByAverageVector(ctx context.Context, albumID int64, modelName string) (int64, error)
-	Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64) error
+	Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64, keepSource bool) error
 }
 
 type albumRepository struct{}
@@ -386,8 +386,8 @@ func (r *albumRepository) FindBestCoverByAverageVector(ctx context.Context, albu
 	return res.ImageID, nil
 }
 
-// Merge 合并相册：将源相册的图片移动到目标相册，并删除源相册
-func (r *albumRepository) Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64) error {
+// Merge 合并相册：将源相册的图片移动到目标相册，根据 keepSource 决定是否删除源相册
+func (r *albumRepository) Merge(ctx context.Context, sourceAlbumIDs []int64, targetAlbumID int64, keepSource bool) error {
 	return database.GetDB(ctx).WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 1. 将源相册的所有图片关联复制到目标相册
 		// 使用 INSERT INTO ... SELECT ... ON CONFLICT DO NOTHING
@@ -421,14 +421,17 @@ func (r *albumRepository) Merge(ctx context.Context, sourceAlbumIDs []int64, tar
 				return err
 			}
 
-			// 2. 删除源相册的关联关系
-			if err := tx.Where("tag_id = ?", sourceID).Delete(&model.ImageTag{}).Error; err != nil {
-				return err
-			}
+			// 如果不保留源相册，则删除源相册及其关联关系
+			if !keepSource {
+				// 2. 删除源相册的关联关系
+				if err := tx.Where("tag_id = ?", sourceID).Delete(&model.ImageTag{}).Error; err != nil {
+					return err
+				}
 
-			// 3. 删除源相册
-			if err := tx.Where("id = ? AND type = ?", sourceID, model.TagTypeAlbum).Delete(&model.Tag{}).Error; err != nil {
-				return err
+				// 3. 删除源相册
+				if err := tx.Where("id = ? AND type = ?", sourceID, model.TagTypeAlbum).Delete(&model.Tag{}).Error; err != nil {
+					return err
+				}
 			}
 		}
 

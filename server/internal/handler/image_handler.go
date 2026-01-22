@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"gallary/server/internal/model"
 	"gallary/server/internal/websocket"
@@ -11,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -309,66 +307,6 @@ func (h *ImageHandler) ProxyFile(c *gin.Context) {
 		logger.Error("流式写入响应失败",
 			zap.Error(err),
 			zap.Int64("written", written))
-	}
-}
-
-// BatchDownload 批量下载图片
-//
-//	@Summary		批量下载图片
-//	@Description	根据ID列表批量下载图片，打包为ZIP（流式传输）
-//	@Tags			图片管理
-//	@Accept			json
-//	@Produce		application/zip
-//	@Param			ids	body		[]int64			true	"图片ID列表"
-//	@Success		200	{file}		binary			"ZIP文件"
-//	@Failure		400	{object}	utils.Response	"无效的参数"
-//	@Failure		500	{object}	utils.Response	"下载失败"
-//	@Router			/api/images/batch-download [post]
-func (h *ImageHandler) BatchDownload(c *gin.Context) {
-	var ids []int64
-
-	// 支持 JSON 和表单两种方式
-	contentType := c.ContentType()
-	if contentType == "application/json" {
-		var req struct {
-			IDs []int64 `json:"ids" binding:"required"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			utils.BadRequest(c, "无效的参数")
-			return
-		}
-		ids = req.IDs
-	} else {
-		// 表单方式：ids 是 JSON 字符串
-		idsStr := c.PostForm("ids")
-		if idsStr == "" {
-			utils.BadRequest(c, "无效的参数")
-			return
-		}
-		if err := json.Unmarshal([]byte(idsStr), &ids); err != nil {
-			utils.BadRequest(c, "无效的参数格式")
-			return
-		}
-	}
-
-	if len(ids) == 0 {
-		utils.BadRequest(c, "请选择要下载的图片")
-		return
-	}
-
-	// 生成文件名
-	filename := fmt.Sprintf("images_%s.zip", time.Now().Format("20060102_150405"))
-
-	// 设置响应头，开始流式传输
-	c.Header("Content-Type", "application/zip")
-	c.Header("Content-Disposition", "attachment; filename="+filename)
-	c.Header("Transfer-Encoding", "chunked")
-
-	// 直接写入到响应流
-	_, err := h.service.DownloadZipped(c.Request.Context(), ids, c.Writer)
-	if err != nil {
-		logger.Error("批量下载图片失败", zap.Error(err))
-		return
 	}
 }
 

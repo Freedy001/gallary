@@ -9,7 +9,7 @@ type TagEmbedding struct {
 	ID        int64     `gorm:"primaryKey;autoIncrement" json:"id"`
 	TagID     int64     `gorm:"not null;uniqueIndex:idx_tag_embedding_tag_model" json:"tag_id"`              // 外键关联 tags 表
 	ModelName string    `gorm:"type:varchar(100);uniqueIndex:idx_tag_embedding_tag_model" json:"model_name"` // 模型名称
-	ModelId   string    `gorm:"type:varchar(100);uniqueIndex:idx_tag_embedding_tag_model" json:"model_id"`   // 模型名称
+	ModelId   string    `gorm:"type:varchar(100)" json:"model_id"`                                           // 模型名称
 	Dimension int       `gorm:"not null" json:"dimension"`                                                   // 向量维度
 	Embedding Vector    `gorm:"type:vector" json:"-"`                                                        // 向量数据（pgvector）
 	CreatedAt time.Time `gorm:"not null;default:CURRENT_TIMESTAMP" json:"created_at"`

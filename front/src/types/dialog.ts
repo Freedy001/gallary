@@ -6,13 +6,15 @@ export interface DialogOptions {
   type?: DialogType
   confirmText?: string
   cancelText?: string
+  thirdText?: string
   onConfirm?: () => void
   onCancel?: () => void
+  onThird?: () => void
 }
 
 export interface DialogState extends DialogOptions {
   visible: boolean
-  resolve?: (value: boolean) => void
+  resolve?: (value: boolean | string) => void
 }
 
 export interface Notification {

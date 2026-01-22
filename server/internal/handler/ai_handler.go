@@ -161,33 +161,6 @@ func (h *AIHandler) RetryTaskItem(c *gin.Context) {
 	utils.Success(c, nil)
 }
 
-// IgnoreTaskItem 忽略单个任务项
-//
-//	@Summary		忽略单个任务项
-//	@Description	忽略指定的失败任务项（从队列中移除）
-//	@Tags			AI
-//	@Produce		json
-//	@Param			id	path		int				true	"任务项 ID"
-//	@Success		200	{object}	utils.Response	"操作成功"
-//	@Failure		400	{object}	utils.Response	"请求参数错误"
-//	@Failure		500	{object}	utils.Response	"操作失败"
-//	@Router			/api/ai/task-items/{id}/ignore [post]
-func (h *AIHandler) IgnoreTaskItem(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "无效的任务项 ID")
-		return
-	}
-
-	if err := h.service.IgnoreTaskItem(c.Request.Context(), id); err != nil {
-		utils.InternalServerError(c, "操作失败: "+err.Error())
-		return
-	}
-
-	utils.Success(c, nil)
-}
-
 // SemanticSearchRequest 语义搜索请求
 type SemanticSearchRequest struct {
 	Query     string `json:"query" binding:"required"` // 搜索查询

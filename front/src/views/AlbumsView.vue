@@ -318,17 +318,6 @@ const {selectionBoxStyle, handleMouseDown, isDragOperation} = useGenericBoxSelec
 // 根据密度动态计算网格列数
 const gridClass = computed(() => {
   const columns = uiStore.gridColumns
-  const desktopClass = {
-    1: 'md:grid-cols-1',
-    2: 'md:grid-cols-2',
-    3: 'md:grid-cols-3',
-    4: 'md:grid-cols-4',
-    5: 'md:grid-cols-5',
-    6: 'md:grid-cols-6',
-    7: 'md:grid-cols-7',
-    8: 'md:grid-cols-8',
-    9: 'md:grid-cols-9',
-  }[columns.desktop] || 'md:grid-cols-4'
 
   const tabletClass = {
     1: 'sm:grid-cols-1',
@@ -338,8 +327,7 @@ const gridClass = computed(() => {
   }[columns.tablet] || 'sm:grid-cols-2'
 
   const mobileClass = columns.mobile === 1 ? 'grid-cols-1' : 'grid-cols-2'
-
-  return `grid gap-6 ${mobileClass} ${tabletClass} ${desktopClass}`
+  return `grid gap-${Math.min(6, Math.ceil((18 - columns.desktop) / 2))} ${mobileClass} ${tabletClass} md:grid-cols-${columns.desktop}`
 })
 
 function handleAlbumClick(event: MouseEvent, album: Album) {
@@ -639,7 +627,7 @@ function handleDragEnd(event: DragEvent) {
   })
 }
 
-async function handleDrop(event: DragEvent, targetAlbum: Album) {
+  async function handleDrop(event: DragEvent, targetAlbum: Album) {
   event.preventDefault()
   event.stopPropagation()
 
@@ -678,26 +666,37 @@ async function handleDrop(event: DragEvent, targetAlbum: Album) {
 
     if (validSourceIds.length === 0) return
 
-    const confirmed = await dialogStore.confirm({
+    // 显示合并对话框
+    const result = await dialogStore.confirm({
       title: '合并相册',
-      message: `确定要将 ${validSourceIds.length} 个相册合并到 "${targetAlbum.name}" 吗？源相册将被删除，图片将移动到目标相册。`,
-      type: 'warning',
-      confirmText: '合并'
+      message: `确定要将 ${validSourceIds.length} 个相册合并到 "${targetAlbum.name}" 吗？`,
+      confirmText: '合并并删除源相册',
+      thirdText: '仅合并（保留源相册）',
+      type: 'warning'
     })
 
-    if (!confirmed) return
+    if (!result) return
 
-    await albumApi.merge(validSourceIds, targetAlbum.id)
+    const keepSource = result === 'third'
 
-    dialogStore.notify({
-      title: '合并成功',
-      message: `已成功合并相册`,
-      type: 'success'
-    })
+    try {
+      await albumApi.merge(validSourceIds, targetAlbum.id, keepSource)
 
-    // 刷新列表并清除选中
-    albumStore.clearSelection()
-    await albumStore.fetchAlbums()
+      dialogStore.notify({
+        title: '合并成功',
+        message: keepSource ? '已成功复制图片到目标相册' : '已成功合并相册',
+        type: 'success'
+      })
+
+      // 刷新列表并清除选中
+      albumStore.clearSelection()
+      await albumStore.fetchAlbums()
+
+    } catch (err: any) {
+      console.error('合并相册失败', err)
+      const errorMsg = err.response?.data?.message || '合并相册失败'
+      dialogStore.alert({title: '错误', message: errorMsg, type: 'error'})
+    }
 
   } catch (err: any) {
     console.error('合并相册失败', err)

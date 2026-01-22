@@ -86,7 +86,7 @@ export const albumApi = {
   },
 
   // 合并相册
-  merge(sourceIds: number[], targetId: number) {
-    return http.post('/api/albums/batch-merge', { source_ids: sourceIds, target_id: targetId })
+  merge(sourceIds: number[], targetId: number, keepSource: boolean = false) {
+    return http.post('/api/albums/batch-merge', { source_ids: sourceIds, target_id: targetId, keep_source: keepSource })
   },
 }

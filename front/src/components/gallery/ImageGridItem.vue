@@ -1,5 +1,5 @@
 <template>
-  <div :class="square ? 'aspect-square' : ''" class="relative group">
+  <div :class="[square ? 'aspect-square' : '', isSelected ? 'z-10' : '']" class="relative group">
     <ImageCard
         :image="image"
         :square="square"

@@ -10,7 +10,7 @@ from concurrent import futures
 from functools import wraps
 
 import grpc
-import httpx
+import requests
 from PIL import Image
 from loguru import logger
 
@@ -25,7 +25,7 @@ from ..services.clustering_service import (
 from ..services.embedding_service import model_service
 
 # HTTP 客户端用于下载远程图片
-_http_client = httpx.Client(timeout=30.0, follow_redirects=True)
+_http_session = requests.Session()
 
 
 def log_grpc_request(method_name: str):
@@ -148,7 +148,7 @@ def load_image_from_bytes(image_bytes: bytes) -> Image.Image:
 def load_image_from_url(url: str) -> Image.Image:
     """从 URL 下载并加载图片"""
     logger.debug(f"从 URL 下载图片: {url}")
-    response = _http_client.get(url)
+    response = _http_session.get(url, timeout=30, allow_redirects=True)
     response.raise_for_status()
     return Image.open(io.BytesIO(response.content)).convert("RGB")
 

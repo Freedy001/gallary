@@ -23,7 +23,7 @@
 
         <!-- Modal Panel -->
         <div
-            class="relative w-full max-w-md -translate-y-20 overflow-hidden rounded-2xl border border-white/10 bg-[#121212] p-6 text-left align-middle shadow-[0_0_40px_rgba(0,0,0,0.5)] transition-all"
+            class="relative w-full max-w-lg -translate-y-20 overflow-hidden rounded-2xl border border-white/10 bg-[#121212] p-6 text-left align-middle shadow-[0_0_40px_rgba(0,0,0,0.5)] transition-all"
         >
           <!-- Glow Effect -->
           <div
@@ -54,18 +54,26 @@
           </div>
 
           <!-- Actions -->
-          <div class="mt-8 flex justify-end gap-3">
+          <div class="mt-8 flex flex-wrap items-center justify-end gap-3">
             <button
               v-if="dialogStore.state.cancelText"
               @click="dialogStore.handleCancel"
-              class="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/10"
+              class="whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/10"
             >
               {{ dialogStore.state.cancelText }}
             </button>
 
             <button
+              v-if="dialogStore.state.thirdText"
+              class="whitespace-nowrap rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/10"
+              @click="dialogStore.handleThird"
+            >
+              {{ dialogStore.state.thirdText }}
+            </button>
+
+            <button
               @click="dialogStore.handleConfirm"
-              class="rounded-xl px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#121212]"
+              class="whitespace-nowrap rounded-xl px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#121212]"
               :class="confirmBtnClass"
             >
               {{ dialogStore.state.confirmText }}

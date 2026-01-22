@@ -1,100 +1,102 @@
 <template>
-  <Modal v-model="isOpen" size="lg" title="智能相册生成结果">
-    <!-- 生成结果 -->
-    <div v-if="smartAlbumStore.result" class="space-y-6 py-2">
-      <!-- 成功状态卡片 -->
-      <div class="relative overflow-hidden rounded-2xl bg-white/5 p-6 border border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
-        <!-- 背景装饰 -->
-        <div class="absolute -top-10 -right-10 w-32 h-32 bg-primary-500/10 rounded-full blur-3xl"></div>
-        <div class="absolute -bottom-10 -left-10 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl"></div>
+  <Modal v-model="isOpen" size="xl" title="智能相册生成结果" >
+    <div>
+      <!-- 生成结果 -->
+      <div v-if="smartAlbumStore.result" class="space-y-6 py-2">
+        <!-- 成功状态卡片 -->
+        <div class="relative overflow-hidden rounded-2xl bg-white/5 p-6 border border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+          <!-- 背景装饰 -->
+          <div class="absolute -top-10 -right-10 w-32 h-32 bg-primary-500/10 rounded-full blur-3xl"></div>
+          <div class="absolute -bottom-10 -left-10 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl"></div>
 
-        <div class="relative flex items-start gap-4">
-          <div class="p-3 rounded-full bg-primary-500/20 text-primary-400 shadow-[0_0_15px_rgba(139,92,246,0.3)]">
-            <CheckCircleIcon class="h-8 w-8"/>
-          </div>
-          <div class="flex-1 space-y-2">
-            <h3 class="text-xl font-semibold text-gray-100">生成完成</h3>
-            <div class="flex flex-wrap gap-x-8 gap-y-2 text-sm text-gray-300/80">
-              <div class="flex items-center gap-2">
-                <span class="text-2xl font-bold text-white tabular-nums tracking-tight">{{ smartAlbumStore.result.cluster_count }}</span>
-                <span>个智能相册</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-2xl font-bold text-white tabular-nums tracking-tight">{{ smartAlbumStore.result.total_images }}</span>
-                <span>张处理图片</span>
+          <div class="relative flex items-start gap-4">
+            <div class="p-3 rounded-full bg-primary-500/20 text-primary-400 shadow-[0_0_15px_rgba(139,92,246,0.3)]">
+              <CheckCircleIcon class="h-8 w-8"/>
+            </div>
+            <div class="flex-1 space-y-2">
+              <h3 class="text-xl font-semibold text-gray-100">生成完成</h3>
+              <div class="flex flex-wrap gap-x-8 gap-y-2 text-sm text-gray-300/80">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl font-bold text-white tabular-nums tracking-tight">{{ smartAlbumStore.result.cluster_count }}</span>
+                  <span>个智能相册</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl font-bold text-white tabular-nums tracking-tight">{{ smartAlbumStore.result.total_images }}</span>
+                  <span>张处理图片</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- 噪声图片展示 -->
-      <div v-if="smartAlbumStore.result.noise_count && smartAlbumStore.result.noise_count > 0"
-           class="rounded-2xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
-        <div class="px-6 py-4">
-          <div class="flex items-center gap-3">
-            <div class="p-2 rounded-lg bg-amber-500/20 text-amber-400">
-              <ExclamationTriangleIcon class="h-5 w-5"/>
-            </div>
-            <div>
-              <p class="font-medium text-amber-200">未归类图片 (噪声点)</p>
-              <p class="text-xs text-amber-500/80 mt-0.5">{{ smartAlbumStore.result.noise_count }} 张图片特征不明显，未被归入任何相册</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="border-t border-amber-500/10 bg-black/20">
-          <div v-if="loadingNoiseImages" class="flex items-center justify-center py-12">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
-          </div>
-          <div v-else-if="noiseImages.length > 0"
-               class="grid grid-cols-5 gap-3 max-h-[400px] overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-            <div
-                v-for="(image, index) in noiseImages"
-                :key="image.id"
-                :class="{ 'ring-2 ring-primary-500': selectedNoiseImageIds.has(image.id) }"
-                class="relative aspect-square rounded-xl overflow-hidden group cursor-pointer bg-gray-800/50 shadow-lg ring-1 ring-white/10 hover:ring-amber-500/50 hover:shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-all duration-300"
-                @click.stop="handleNoiseImageClick(image.id)"
-                @dblclick.stop="handleImageDoubleClick(index)"
-                @contextmenu.prevent.stop="handleNoiseImageContextMenu($event, image.id)"
-            >
-              <img
-                  :alt="image.original_name"
-                  :src="image.thumbnail_url || image.url"
-                  class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  loading="lazy"
-              />
-              <!-- 遮罩 -->
-              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300"></div>
-              <!-- 选中标记 -->
-              <div v-if="selectedNoiseImageIds.has(image.id)" class="absolute top-2 right-2 bg-primary-500 rounded-full p-1">
-                <CheckIcon class="h-3 w-3 text-white"/>
+        <!-- 噪声图片展示 -->
+        <div v-if="smartAlbumStore.result.noise_count && smartAlbumStore.result.noise_count > 0"
+             class="rounded-2xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
+          <div class="px-6 py-4">
+            <div class="flex items-center gap-3">
+              <div class="p-2 rounded-lg bg-amber-500/20 text-amber-400">
+                <ExclamationTriangleIcon class="h-5 w-5"/>
+              </div>
+              <div>
+                <p class="font-medium text-amber-200">未归类图片 (噪声点)</p>
+                <p class="text-xs text-amber-500/80 mt-0.5">{{ smartAlbumStore.result.noise_count }} 张图片特征不明显，未被归入任何相册</p>
               </div>
             </div>
           </div>
-          <p v-else class="text-sm text-gray-500 text-center py-8">无法加载噪声图片</p>
+
+          <div class="border-t border-amber-500/10 bg-black/20">
+            <div v-if="loadingNoiseImages" class="flex items-center justify-center py-12">
+              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500"></div>
+            </div>
+            <div v-else-if="noiseImages.length > 0"
+                 class="grid grid-cols-5 gap-3 max-h-[50vh] overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+              <div
+                  v-for="(image, index) in noiseImages"
+                  :key="image.id"
+                  :class="{ 'ring-2 ring-primary-500': selectedNoiseImageIds.has(image.id) }"
+                  class="relative aspect-square rounded-xl overflow-hidden group cursor-pointer bg-gray-800/50 shadow-lg ring-1 ring-white/10 hover:ring-amber-500/50 hover:shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-all duration-300"
+                  @click.stop="handleNoiseImageClick(image.id)"
+                  @dblclick.stop="handleImageDoubleClick(index)"
+                  @contextmenu.prevent.stop="handleNoiseImageContextMenu($event, image.id)"
+              >
+                <img
+                    :alt="image.original_name"
+                    :src="image.thumbnail_url || image.url"
+                    class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    loading="lazy"
+                />
+                <!-- 遮罩 -->
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300"></div>
+                <!-- 选中标记 -->
+                <div v-if="selectedNoiseImageIds.has(image.id)" class="absolute top-2 right-2 bg-primary-500 rounded-full p-1">
+                  <CheckIcon class="h-3 w-3 text-white"/>
+                </div>
+              </div>
+            </div>
+            <p v-else class="text-sm text-gray-500 text-center py-8">无法加载噪声图片</p>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- 错误提示 -->
-    <div v-if="smartAlbumStore.errorMessage" class="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-      <div class="flex items-center gap-2 text-red-400 mb-2">
-        <XCircleIcon class="h-5 w-5"/>
-        <span class="font-medium">生成失败</span>
+      <!-- 错误提示 -->
+      <div v-if="smartAlbumStore.errorMessage" class="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+        <div class="flex items-center gap-2 text-red-400 mb-2">
+          <XCircleIcon class="h-5 w-5"/>
+          <span class="font-medium">生成失败</span>
+        </div>
+        <p class="text-sm text-gray-300">{{ smartAlbumStore.errorMessage }}</p>
       </div>
-      <p class="text-sm text-gray-300">{{ smartAlbumStore.errorMessage }}</p>
-    </div>
 
-    <!-- 操作按钮 -->
-    <div class="flex justify-end gap-3 pt-4">
-      <button
-          class="px-5 py-2.5 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors"
-          type="button"
-          @click="handleClose"
-      >
-        确定
-      </button>
+      <!-- 操作按钮 -->
+      <div class="flex justify-end gap-3 pt-4">
+        <button
+            class="px-5 py-2.5 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors"
+            type="button"
+            @click="handleClose"
+        >
+          确定
+        </button>
+      </div>  ·
     </div>
   </Modal>
 
